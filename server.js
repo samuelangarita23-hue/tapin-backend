@@ -55,6 +55,57 @@ function detectarDispositivo(userAgent = "") {
   return "Desconocido";
 }
 
+// Calcula métricas de resumen para el dashboard: hoy, esta semana, último toque,
+// y un mini-histograma de los últimos 7 días (para la barra tipo gráfica).
+function calcularResumen(eventos) {
+  const ahora = new Date();
+  const inicioHoy = new Date(ahora);
+  inicioHoy.setHours(0, 0, 0, 0);
+
+  let hoy = 0;
+  let semana = 0;
+  const dias7 = new Array(7).fill(0); // [hace 6 dias, ..., hoy]
+  const inicioSemana = new Date(inicioHoy);
+  inicioSemana.setDate(inicioSemana.getDate() - 6);
+
+  for (const e of eventos) {
+    const fecha = new Date(e.fechaISO);
+    if (fecha >= inicioHoy) hoy++;
+    if (fecha >= inicioSemana) semana++;
+
+    const diffDias = Math.floor((inicioHoy - new Date(fecha).setHours(0, 0, 0, 0)) / 86400000);
+    if (diffDias >= 0 && diffDias < 7) {
+      dias7[6 - diffDias]++;
+    }
+  }
+
+  const ultimo = eventos.length ? eventos[eventos.length - 1] : null;
+
+  return { hoy, semana, dias7, ultimo, total: eventos.length };
+}
+
+function barraSemana(dias7) {
+  const max = Math.max(1, ...dias7);
+  const nombresDias = [];
+  const ahora = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(ahora);
+    d.setDate(d.getDate() - i);
+    nombresDias.push(d.toLocaleDateString("es-CO", { weekday: "short" }));
+  }
+  return dias7
+    .map((v, i) => {
+      const alturaPx = 6 + Math.round((v / max) * 46);
+      return `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;">
+          <div style="font-size:0.65rem;color:#888;">${v}</div>
+          <div style="width:100%;max-width:22px;height:${alturaPx}px;background:#1F6E4E;border-radius:4px 4px 0 0;"></div>
+          <div style="font-size:0.62rem;color:#999;text-transform:capitalize;">${nombresDias[i]}</div>
+        </div>`;
+    })
+    .join("");
+}
+
 function registrarToque(slug, req) {
   const datos = leerDatos();
   if (!datos[slug]) {
@@ -97,7 +148,7 @@ app.get("/r/:slug", (req, res) => {
   res.redirect(302, negocio.googleUrl);
 });
 
-// Panel simple: lista de negocios con su total de toques.
+// Panel visual: una tarjeta por negocio con totales de hoy, semana, y mini gráfica.
 // Visítalo así: https://tu-dominio.com/stats?key=TU_CLAVE
 app.get("/stats", (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
@@ -105,38 +156,79 @@ app.get("/stats", (req, res) => {
   }
 
   const datos = leerDatos();
-  let filas = "";
+  const key = req.query.key;
+
+  let tarjetas = "";
   for (const slug in NEGOCIOS) {
-    const total = datos[slug] ? datos[slug].total : 0;
-    filas += `
-      <tr>
-        <td>${NEGOCIOS[slug].nombre}</td>
-        <td>${slug}</td>
-        <td>${total}</td>
-        <td><a href="/historial/${slug}?key=${req.query.key}">Ver historial</a></td>
-        <td><a href="/export/${slug}.csv?key=${req.query.key}">Descargar CSV</a></td>
-      </tr>`;
+    const eventos = (datos[slug] && datos[slug].eventos) || [];
+    const r = calcularResumen(eventos);
+    const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
+
+    tarjetas += `
+      <div class="card">
+        <div class="card-top">
+          <div>
+            <div class="card-nombre">${NEGOCIOS[slug].nombre}</div>
+            <div class="card-slug">/r/${slug}</div>
+          </div>
+          <div class="card-total">${r.total}<span>toques totales</span></div>
+        </div>
+
+        <div class="card-metrics">
+          <div class="metric"><div class="metric-num">${r.hoy}</div><div class="metric-lbl">Hoy</div></div>
+          <div class="metric"><div class="metric-num">${r.semana}</div><div class="metric-lbl">Últimos 7 días</div></div>
+        </div>
+
+        <div class="sparkline">${barraSemana(r.dias7)}</div>
+
+        <div class="card-ultimo">Último toque: <b>${ultimoTexto}</b></div>
+
+        <div class="card-actions">
+          <a href="/historial/${slug}?key=${key}">Ver historial completo</a>
+          <a href="/export/${slug}.csv?key=${key}">Descargar CSV</a>
+        </div>
+      </div>`;
+  }
+
+  if (!tarjetas) {
+    tarjetas = `<p>No hay negocios configurados todavía en NEGOCIOS dentro de server.js.</p>`;
   }
 
   res.send(`
     <html>
       <head>
         <meta charset="utf-8">
-        <title>Estadísticas Tapin</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Panel Tapin</title>
         <style>
-          body{font-family:sans-serif;background:#F8F4EC;padding:40px;color:#16201C;}
-          table{border-collapse:collapse;width:100%;max-width:760px;background:#fff;border-radius:10px;overflow:hidden;}
-          th,td{padding:12px 16px;text-align:left;border-bottom:1px solid #eee;}
-          th{background:#16201C;color:#F8F4EC;}
-          a{color:#1F6E4E;font-weight:600;text-decoration:none;}
+          *{box-sizing:border-box;}
+          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F8F4EC;padding:32px 24px;color:#16201C;margin:0;}
+          h1{font-size:1.5rem;margin-bottom:4px;}
+          .sub{color:#777;margin-bottom:28px;font-size:0.9rem;}
+          .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;max-width:1100px;}
+          .card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border:1px solid #eee;}
+          .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;}
+          .card-nombre{font-weight:700;font-size:1.05rem;}
+          .card-slug{font-size:0.78rem;color:#999;margin-top:2px;}
+          .card-total{text-align:right;font-size:1.6rem;font-weight:700;color:#1F6E4E;line-height:1;}
+          .card-total span{display:block;font-size:0.62rem;font-weight:500;color:#999;margin-top:2px;}
+          .card-metrics{display:flex;gap:16px;margin-bottom:16px;}
+          .metric{background:#F8F4EC;border-radius:10px;padding:10px 14px;flex:1;text-align:center;}
+          .metric-num{font-size:1.25rem;font-weight:700;}
+          .metric-lbl{font-size:0.7rem;color:#888;margin-top:2px;}
+          .sparkline{display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:14px;border-top:1px solid #f0f0f0;padding-top:8px;}
+          .card-ultimo{font-size:0.82rem;color:#666;margin-bottom:14px;}
+          .card-actions{display:flex;border-top:1px solid #f0f0f0;padding-top:12px;}
+          .card-actions a{color:#1F6E4E;font-weight:600;text-decoration:none;font-size:0.85rem;margin-right:20px;}
+          .card-actions a:hover{text-decoration:underline;}
         </style>
       </head>
       <body>
-        <h1>Toques registrados por Tapin</h1>
-        <table>
-          <tr><th>Negocio</th><th>Slug</th><th>Total de toques</th><th></th><th></th></tr>
-          ${filas}
-        </table>
+        <h1>Panel Tapin</h1>
+        <div class="sub">Resumen de toques por negocio, en tiempo real.</div>
+        <div class="grid">
+          ${tarjetas}
+        </div>
       </body>
     </html>
   `);
@@ -180,7 +272,7 @@ app.get("/historial/:slug", (req, res) => {
         </style>
       </head>
       <body>
-        <p><a href="/stats?key=${req.query.key}">&larr; Volver a estadísticas</a></p>
+        <p><a href="/stats?key=${req.query.key}">&larr; Volver al panel</a></p>
         <h1>Historial de toques — ${negocio.nombre}</h1>
         <p>Total: <b>${eventos.length}</b> toques registrados</p>
         <table>
