@@ -328,6 +328,7 @@ app.get("/stats", (req, res) => {
 
         <div class="card-actions">
           <a href="/historial/${slug}?key=${key}">Ver historial completo</a>
+          <a href="/reporte/${slug}?key=${key}">Ver reporte</a>
           <a href="/export/${slug}.csv?key=${key}">Descargar CSV</a>
           <a href="/export/${slug}.pdf?key=${key}">Descargar PDF</a>
           <a href="/quejas/${slug}?key=${key}">Ver quejas</a>
@@ -464,6 +465,75 @@ app.get("/quejas/:slug", (req, res) => {
       ${filas || "<tr><td colspan='2'>Sin quejas registradas</td></tr>"}
       </table>
     </body></html>
+  `);
+});
+
+// Mismo reporte que el PDF, pero para ver directo en el navegador sin descargar nada.
+// Visítalo así: https://tu-dominio.com/reporte/mi-negocio?key=TU_CLAVE
+app.get("/reporte/:slug", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  const { slug } = req.params;
+  const negocio = NEGOCIOS[slug];
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  const datos = leerDatos();
+  const eventos = (datos[slug] && datos[slug].eventos) || [];
+  const r = calcularResumen(eventos);
+  const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
+
+  const recientes = eventos
+    .slice(-20)
+    .reverse()
+    .map((e) => `<tr><td>${e.fechaLegible}</td><td>${e.dispositivo}</td></tr>`)
+    .join("");
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Reporte — ${negocio.nombre}</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F8F4EC;padding:28px 20px;color:#16201C;margin:0;}
+          .back{color:#1F6E4E;font-weight:600;text-decoration:none;font-size:0.88rem;}
+          .card{background:#fff;border-radius:14px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,0.05);
+                border:1px solid #eee;max-width:520px;margin-top:16px;}
+          h1{font-size:1.3rem;margin:0 0 2px;}
+          .fecha{color:#999;font-size:0.8rem;margin-bottom:20px;}
+          .metrics{display:flex;gap:14px;margin-bottom:18px;}
+          .metric{background:#F8F4EC;border-radius:10px;padding:14px;flex:1;text-align:center;}
+          .metric-num{font-size:1.5rem;font-weight:700;color:#1F6E4E;}
+          .metric-lbl{font-size:0.72rem;color:#888;margin-top:4px;}
+          .sparkline{display:flex;align-items:flex-end;gap:6px;height:90px;margin-bottom:20px;
+                     border-top:1px solid #f0f0f0;padding-top:10px;}
+          table{border-collapse:collapse;width:100%;margin-top:10px;}
+          th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #eee;font-size:0.85rem;}
+          th{background:#16201C;color:#F8F4EC;}
+        </style>
+      </head>
+      <body>
+        <a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a>
+        <div class="card">
+          <h1>${negocio.nombre}</h1>
+          <div class="fecha">Reporte generado el ${new Date().toLocaleDateString("es-CO", { timeZone: TIMEZONE })}</div>
+          <div class="metrics">
+            <div class="metric"><div class="metric-num">${r.total}</div><div class="metric-lbl">Total</div></div>
+            <div class="metric"><div class="metric-num">${r.hoy}</div><div class="metric-lbl">Hoy</div></div>
+            <div class="metric"><div class="metric-num">${r.semana}</div><div class="metric-lbl">Últimos 7 días</div></div>
+          </div>
+          <div class="sparkline">${barraSemana(r.dias7)}</div>
+          <div style="font-size:0.85rem;color:#666;margin-bottom:10px;">Último toque: <b>${ultimoTexto}</b></div>
+          <h3 style="font-size:0.95rem;margin-bottom:6px;">Últimas interacciones</h3>
+          <table>
+            <tr><th>Fecha y hora</th><th>Dispositivo</th></tr>
+            ${recientes || "<tr><td colspan='2'>Sin toques todavía</td></tr>"}
+          </table>
+        </div>
+      </body>
+    </html>
   `);
 });
 
