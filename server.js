@@ -349,7 +349,10 @@ app.get("/stats", (req, res) => {
         <style>
           *{box-sizing:border-box;}
           body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F8F4EC;padding:32px 24px;color:#16201C;margin:0;}
-          h1{font-size:1.5rem;margin-bottom:4px;}
+          .topbar{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+          .logo-dot{width:9px;height:9px;border-radius:50%;background:#D6483B;box-shadow:14px 0 0 #E8A93D, 28px 0 0 #1F6E4E;margin-right:16px;}
+          .logo-text{font-size:1.4rem;font-weight:700;color:#16201C;letter-spacing:-0.01em;}
+          h1{font-size:1.1rem;margin:18px 0 4px;color:#444;font-weight:600;}
           .sub{color:#777;margin-bottom:28px;font-size:0.9rem;}
           .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;max-width:1100px;}
           .card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border:1px solid #eee;}
@@ -364,13 +367,17 @@ app.get("/stats", (req, res) => {
           .metric-lbl{font-size:0.7rem;color:#888;margin-top:2px;}
           .sparkline{display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:14px;border-top:1px solid #f0f0f0;padding-top:8px;}
           .card-ultimo{font-size:0.82rem;color:#666;margin-bottom:14px;}
-          .card-actions{display:flex;border-top:1px solid #f0f0f0;padding-top:12px;}
-          .card-actions a{color:#1F6E4E;font-weight:600;text-decoration:none;font-size:0.85rem;margin-right:20px;}
+          .card-actions{display:flex;flex-wrap:wrap;border-top:1px solid #f0f0f0;padding-top:14px;}
+          .card-actions a{color:#1F6E4E;font-weight:600;text-decoration:none;font-size:0.82rem;white-space:nowrap;margin:0 18px 8px 0;}
           .card-actions a:hover{text-decoration:underline;}
         </style>
       </head>
       <body>
-        <h1>Panel Tapin</h1>
+        <div class="topbar">
+          <span class="logo-dot"></span>
+          <span class="logo-text">Tapin</span>
+        </div>
+        <h1>Panel</h1>
         <div class="sub">Resumen de toques por negocio, en tiempo real.</div>
         <div class="grid">
           ${tarjetas}
