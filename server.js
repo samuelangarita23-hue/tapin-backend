@@ -1167,40 +1167,70 @@ app.get("/mi-panel/:slug", (req, res) => {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Mi Panel — ${negocio.nombre}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
-          *{box-sizing:border-box;}
-          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F8F4EC;padding:28px 20px;color:#16201C;margin:0;}
-          .topbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;}
-          .logo-dot{width:9px;height:9px;border-radius:50%;background:#D6483B;box-shadow:14px 0 0 #E8A93D, 28px 0 0 #1F6E4E;margin-right:16px;}
-          .logo-text{font-size:1.2rem;font-weight:700;color:#16201C;}
-          .card{background:#fff;border-radius:14px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,0.05);
-                border:1px solid #eee;max-width:520px;}
-          h1{font-size:1.3rem;margin:0 0 2px;}
-          .fecha{color:#999;font-size:0.8rem;margin-bottom:20px;}
-          .metrics{display:flex;gap:14px;margin-bottom:18px;}
-          .metric{background:#F8F4EC;border-radius:10px;padding:14px;flex:1;text-align:center;}
-          .metric-num{font-size:1.5rem;font-weight:700;color:#1F6E4E;}
-          .metric-lbl{font-size:0.72rem;color:#888;margin-top:4px;}
-          .sparkline{display:flex;align-items:flex-end;gap:6px;height:90px;margin-bottom:20px;
-                     border-top:1px solid #f0f0f0;padding-top:10px;}
-          .reco{background:#F1F7F4;border-left:3px solid #1F6E4E;border-radius:8px;padding:12px 14px;
-                font-size:0.85rem;margin-bottom:10px;color:#1F3D2E;}
+          ${ESTILO_BASE}
+          .content{max-width:600px;}
+          .seccion{margin-bottom:40px;}
+          .seccion-header{text-align:center;margin-bottom:20px;}
+          .seccion-header .eyebrow{justify-content:center;}
+          .seccion-header h2{font-size:1.1rem;font-weight:700;margin:0 0 4px;}
+          .seccion-header p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0;}
+
+          .resumen-grid{display:flex;gap:12px;flex-wrap:wrap;}
+          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:20px 14px;text-align:center;
+                       box-shadow:0 1px 2px rgba(11,61,44,0.04);flex:1;min-width:120px;}
+          .resumen-num{font-size:1.8rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
+          .resumen-lbl{font-size:0.7rem;color:${MARCA.textoSuave};margin-top:6px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
+
+          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:20px 22px;margin-top:14px;
+                      box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .chart-card-titulo{font-size:0.8rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:16px;text-align:center;}
+          .sparkline{display:flex;align-items:flex-end;gap:5px;}
+          .sparkline-grande{height:100px;}
+
+          .ultimo-toque{text-align:center;font-size:0.85rem;color:${MARCA.textoSuave};margin-top:14px;}
+          .ultimo-toque b{color:${MARCA.texto};}
+
+          .reco{background:${MARCA.verdeClaro};border-left:3px solid ${MARCA.verde};border-radius:8px;padding:14px 16px;
+                font-size:0.86rem;margin-bottom:10px;color:${MARCA.verdeOscuro};}
         </style>
       </head>
       <body>
-        <div class="topbar"><span class="logo-dot"></span><span class="logo-text">Tapin</span></div>
-        <div class="card">
-          <h1>${negocio.nombre}</h1>
-          <div class="fecha">Actualizado al ${new Date().toLocaleDateString("es-CO", { timeZone: TIMEZONE })}</div>
-          <div class="metrics">
-            <div class="metric"><div class="metric-num">${r.total}</div><div class="metric-lbl">Total</div></div>
-            <div class="metric"><div class="metric-num">${r.hoy}</div><div class="metric-lbl">Hoy</div></div>
-            <div class="metric"><div class="metric-num">${r.semana}</div><div class="metric-lbl">Últimos 7 días</div></div>
+        <div class="topbar" style="justify-content:center;">
+          <div>${logoSvg("#FFFFFF", 24)}</div>
+        </div>
+        <div class="content">
+
+          <div class="seccion" style="text-align:center;">
+            <div class="eyebrow" style="justify-content:center;">Panel del negocio</div>
+            <h1 class="titulo-pagina">${negocio.nombre}</h1>
+            <div class="subtitulo">Actualizado al ${new Date().toLocaleDateString("es-CO", { timeZone: TIMEZONE })}</div>
           </div>
-          <div class="sparkline">${barraSemana(r.dias7)}</div>
-          <div style="font-size:0.85rem;color:#666;margin-bottom:18px;">Último toque: <b>${ultimoTexto}</b></div>
-          <h3 style="font-size:0.95rem;margin-bottom:10px;">Recomendaciones para ti</h3>
-          ${recomendacionesHtml}
+
+          <div class="seccion">
+            <div class="resumen-grid">
+              <div class="resumen-box"><div class="resumen-num">${r.total}</div><div class="resumen-lbl">Total</div></div>
+              <div class="resumen-box"><div class="resumen-num">${r.hoy}</div><div class="resumen-lbl">Hoy</div></div>
+              <div class="resumen-box"><div class="resumen-num">${r.semana}</div><div class="resumen-lbl">Últimos 7 días</div></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-titulo">Toques de los últimos 7 días</div>
+              <div class="sparkline sparkline-grande">${barraSemana(r.dias7)}</div>
+            </div>
+            <div class="ultimo-toque">Último toque: <b>${ultimoTexto}</b></div>
+          </div>
+
+          <div class="seccion">
+            <div class="seccion-header">
+              <div class="eyebrow">Para ti</div>
+              <h2>Recomendaciones</h2>
+              <p>Generadas automáticamente a partir de tu propia actividad.</p>
+            </div>
+            ${recomendacionesHtml}
+          </div>
+
         </div>
       </body>
     </html>
