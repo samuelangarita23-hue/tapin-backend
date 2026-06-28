@@ -22,16 +22,20 @@ const TIMEZONE = "America/Bogota";
 // Agrega aquí un negocio por cada Tapin que tengas en la calle.
 // "slug" es lo que va en la URL del QR/NFC, ej: /r/mi-negocio
 // "categoria" se usa para comparar el negocio contra otros del mismo tipo (punto 9).
+// "claveAcceso" es opcional: si la pones, el dueño puede entrar a SU PROPIO panel
+// (/mi-panel/slug?key=claveAcceso) sin ver los datos de tus otros negocios.
 const NEGOCIOS = {
   "mi-negocio": {
     nombre: "Mi Negocio",
     googleUrl: "https://g.page/r/REEMPLAZA_CON_TU_ENLACE/review",
     categoria: "restaurante",
+    claveAcceso: "mi-negocio-2026",
   },
   // "otro-local": {
   //   nombre: "Otro Local",
   //   googleUrl: "https://g.page/r/OTRO_ENLACE/review",
   //   categoria: "peluqueria",
+  //   claveAcceso: "otro-local-2026",
   // },
 };
 
@@ -147,6 +151,74 @@ function guardarQueja(slug, comentario) {
     comentario,
   });
   guardarDatos(datos);
+}
+
+// Genera recomendaciones automáticas simples (reglas si-entonces) a partir de los
+// datos ya calculados — esto es lo que convierte "te muestro números" en
+// "te doy un consejo basado en tus números" (punto 8).
+function generarRecomendaciones(eventos, r) {
+  const recos = [];
+
+  // Regla 1: comparación semana actual vs. semana anterior
+  const ahora = new Date();
+  const inicioHoy = new Date(ahora);
+  inicioHoy.setHours(0, 0, 0, 0);
+  const inicioSemanaAnterior = new Date(inicioHoy);
+  inicioSemanaAnterior.setDate(inicioSemanaAnterior.getDate() - 13);
+  const finSemanaAnterior = new Date(inicioHoy);
+  finSemanaAnterior.setDate(finSemanaAnterior.getDate() - 6);
+
+  let semanaAnterior = 0;
+  for (const e of eventos) {
+    const f = new Date(e.fechaISO);
+    if (f >= inicioSemanaAnterior && f < finSemanaAnterior) semanaAnterior++;
+  }
+
+  if (semanaAnterior > 0) {
+    const cambio = (r.semana - semanaAnterior) / semanaAnterior;
+    if (cambio <= -0.3) {
+      recos.push(
+        `Tu actividad bajó ${Math.round(Math.abs(cambio) * 100)}% esta semana comparado con la anterior. Revisa si la tarjeta sigue visible y en buen estado.`
+      );
+    } else if (cambio >= 0.3) {
+      recos.push(
+        `Tu actividad subió ${Math.round(cambio * 100)}% esta semana comparado con la anterior. Lo que estás haciendo está funcionando, sigue así.`
+      );
+    }
+  }
+
+  // Regla 2: inactividad reciente
+  if (r.ultimo) {
+    const diasSinToque = Math.floor((ahora - new Date(r.ultimo.fechaISO)) / 86400000);
+    if (diasSinToque >= 3) {
+      recos.push(
+        `Llevas ${diasSinToque} días sin ningún toque registrado. Confirma que la tarjeta esté en un lugar visible y que el chip no esté dañado.`
+      );
+    }
+  } else {
+    recos.push("Todavía no se ha registrado ningún toque. Confirma que la tarjeta esté colocada en un lugar visible para tus clientes.");
+  }
+
+  // Regla 3: hora/día pico de la semana
+  const conteoPorDiaHora = {};
+  for (const e of eventos) {
+    const f = new Date(e.fechaISO);
+    const dia = f.toLocaleDateString("es-CO", { timeZone: TIMEZONE, weekday: "long" });
+    const hora = f.getHours();
+    const bloque = hora < 12 ? "en la mañana" : hora < 18 ? "en la tarde" : "en la noche";
+    const clave = `${dia} ${bloque}`;
+    conteoPorDiaHora[clave] = (conteoPorDiaHora[clave] || 0) + 1;
+  }
+  const entradas = Object.entries(conteoPorDiaHora).sort((a, b) => b[1] - a[1]);
+  if (entradas.length > 0 && entradas[0][1] >= 3) {
+    recos.push(`Tu momento de mayor actividad es ${entradas[0][0]}. Considera reforzar al personal para pedir reseñas en ese horario.`);
+  }
+
+  if (recos.length === 0) {
+    recos.push("Todo se ve estable. Sigue usando la tarjeta con normalidad.");
+  }
+
+  return recos;
 }
 
 // Calcula el promedio de toques (últimos 7 días) de los negocios de la misma categoría,
@@ -329,6 +401,7 @@ app.get("/stats", (req, res) => {
         <div class="card-actions">
           <a href="/historial/${slug}?key=${key}">Ver historial completo</a>
           <a href="/reporte/${slug}?key=${key}">Ver reporte</a>
+          ${NEGOCIOS[slug].claveAcceso ? `<a href="/mi-panel/${slug}?key=${NEGOCIOS[slug].claveAcceso}" target="_blank">Panel del negocio</a>` : ""}
           <a href="/export/${slug}.csv?key=${key}">Descargar CSV</a>
           <a href="/export/${slug}.pdf?key=${key}">Descargar PDF</a>
           <a href="/quejas/${slug}?key=${key}">Ver quejas</a>
@@ -475,6 +548,75 @@ app.get("/quejas/:slug", (req, res) => {
   `);
 });
 
+// Panel individual de UN SOLO negocio, usando su propia clave (no la clave maestra).
+// Así puedes darle este enlace al dueño sin que vea los datos de tus otros negocios.
+// Incluye recomendaciones automáticas generadas a partir de sus propios datos.
+// Visítalo así: https://tu-dominio.com/mi-panel/mi-negocio?key=CLAVE_DE_ESE_NEGOCIO
+app.get("/mi-panel/:slug", (req, res) => {
+  const { slug } = req.params;
+  const negocio = NEGOCIOS[slug];
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado. Verifica el enlace que te dio Tapin, debe incluir tu clave personal (?key=...).");
+  }
+
+  const datos = leerDatos();
+  const eventos = (datos[slug] && datos[slug].eventos) || [];
+  const r = calcularResumen(eventos);
+  const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
+  const recomendaciones = generarRecomendaciones(eventos, r);
+
+  const recomendacionesHtml = recomendaciones
+    .map((texto) => `<div class="reco">💡 ${texto}</div>`)
+    .join("");
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Mi Panel — ${negocio.nombre}</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F8F4EC;padding:28px 20px;color:#16201C;margin:0;}
+          .topbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;}
+          .logo-dot{width:9px;height:9px;border-radius:50%;background:#D6483B;box-shadow:14px 0 0 #E8A93D, 28px 0 0 #1F6E4E;margin-right:16px;}
+          .logo-text{font-size:1.2rem;font-weight:700;color:#16201C;}
+          .card{background:#fff;border-radius:14px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,0.05);
+                border:1px solid #eee;max-width:520px;}
+          h1{font-size:1.3rem;margin:0 0 2px;}
+          .fecha{color:#999;font-size:0.8rem;margin-bottom:20px;}
+          .metrics{display:flex;gap:14px;margin-bottom:18px;}
+          .metric{background:#F8F4EC;border-radius:10px;padding:14px;flex:1;text-align:center;}
+          .metric-num{font-size:1.5rem;font-weight:700;color:#1F6E4E;}
+          .metric-lbl{font-size:0.72rem;color:#888;margin-top:4px;}
+          .sparkline{display:flex;align-items:flex-end;gap:6px;height:90px;margin-bottom:20px;
+                     border-top:1px solid #f0f0f0;padding-top:10px;}
+          .reco{background:#F1F7F4;border-left:3px solid #1F6E4E;border-radius:8px;padding:12px 14px;
+                font-size:0.85rem;margin-bottom:10px;color:#1F3D2E;}
+        </style>
+      </head>
+      <body>
+        <div class="topbar"><span class="logo-dot"></span><span class="logo-text">Tapin</span></div>
+        <div class="card">
+          <h1>${negocio.nombre}</h1>
+          <div class="fecha">Actualizado al ${new Date().toLocaleDateString("es-CO", { timeZone: TIMEZONE })}</div>
+          <div class="metrics">
+            <div class="metric"><div class="metric-num">${r.total}</div><div class="metric-lbl">Total</div></div>
+            <div class="metric"><div class="metric-num">${r.hoy}</div><div class="metric-lbl">Hoy</div></div>
+            <div class="metric"><div class="metric-num">${r.semana}</div><div class="metric-lbl">Últimos 7 días</div></div>
+          </div>
+          <div class="sparkline">${barraSemana(r.dias7)}</div>
+          <div style="font-size:0.85rem;color:#666;margin-bottom:18px;">Último toque: <b>${ultimoTexto}</b></div>
+          <h3 style="font-size:0.95rem;margin-bottom:10px;">Recomendaciones para ti</h3>
+          ${recomendacionesHtml}
+        </div>
+      </body>
+    </html>
+  `);
+});
+
 // Mismo reporte que el PDF, pero para ver directo en el navegador sin descargar nada.
 // Visítalo así: https://tu-dominio.com/reporte/mi-negocio?key=TU_CLAVE
 app.get("/reporte/:slug", (req, res) => {
@@ -489,6 +631,8 @@ app.get("/reporte/:slug", (req, res) => {
   const eventos = (datos[slug] && datos[slug].eventos) || [];
   const r = calcularResumen(eventos);
   const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
+  const recomendaciones = generarRecomendaciones(eventos, r);
+  const recomendacionesHtml = recomendaciones.map((texto) => `<div class="reco">💡 ${texto}</div>`).join("");
 
   const recientes = eventos
     .slice(-20)
@@ -516,6 +660,8 @@ app.get("/reporte/:slug", (req, res) => {
           .metric-lbl{font-size:0.72rem;color:#888;margin-top:4px;}
           .sparkline{display:flex;align-items:flex-end;gap:6px;height:90px;margin-bottom:20px;
                      border-top:1px solid #f0f0f0;padding-top:10px;}
+          .reco{background:#F1F7F4;border-left:3px solid #1F6E4E;border-radius:8px;padding:12px 14px;
+                font-size:0.85rem;margin-bottom:10px;color:#1F3D2E;}
           table{border-collapse:collapse;width:100%;margin-top:10px;}
           th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #eee;font-size:0.85rem;}
           th{background:#16201C;color:#F8F4EC;}
@@ -533,7 +679,9 @@ app.get("/reporte/:slug", (req, res) => {
           </div>
           <div class="sparkline">${barraSemana(r.dias7)}</div>
           <div style="font-size:0.85rem;color:#666;margin-bottom:10px;">Último toque: <b>${ultimoTexto}</b></div>
-          <h3 style="font-size:0.95rem;margin-bottom:6px;">Últimas interacciones</h3>
+          <h3 style="font-size:0.95rem;margin-bottom:10px;">Recomendaciones</h3>
+          ${recomendacionesHtml}
+          <h3 style="font-size:0.95rem;margin:18px 0 6px;">Últimas interacciones</h3>
           <table>
             <tr><th>Fecha y hora</th><th>Dispositivo</th></tr>
             ${recientes || "<tr><td colspan='2'>Sin toques todavía</td></tr>"}
