@@ -679,6 +679,20 @@ app.get("/stats", (req, res) => {
   const key = req.query.key;
   const NEGOCIOS_TOTAL = todosLosNegocios();
 
+  // Totales agregados de TODAS las tarjetas juntas (sección de resumen general)
+  let totalNegocios = 0;
+  let totalToquesGlobal = 0;
+  let totalHoyGlobal = 0;
+  let totalSemanaGlobal = 0;
+  for (const slug in NEGOCIOS_TOTAL) {
+    const eventos = (datos[slug] && datos[slug].eventos) || [];
+    const r = calcularResumen(eventos);
+    totalNegocios++;
+    totalToquesGlobal += r.total;
+    totalHoyGlobal += r.hoy;
+    totalSemanaGlobal += r.semana;
+  }
+
   let tarjetas = "";
   for (const slug in NEGOCIOS_TOTAL) {
     const eventos = (datos[slug] && datos[slug].eventos) || [];
@@ -736,7 +750,22 @@ app.get("/stats", (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;}
+          .content{max-width:880px;}
+          .seccion{margin-bottom:48px;}
+          .seccion-header{text-align:center;margin-bottom:24px;}
+          .seccion-header .eyebrow{justify-content:center;}
+          .seccion-header h2{font-size:1.15rem;font-weight:700;margin:0 0 4px;}
+          .seccion-header p{color:${MARCA.textoSuave};font-size:0.86rem;margin:0;}
+
+          /* Resumen global */
+          .resumen-grid{display:flex;gap:14px;flex-wrap:wrap;}
+          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px 16px;text-align:center;
+                       box-shadow:0 1px 2px rgba(11,61,44,0.04);flex:1;min-width:140px;}
+          .resumen-num{font-size:2rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
+          .resumen-lbl{font-size:0.74rem;color:${MARCA.textoSuave};margin-top:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
+
+          /* Lista de negocios */
+          .lista-negocios{display:flex;flex-direction:column;gap:16px;}
           .card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 1px 2px rgba(11,61,44,0.04), 0 8px 24px rgba(11,61,44,0.06);border:1px solid ${MARCA.borde};transition:box-shadow .2s;}
           .card:hover{box-shadow:0 1px 2px rgba(11,61,44,0.05), 0 12px 32px rgba(11,61,44,0.10);}
           .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
@@ -744,11 +773,11 @@ app.get("/stats", (req, res) => {
           .card-slug{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:2px;font-family:monospace;}
           .card-total{text-align:right;font-size:1.7rem;font-weight:700;color:${MARCA.verde};line-height:1;}
           .card-total span{display:block;font-size:0.6rem;font-weight:600;color:${MARCA.textoSuave};margin-top:4px;letter-spacing:0.04em;text-transform:uppercase;}
-          .card-metrics{display:flex;gap:12px;margin-bottom:18px;}
+          .card-metrics{display:flex;gap:12px;margin-bottom:18px;max-width:340px;}
           .metric{background:${MARCA.verdeClaro};border-radius:12px;padding:12px 14px;flex:1;text-align:center;}
           .metric-num{font-size:1.3rem;font-weight:700;color:${MARCA.verdeOscuro};}
           .metric-lbl{font-size:0.68rem;color:${MARCA.verde};margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
-          .sparkline{display:flex;align-items:flex-end;gap:5px;height:64px;margin-bottom:10px;}
+          .sparkline{display:flex;align-items:flex-end;gap:5px;height:64px;margin-bottom:10px;max-width:300px;}
           .sector-badge{font-size:0.74rem;font-weight:700;margin-bottom:14px;}
           .card-ultimo{font-size:0.82rem;color:${MARCA.textoSuave};margin-bottom:16px;padding-top:14px;border-top:1px solid ${MARCA.borde};}
           .card-ultimo b{color:${MARCA.texto};}
@@ -763,12 +792,32 @@ app.get("/stats", (req, res) => {
           <a href="/codigos?key=${key}" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;">+ Generar tarjetas</a>
         </div>
         <div class="content">
-          <div class="eyebrow">Tiempo real</div>
-          <h1 class="titulo-pagina">Resumen de negocios</h1>
-          <div class="subtitulo">Actividad de toques por cada tarjeta Tapin activa.</div>
-          <div class="grid">
-            ${tarjetas}
+
+          <div class="seccion">
+            <div class="seccion-header">
+              <div class="eyebrow">Resumen general</div>
+              <h2>Todas tus tarjetas Tapin</h2>
+              <p>Suma de actividad de todos los negocios activos.</p>
+            </div>
+            <div class="resumen-grid">
+              <div class="resumen-box"><div class="resumen-num">${totalNegocios}</div><div class="resumen-lbl">Tarjetas activas</div></div>
+              <div class="resumen-box"><div class="resumen-num">${totalToquesGlobal}</div><div class="resumen-lbl">Toques totales</div></div>
+              <div class="resumen-box"><div class="resumen-num">${totalHoyGlobal}</div><div class="resumen-lbl">Toques hoy</div></div>
+              <div class="resumen-box"><div class="resumen-num">${totalSemanaGlobal}</div><div class="resumen-lbl">Últimos 7 días</div></div>
+            </div>
           </div>
+
+          <div class="seccion">
+            <div class="seccion-header">
+              <div class="eyebrow">Por negocio</div>
+              <h2>Negocios uno por uno</h2>
+              <p>Detalle individual de cada tarjeta Tapin.</p>
+            </div>
+            <div class="lista-negocios">
+              ${tarjetas}
+            </div>
+          </div>
+
         </div>
       </body>
     </html>
