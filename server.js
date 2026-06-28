@@ -18,6 +18,41 @@ const ADMIN_KEY = process.env.ADMIN_KEY || "cambia-esta-clave";
 // Zona horaria de Colombia para mostrar fecha/hora legibles
 const TIMEZONE = "America/Bogota";
 
+// ---------- Marca Tapin ----------
+// Path vectorial real del logo (extraído del archivo de marca), reutilizado en todo el panel.
+const LOGO_PATH = "M524 -695V-602H339V0H225V-602H39V-695Z M861 -560Q926 -560 974.5 -534.5Q1023 -509 1052 -471V-551H1167V0H1052V-82Q1023 -43 973.0 -17.0Q923 9 859 9Q788 9 729.0 -27.5Q670 -64 635.5 -129.5Q601 -195 601 -278Q601 -361 635.5 -425.0Q670 -489 729.5 -524.5Q789 -560 861 -560ZM885 -461Q841 -461 803.0 -439.5Q765 -418 741.5 -376.5Q718 -335 718 -278Q718 -221 741.5 -178.0Q765 -135 803.5 -112.5Q842 -90 885 -90Q929 -90 967.0 -112.0Q1005 -134 1028.5 -176.5Q1052 -219 1052 -276Q1052 -333 1028.5 -375.0Q1005 -417 967.0 -439.0Q929 -461 885 -461Z M1623 -560Q1695 -560 1754.5 -524.5Q1814 -489 1848.0 -425.0Q1882 -361 1882 -278Q1882 -195 1848.0 -129.5Q1814 -64 1754.5 -27.5Q1695 9 1623 9Q1560 9 1511.0 -16.5Q1462 -42 1431 -80V262H1317V-551H1431V-470Q1460 -508 1510.0 -534.0Q1560 -560 1623 -560ZM1598 -461Q1555 -461 1516.5 -439.0Q1478 -417 1454.5 -375.0Q1431 -333 1431 -276Q1431 -219 1454.5 -176.5Q1478 -134 1516.5 -112.0Q1555 -90 1598 -90Q1642 -90 1680.5 -112.5Q1719 -135 1742.5 -178.0Q1766 -221 1766 -278Q1766 -335 1742.5 -376.5Q1719 -418 1680.5 -439.5Q1642 -461 1598 -461Z M1980 -697Q1980 -728 2001.0 -749.0Q2022 -770 2053 -770Q2083 -770 2104.0 -749.0Q2125 -728 2125 -697Q2125 -666 2104.0 -645.0Q2083 -624 2053 -624Q2022 -624 2001.0 -645.0Q1980 -666 1980 -697ZM2109 -551V0H1995V-551Z M2763 -325V0H2650V-308Q2650 -382 2613.0 -421.5Q2576 -461 2512 -461Q2448 -461 2410.5 -421.5Q2373 -382 2373 -308V0H2259V-551H2373V-488Q2401 -522 2444.5 -541.0Q2488 -560 2537 -560Q2602 -560 2653.5 -533.0Q2705 -506 2734.0 -453.0Q2763 -400 2763 -325Z";
+
+function logoSvg(color, height) {
+  return `<svg viewBox="-40 -780 2913 880" style="height:${height}px;display:block;"><path d="${LOGO_PATH}" fill="${color}"/></svg>`;
+}
+
+// Paleta de marca (extraída del logo oficial de Tapin)
+const MARCA = {
+  verdeOscuro: "#0B3D2C",
+  verde: "#0F5132",
+  verdeClaro: "#E7F0EA",
+  crema: "#FAFAF8",
+  texto: "#16201C",
+  textoSuave: "#6B7570",
+  borde: "#E7E5E0",
+  rojo: "#C0392B",
+  oro: "#C9A24B",
+};
+
+// Estilos base compartidos por todas las páginas del panel — look "pro" consistente.
+const ESTILO_BASE = `
+  *{box-sizing:border-box;}
+  body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};color:${MARCA.texto};margin:0;}
+  a{color:${MARCA.verde};}
+  .topbar{background:${MARCA.verdeOscuro};padding:18px 32px;display:flex;align-items:center;justify-content:space-between;}
+  .topbar .back{color:#CFE3D8;font-size:0.82rem;font-weight:500;text-decoration:none;}
+  .topbar .back:hover{color:#fff;}
+  .content{padding:32px 32px 60px;max-width:1140px;margin:0 auto;}
+  .eyebrow{font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${MARCA.verde};margin-bottom:6px;}
+  .titulo-pagina{font-size:1.5rem;font-weight:700;margin:0 0 4px;letter-spacing:-0.01em;}
+  .subtitulo{color:${MARCA.textoSuave};font-size:0.92rem;margin-bottom:30px;}
+`;
+
 // ---------- Configuración de negocios ----------
 // Agrega aquí un negocio por cada Tapin que tengas en la calle.
 // "slug" es lo que va en la URL del QR/NFC, ej: /r/mi-negocio
@@ -51,6 +86,47 @@ function leerDatos() {
 
 function guardarDatos(datos) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(datos, null, 2));
+}
+
+// ---------- Códigos de activación ----------
+// Permite generar un código único por cada tarjeta Tapin física ANTES de saber
+// a qué negocio va a parar. Programas el QR/NFC con ese código, y cuando consigas
+// el cliente, lo activas con sus datos reales (nombre, enlace de Google, categoría).
+
+const CODIGOS_FILE = path.join(__dirname, "codigos.json");
+
+function leerCodigos() {
+  if (!fs.existsSync(CODIGOS_FILE)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(CODIGOS_FILE, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function guardarCodigos(codigos) {
+  fs.writeFileSync(CODIGOS_FILE, JSON.stringify(codigos, null, 2));
+}
+
+function generarCodigo() {
+  // Código corto, fácil de escribir a mano si toca, ej: "7K9P2M"
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin 0/O/1/I para evitar confusión
+  let codigo = "";
+  for (let i = 0; i < 6; i++) {
+    codigo += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return codigo;
+}
+
+// Busca un negocio primero en NEGOCIOS (configurado a mano en el código)
+// y si no lo encuentra, en los códigos de activación ya activados.
+// Esto permite que /r/:slug funcione igual para ambos casos.
+function obtenerNegocio(slug) {
+  if (NEGOCIOS[slug]) return NEGOCIOS[slug];
+  const codigos = leerCodigos();
+  const entrada = codigos[slug];
+  if (entrada && entrada.activado && entrada.negocio) return entrada.negocio;
+  return null;
 }
 
 // Detecta tipo de dispositivo de forma simple a partir del user-agent
@@ -107,7 +183,7 @@ function barraSemana(dias7) {
       return `
         <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;">
           <div style="font-size:0.65rem;color:#888;">${v}</div>
-          <div style="width:100%;max-width:22px;height:${alturaPx}px;background:#1F6E4E;border-radius:4px 4px 0 0;"></div>
+          <div style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
           <div style="font-size:0.62rem;color:#999;text-transform:capitalize;">${nombresDias[i]}</div>
         </div>`;
     })
@@ -221,10 +297,24 @@ function generarRecomendaciones(eventos, r) {
   return recos;
 }
 
+// Junta los negocios configurados a mano (NEGOCIOS) con los activados por código.
+// Se usa en el panel principal y en las comparaciones de sector.
+function todosLosNegocios() {
+  const codigos = leerCodigos();
+  const dinamicos = {};
+  for (const codigo in codigos) {
+    if (codigos[codigo].activado && codigos[codigo].negocio) {
+      dinamicos[codigo] = codigos[codigo].negocio;
+    }
+  }
+  return { ...NEGOCIOS, ...dinamicos };
+}
+
 // Calcula el promedio de toques (últimos 7 días) de los negocios de la misma categoría,
 // excluyendo al propio negocio. Sirve para el comparativo "vs. promedio del sector" (punto 9).
 function promedioSector(categoria, slugActual, datos) {
-  const pares = Object.entries(NEGOCIOS).filter(
+  const todos = todosLosNegocios();
+  const pares = Object.entries(todos).filter(
     ([slug, n]) => n.categoria === categoria && slug !== slugActual
   );
   if (pares.length === 0) return null;
@@ -244,9 +334,13 @@ function promedioSector(categoria, slugActual, datos) {
 // Ejemplo: https://tu-dominio.com/r/mi-negocio
 app.get("/r/:slug", (req, res) => {
   const { slug } = req.params;
-  const negocio = NEGOCIOS[slug];
+  const negocio = obtenerNegocio(slug);
 
   if (!negocio) {
+    const codigos = leerCodigos();
+    if (codigos[slug] && !codigos[slug].activado) {
+      return res.redirect(302, `/activar/${slug}`);
+    }
     return res.status(404).send("Negocio no encontrado. Revisa el enlace del QR/NFC.");
   }
 
@@ -294,7 +388,7 @@ app.get("/r/:slug", (req, res) => {
 // en vez de exponer la insatisfacción en una reseña pública.
 app.get("/calificar/:slug", (req, res) => {
   const { slug } = req.params;
-  const negocio = NEGOCIOS[slug];
+  const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const valor = parseInt(req.query.valor, 10);
@@ -339,7 +433,7 @@ app.get("/calificar/:slug", (req, res) => {
 
 app.post("/calificar/:slug", (req, res) => {
   const { slug } = req.params;
-  const negocio = NEGOCIOS[slug];
+  const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   guardarQueja(slug, req.body.comentario || "(sin comentario)");
@@ -356,6 +450,226 @@ app.post("/calificar/:slug", (req, res) => {
 
 // Panel visual: una tarjeta por negocio con totales de hoy, semana, y mini gráfica.
 // Visítalo así: https://tu-dominio.com/stats?key=TU_CLAVE
+// Panel de generación y administración de códigos de activación.
+// Genera un código por cada tarjeta física ANTES de saber a qué negocio va.
+// Visítalo así: https://tu-dominio.com/codigos?key=TU_CLAVE
+app.get("/codigos", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+
+  const codigos = leerCodigos();
+  const key = req.query.key;
+
+  const filas = Object.entries(codigos)
+    .sort((a, b) => new Date(b[1].creado) - new Date(a[1].creado))
+    .map(([codigo, info]) => {
+      const estado = info.activado
+        ? `<span class="pill pill-on">Activado — ${info.negocio.nombre}</span>`
+        : `<span class="pill pill-off">Sin activar</span>`;
+      const accion = info.activado
+        ? `<a href="/stats?key=${key}">Ver en el panel</a>`
+        : `<a href="/activar/${codigo}" target="_blank">Activar ahora</a>`;
+      const urlTarjeta = `${req.protocol}://${req.get("host")}/r/${codigo}`;
+      return `<tr>
+        <td><code class="codigo">${codigo}</code></td>
+        <td>${estado}</td>
+        <td class="url-cell">${urlTarjeta}</td>
+        <td>${accion}</td>
+      </tr>`;
+    })
+    .join("");
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Códigos de activación — Tapin</title>
+        <style>
+          ${ESTILO_BASE}
+          .panel-generar{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px 24px;margin-bottom:28px;max-width:480px;}
+          .panel-generar label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin-bottom:6px;}
+          .panel-generar input{width:90px;padding:9px 12px;border:1px solid ${MARCA.borde};border-radius:8px;font-size:0.92rem;margin-right:10px;}
+          .panel-generar button{background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:600;font-size:0.88rem;cursor:pointer;}
+          .panel-generar button:hover{background:${MARCA.verde};}
+          table{border-collapse:collapse;width:100%;background:#fff;border-radius:12px;overflow:hidden;border:1px solid ${MARCA.borde};}
+          th,td{padding:12px 16px;text-align:left;font-size:0.86rem;border-bottom:1px solid ${MARCA.borde};}
+          th{background:${MARCA.verdeOscuro};color:#fff;font-size:0.74rem;text-transform:uppercase;letter-spacing:0.04em;}
+          .codigo{background:${MARCA.verdeClaro};padding:4px 10px;border-radius:6px;font-weight:700;letter-spacing:0.05em;}
+          .pill{font-size:0.72rem;font-weight:700;padding:4px 10px;border-radius:100px;}
+          .pill-on{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};}
+          .pill-off{background:#FBEFE9;color:${MARCA.rojo};}
+          .url-cell{font-family:monospace;font-size:0.78rem;color:${MARCA.textoSuave};}
+          a{font-weight:600;text-decoration:none;}
+        </style>
+      </head>
+      <body>
+        <div class="topbar">
+          <div>${logoSvg("#FFFFFF", 22)}</div>
+          <a class="back" href="/stats?key=${key}">&larr; Volver al panel</a>
+        </div>
+        <div class="content">
+          <div class="eyebrow">Aprovisionamiento</div>
+          <h1 class="titulo-pagina">Códigos de activación</h1>
+          <div class="subtitulo">Genera un código por cada tarjeta física antes de tener el cliente, prográmala con esa URL, y actívala después con los datos reales.</div>
+
+          <div class="panel-generar">
+            <form method="POST" action="/codigos/generar?key=${key}">
+              <label>¿Cuántos códigos nuevos quieres generar?</label>
+              <input type="number" name="cantidad" value="10" min="1" max="200">
+              <button type="submit">Generar códigos</button>
+            </form>
+          </div>
+
+          <table>
+            <tr><th>Código</th><th>Estado</th><th>URL para la tarjeta (NFC/QR)</th><th></th></tr>
+            ${filas || "<tr><td colspan='4'>Todavía no has generado ningún código.</td></tr>"}
+          </table>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Genera N códigos nuevos y los guarda.
+app.post("/codigos/generar", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const cantidad = Math.min(200, Math.max(1, parseInt(req.body.cantidad, 10) || 1));
+  const codigos = leerCodigos();
+
+  for (let i = 0; i < cantidad; i++) {
+    let nuevo;
+    do {
+      nuevo = generarCodigo();
+    } while (codigos[nuevo]); // evita colisiones, aunque son muy improbables
+    codigos[nuevo] = { activado: false, creado: new Date().toISOString() };
+  }
+
+  guardarCodigos(codigos);
+  res.redirect(`/codigos?key=${req.query.key}`);
+});
+
+// Formulario para activar una tarjeta: el negocio (o tú, en su nombre) llena sus datos reales.
+// Visítalo así: https://tu-dominio.com/activar/7K9P2M
+app.get("/activar/:codigo", (req, res) => {
+  const { codigo } = req.params;
+  const codigos = leerCodigos();
+  const entrada = codigos[codigo];
+
+  if (!entrada) {
+    return res.status(404).send("Código no válido. Verifica que lo escribiste bien.");
+  }
+  if (entrada.activado) {
+    return res.send(`
+      <html><body style="font-family:sans-serif;padding:40px;text-align:center;">
+        <h2>Esta tarjeta ya está activada</h2>
+        <p>Pertenece a: <b>${entrada.negocio.nombre}</b></p>
+      </body></html>
+    `);
+  }
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Activar tarjeta — Tapin</title>
+        <style>
+          ${ESTILO_BASE}
+          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;
+                     box-shadow:0 8px 24px rgba(11,61,44,0.06);}
+          label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin:14px 0 6px;}
+          label:first-of-type{margin-top:0;}
+          input,select{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;font-family:inherit;}
+          button{margin-top:22px;width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;
+                 padding:13px;font-size:0.95rem;font-weight:700;cursor:pointer;}
+          button:hover{background:${MARCA.verde};}
+        </style>
+      </head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div></div>
+        <div class="content">
+          <div class="eyebrow">Código ${codigo}</div>
+          <h1 class="titulo-pagina">Activar esta tarjeta</h1>
+          <div class="subtitulo">Completa los datos del negocio para dejar la tarjeta lista para usar.</div>
+
+          <div class="form-card">
+            <form method="POST" action="/activar/${codigo}">
+              <label>Nombre del negocio</label>
+              <input type="text" name="nombre" required placeholder="Ej: Restaurante La 21">
+
+              <label>Enlace de reseñas de Google</label>
+              <input type="url" name="googleUrl" required placeholder="https://g.page/r/.../review">
+
+              <label>Categoría</label>
+              <select name="categoria">
+                <option value="restaurante">Restaurante</option>
+                <option value="peluqueria">Peluquería / Barbería</option>
+                <option value="tienda">Tienda</option>
+                <option value="clinica">Clínica / Consultorio</option>
+                <option value="otro">Otro</option>
+              </select>
+
+              <button type="submit">Activar tarjeta</button>
+            </form>
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Procesa la activación: guarda los datos del negocio y marca el código como usado.
+app.post("/activar/:codigo", (req, res) => {
+  const { codigo } = req.params;
+  const codigos = leerCodigos();
+  const entrada = codigos[codigo];
+
+  if (!entrada) return res.status(404).send("Código no válido.");
+  if (entrada.activado) return res.status(400).send("Esta tarjeta ya fue activada antes.");
+
+  const { nombre, googleUrl, categoria } = req.body;
+  if (!nombre || !googleUrl) {
+    return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
+  }
+
+  entrada.activado = true;
+  entrada.activadoEl = new Date().toISOString();
+  entrada.negocio = {
+    nombre,
+    googleUrl,
+    categoria: categoria || "otro",
+    claveAcceso: `${codigo.toLowerCase()}-panel`,
+  };
+
+  guardarCodigos(codigos);
+
+  res.send(`
+    <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>${ESTILO_BASE}
+        .ok-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;}
+        .ok-card code{background:${MARCA.verdeClaro};padding:3px 8px;border-radius:6px;}
+      </style></head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div></div>
+        <div class="content">
+          <div class="eyebrow">Listo</div>
+          <h1 class="titulo-pagina">¡Tarjeta activada!</h1>
+          <div class="ok-card">
+            <p><b>${nombre}</b> ya está conectado a esta tarjeta Tapin.</p>
+            <p>Panel de este negocio:<br><code>${req.protocol}://${req.get("host")}/mi-panel/${codigo}?key=${entrada.negocio.claveAcceso}</code></p>
+            <p>Esta tarjeta ya está lista — el cliente puede empezar a usarla de inmediato.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
 app.get("/stats", (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
@@ -363,26 +677,25 @@ app.get("/stats", (req, res) => {
 
   const datos = leerDatos();
   const key = req.query.key;
+  const NEGOCIOS_TOTAL = todosLosNegocios();
 
   let tarjetas = "";
-  for (const slug in NEGOCIOS) {
+  for (const slug in NEGOCIOS_TOTAL) {
     const eventos = (datos[slug] && datos[slug].eventos) || [];
     const r = calcularResumen(eventos);
     const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
-    const promSector = promedioSector(NEGOCIOS[slug].categoria, slug, datos);
-    let comparativoHtml = "";
-    if (promSector !== null) {
-      const diferencia = r.semana - promSector;
-      const signo = diferencia > 0 ? "+" : "";
-      const color = diferencia >= 0 ? "#1F6E4E" : "#D6483B";
-      comparativoHtml = `<div class="card-ultimo">Promedio del sector (${NEGOCIOS[slug].categoria}): <b>${promSector}</b> toques/semana — tú estás <b style="color:${color}">${signo}${diferencia}</b></div>`;
-    }
+    const promSector = promedioSector(NEGOCIOS_TOTAL[slug].categoria, slug, datos);
+    const sectorBadge = promSector !== null
+      ? `<div class="sector-badge" style="color:${r.semana - promSector >= 0 ? MARCA.verde : MARCA.rojo}">
+           ${r.semana - promSector >= 0 ? "▲" : "▼"} ${r.semana - promSector >= 0 ? "+" : ""}${r.semana - promSector} vs. promedio del sector
+         </div>`
+      : "";
 
     tarjetas += `
       <div class="card">
         <div class="card-top">
           <div>
-            <div class="card-nombre">${NEGOCIOS[slug].nombre}</div>
+            <div class="card-nombre">${NEGOCIOS_TOTAL[slug].nombre}</div>
             <div class="card-slug">/r/${slug}</div>
           </div>
           <div class="card-total">${r.total}<span>toques totales</span></div>
@@ -394,23 +707,23 @@ app.get("/stats", (req, res) => {
         </div>
 
         <div class="sparkline">${barraSemana(r.dias7)}</div>
+        ${sectorBadge}
 
         <div class="card-ultimo">Último toque: <b>${ultimoTexto}</b></div>
-        ${comparativoHtml}
 
         <div class="card-actions">
-          <a href="/historial/${slug}?key=${key}">Ver historial completo</a>
-          <a href="/reporte/${slug}?key=${key}">Ver reporte</a>
-          ${NEGOCIOS[slug].claveAcceso ? `<a href="/mi-panel/${slug}?key=${NEGOCIOS[slug].claveAcceso}" target="_blank">Panel del negocio</a>` : ""}
-          <a href="/export/${slug}.csv?key=${key}">Descargar CSV</a>
-          <a href="/export/${slug}.pdf?key=${key}">Descargar PDF</a>
-          <a href="/quejas/${slug}?key=${key}">Ver quejas</a>
+          <a href="/historial/${slug}?key=${key}">Historial</a>
+          <a href="/reporte/${slug}?key=${key}">Reporte</a>
+          ${NEGOCIOS_TOTAL[slug].claveAcceso ? `<a href="/mi-panel/${slug}?key=${NEGOCIOS_TOTAL[slug].claveAcceso}" target="_blank">Panel del negocio</a>` : ""}
+          <a href="/export/${slug}.csv?key=${key}">CSV</a>
+          <a href="/export/${slug}.pdf?key=${key}">PDF</a>
+          <a href="/quejas/${slug}?key=${key}">Quejas</a>
         </div>
       </div>`;
   }
 
   if (!tarjetas) {
-    tarjetas = `<p>No hay negocios configurados todavía en NEGOCIOS dentro de server.js.</p>`;
+    tarjetas = `<p style="color:${MARCA.textoSuave}">No hay negocios configurados todavía en NEGOCIOS dentro de server.js.</p>`;
   }
 
   res.send(`
@@ -418,42 +731,44 @@ app.get("/stats", (req, res) => {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Panel Tapin</title>
+        <title>Panel — Tapin</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
-          *{box-sizing:border-box;}
-          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F8F4EC;padding:32px 24px;color:#16201C;margin:0;}
-          .topbar{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
-          .logo-dot{width:9px;height:9px;border-radius:50%;background:#D6483B;box-shadow:14px 0 0 #E8A93D, 28px 0 0 #1F6E4E;margin-right:16px;}
-          .logo-text{font-size:1.4rem;font-weight:700;color:#16201C;letter-spacing:-0.01em;}
-          h1{font-size:1.1rem;margin:18px 0 4px;color:#444;font-weight:600;}
-          .sub{color:#777;margin-bottom:28px;font-size:0.9rem;}
-          .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;max-width:1100px;}
-          .card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border:1px solid #eee;}
-          .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;}
-          .card-nombre{font-weight:700;font-size:1.05rem;}
-          .card-slug{font-size:0.78rem;color:#999;margin-top:2px;}
-          .card-total{text-align:right;font-size:1.6rem;font-weight:700;color:#1F6E4E;line-height:1;}
-          .card-total span{display:block;font-size:0.62rem;font-weight:500;color:#999;margin-top:2px;}
-          .card-metrics{display:flex;gap:16px;margin-bottom:16px;}
-          .metric{background:#F8F4EC;border-radius:10px;padding:10px 14px;flex:1;text-align:center;}
-          .metric-num{font-size:1.25rem;font-weight:700;}
-          .metric-lbl{font-size:0.7rem;color:#888;margin-top:2px;}
-          .sparkline{display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:14px;border-top:1px solid #f0f0f0;padding-top:8px;}
-          .card-ultimo{font-size:0.82rem;color:#666;margin-bottom:14px;}
-          .card-actions{display:flex;flex-wrap:wrap;border-top:1px solid #f0f0f0;padding-top:14px;}
-          .card-actions a{color:#1F6E4E;font-weight:600;text-decoration:none;font-size:0.82rem;white-space:nowrap;margin:0 18px 8px 0;}
-          .card-actions a:hover{text-decoration:underline;}
+          ${ESTILO_BASE}
+          .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;}
+          .card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 1px 2px rgba(11,61,44,0.04), 0 8px 24px rgba(11,61,44,0.06);border:1px solid ${MARCA.borde};transition:box-shadow .2s;}
+          .card:hover{box-shadow:0 1px 2px rgba(11,61,44,0.05), 0 12px 32px rgba(11,61,44,0.10);}
+          .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
+          .card-nombre{font-weight:700;font-size:1.08rem;letter-spacing:-0.01em;}
+          .card-slug{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:2px;font-family:monospace;}
+          .card-total{text-align:right;font-size:1.7rem;font-weight:700;color:${MARCA.verde};line-height:1;}
+          .card-total span{display:block;font-size:0.6rem;font-weight:600;color:${MARCA.textoSuave};margin-top:4px;letter-spacing:0.04em;text-transform:uppercase;}
+          .card-metrics{display:flex;gap:12px;margin-bottom:18px;}
+          .metric{background:${MARCA.verdeClaro};border-radius:12px;padding:12px 14px;flex:1;text-align:center;}
+          .metric-num{font-size:1.3rem;font-weight:700;color:${MARCA.verdeOscuro};}
+          .metric-lbl{font-size:0.68rem;color:${MARCA.verde};margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
+          .sparkline{display:flex;align-items:flex-end;gap:5px;height:64px;margin-bottom:10px;}
+          .sector-badge{font-size:0.74rem;font-weight:700;margin-bottom:14px;}
+          .card-ultimo{font-size:0.82rem;color:${MARCA.textoSuave};margin-bottom:16px;padding-top:14px;border-top:1px solid ${MARCA.borde};}
+          .card-ultimo b{color:${MARCA.texto};}
+          .card-actions{display:flex;flex-wrap:wrap;}
+          .card-actions a{color:${MARCA.verde};font-weight:600;text-decoration:none;font-size:0.78rem;white-space:nowrap;margin:0 14px 6px 0;}
+          .card-actions a:hover{color:${MARCA.verdeOscuro};text-decoration:underline;}
         </style>
       </head>
       <body>
         <div class="topbar">
-          <span class="logo-dot"></span>
-          <span class="logo-text">Tapin</span>
+          <div style="display:flex;align-items:center;gap:0;">${logoSvg("#FFFFFF", 22)}</div>
+          <a href="/codigos?key=${key}" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;">+ Generar tarjetas</a>
         </div>
-        <h1>Panel</h1>
-        <div class="sub">Resumen de toques por negocio, en tiempo real.</div>
-        <div class="grid">
-          ${tarjetas}
+        <div class="content">
+          <div class="eyebrow">Tiempo real</div>
+          <h1 class="titulo-pagina">Resumen de negocios</h1>
+          <div class="subtitulo">Actividad de toques por cada tarjeta Tapin activa.</div>
+          <div class="grid">
+            ${tarjetas}
+          </div>
         </div>
       </body>
     </html>
@@ -469,7 +784,7 @@ app.get("/historial/:slug", (req, res) => {
   }
 
   const { slug } = req.params;
-  const negocio = NEGOCIOS[slug];
+  const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const datos = leerDatos();
@@ -517,7 +832,7 @@ app.get("/quejas/:slug", (req, res) => {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   const { slug } = req.params;
-  const negocio = NEGOCIOS[slug];
+  const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const datos = leerDatos();
@@ -554,7 +869,7 @@ app.get("/quejas/:slug", (req, res) => {
 // Visítalo así: https://tu-dominio.com/mi-panel/mi-negocio?key=CLAVE_DE_ESE_NEGOCIO
 app.get("/mi-panel/:slug", (req, res) => {
   const { slug } = req.params;
-  const negocio = NEGOCIOS[slug];
+  const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
@@ -624,7 +939,7 @@ app.get("/reporte/:slug", (req, res) => {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   const { slug } = req.params;
-  const negocio = NEGOCIOS[slug];
+  const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const datos = leerDatos();
@@ -700,7 +1015,7 @@ app.get("/export/:slug.pdf", async (req, res) => {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   const { slug } = req.params;
-  const negocio = NEGOCIOS[slug];
+  const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
@@ -792,7 +1107,7 @@ app.get("/export/:slug.csv", (req, res) => {
   }
 
   const { slug } = req.params;
-  const negocio = NEGOCIOS[slug];
+  const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const datos = leerDatos();
@@ -817,7 +1132,7 @@ app.get("/notificar/:slug", async (req, res) => {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   const { slug } = req.params;
-  const negocio = NEGOCIOS[slug];
+  const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   if (!negocio.whatsapp || !negocio.callmebotApiKey) {
     return res.status(400).send(
