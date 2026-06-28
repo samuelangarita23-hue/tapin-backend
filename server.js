@@ -122,10 +122,10 @@ function generarCodigo() {
 // y si no lo encuentra, en los códigos de activación ya activados.
 // Esto permite que /r/:slug funcione igual para ambos casos.
 function obtenerNegocio(slug) {
-  if (NEGOCIOS[slug]) return NEGOCIOS[slug];
   const codigos = leerCodigos();
   const entrada = codigos[slug];
   if (entrada && entrada.activado && entrada.negocio) return entrada.negocio;
+  if (NEGOCIOS[slug]) return NEGOCIOS[slug];
   return null;
 }
 
@@ -465,15 +465,11 @@ app.get("/editar", (req, res) => {
 
   const filas = Object.entries(todos)
     .map(([slug, n]) => {
-      const editable = !NEGOCIOS[slug]; // los del código fuente no se editan aquí
-      const accion = editable
-        ? `<a href="/editar/${slug}?key=${key}">Editar</a>`
-        : `<span style="color:${MARCA.textoSuave};font-size:0.78rem;">Definido en server.js</span>`;
       return `<tr>
         <td><b>${n.nombre}</b></td>
         <td><code class="codigo">/r/${slug}</code></td>
         <td>${n.categoria || "—"}</td>
-        <td>${accion}</td>
+        <td><a href="/editar/${slug}?key=${key}">Editar</a></td>
       </tr>`;
     })
     .join("");
@@ -564,20 +560,16 @@ app.get("/editar/:slug", (req, res) => {
     return res.status(401).send("No autorizado.");
   }
   const { slug } = req.params;
-  if (NEGOCIOS[slug]) {
-    return res.status(400).send("Este negocio está definido directamente en server.js — edítalo ahí y vuelve a desplegar.");
-  }
-  const codigos = leerCodigos();
-  const entrada = codigos[slug];
-  if (!entrada || !entrada.activado) {
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) {
     return res.status(404).send("Negocio no encontrado.");
   }
   const key = req.query.key;
   res.send(formularioNegocio({
-    titulo: `Editar — ${entrada.negocio.nombre}`,
+    titulo: `Editar — ${negocio.nombre}`,
     accion: `/editar/${slug}?key=${key}`,
     key,
-    valores: entrada.negocio,
+    valores: negocio,
   }));
 });
 
@@ -586,18 +578,29 @@ app.post("/editar/:slug", (req, res) => {
     return res.status(401).send("No autorizado.");
   }
   const { slug } = req.params;
-  const codigos = leerCodigos();
-  const entrada = codigos[slug];
-  if (!entrada || !entrada.activado) {
+  const negocioActual = obtenerNegocio(slug);
+  if (!negocioActual) {
     return res.status(404).send("Negocio no encontrado.");
   }
   const { nombre, googleUrl, categoria } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
-  entrada.negocio.nombre = nombre;
-  entrada.negocio.googleUrl = googleUrl;
-  entrada.negocio.categoria = categoria || "otro";
+
+  // Si el negocio venía del código (NEGOCIOS) y aún no tiene override, lo creamos ahora.
+  // Esto sobreescribe esa entrada sin tocar server.js ni redesplegar.
+  const codigos = leerCodigos();
+  if (!codigos[slug]) {
+    codigos[slug] = { activado: true, creado: new Date().toISOString() };
+  }
+  codigos[slug].activado = true;
+  codigos[slug].activadoEl = new Date().toISOString();
+  codigos[slug].negocio = {
+    nombre,
+    googleUrl,
+    categoria: categoria || "otro",
+    claveAcceso: (codigos[slug].negocio && codigos[slug].negocio.claveAcceso) || negocioActual.claveAcceso || `${slug.toLowerCase()}-panel`,
+  };
   guardarCodigos(codigos);
 
   res.redirect(`/editar?key=${req.query.key}`);
@@ -893,6 +896,7 @@ app.get("/stats", (req, res) => {
   let totalToquesGlobal = 0;
   let totalHoyGlobal = 0;
   let totalSemanaGlobal = 0;
+  const dias7Global = new Array(7).fill(0);
   for (const slug in NEGOCIOS_TOTAL) {
     const eventos = (datos[slug] && datos[slug].eventos) || [];
     const r = calcularResumen(eventos);
@@ -900,6 +904,7 @@ app.get("/stats", (req, res) => {
     totalToquesGlobal += r.total;
     totalHoyGlobal += r.hoy;
     totalSemanaGlobal += r.semana;
+    r.dias7.forEach((v, i) => { dias7Global[i] += v; });
   }
 
   let tarjetas = "";
@@ -972,6 +977,10 @@ app.get("/stats", (req, res) => {
                        box-shadow:0 1px 2px rgba(11,61,44,0.04);flex:1;min-width:140px;}
           .resumen-num{font-size:2rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
           .resumen-lbl{font-size:0.74rem;color:${MARCA.textoSuave};margin-top:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
+          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px 24px;margin-top:16px;
+                      box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .chart-card-titulo{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:18px;text-align:center;}
+          .sparkline-grande{height:120px;max-width:520px;margin:0 auto;}
 
           /* Lista de negocios */
           .lista-negocios{display:flex;flex-direction:column;gap:16px;}
@@ -1016,6 +1025,11 @@ app.get("/stats", (req, res) => {
               <div class="resumen-box"><div class="resumen-num">${totalToquesGlobal}</div><div class="resumen-lbl">Toques totales</div></div>
               <div class="resumen-box"><div class="resumen-num">${totalHoyGlobal}</div><div class="resumen-lbl">Toques hoy</div></div>
               <div class="resumen-box"><div class="resumen-num">${totalSemanaGlobal}</div><div class="resumen-lbl">Últimos 7 días</div></div>
+            </div>
+
+            <div class="chart-card">
+              <div class="chart-card-titulo">Toques combinados de todos los negocios — últimos 7 días</div>
+              <div class="sparkline sparkline-grande">${barraSemana(dias7Global)}</div>
             </div>
           </div>
 
