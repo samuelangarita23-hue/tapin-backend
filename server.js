@@ -453,6 +453,215 @@ app.post("/calificar/:slug", (req, res) => {
 // Panel de generación y administración de códigos de activación.
 // Genera un código por cada tarjeta física ANTES de saber a qué negocio va.
 // Visítalo así: https://tu-dominio.com/codigos?key=TU_CLAVE
+// Página para crear y editar negocios directamente desde el navegador,
+// sin tener que tocar el código ni redesplegar en Render.
+// Visítalo así: https://tu-dominio.com/editar?key=TU_CLAVE
+app.get("/editar", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  const key = req.query.key;
+  const todos = todosLosNegocios();
+
+  const filas = Object.entries(todos)
+    .map(([slug, n]) => {
+      const editable = !NEGOCIOS[slug]; // los del código fuente no se editan aquí
+      const accion = editable
+        ? `<a href="/editar/${slug}?key=${key}">Editar</a>`
+        : `<span style="color:${MARCA.textoSuave};font-size:0.78rem;">Definido en server.js</span>`;
+      return `<tr>
+        <td><b>${n.nombre}</b></td>
+        <td><code class="codigo">/r/${slug}</code></td>
+        <td>${n.categoria || "—"}</td>
+        <td>${accion}</td>
+      </tr>`;
+    })
+    .join("");
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Editar negocios — Tapin</title>
+        <style>
+          ${ESTILO_BASE}
+          table{border-collapse:collapse;width:100%;background:#fff;border-radius:12px;overflow:hidden;border:1px solid ${MARCA.borde};}
+          th,td{padding:12px 16px;text-align:left;font-size:0.86rem;border-bottom:1px solid ${MARCA.borde};}
+          th{background:${MARCA.verdeOscuro};color:#fff;font-size:0.74rem;text-transform:uppercase;letter-spacing:0.04em;}
+          .codigo{background:${MARCA.verdeClaro};padding:3px 8px;border-radius:6px;font-family:monospace;}
+          a{font-weight:600;text-decoration:none;}
+          .btn-nuevo{display:inline-block;background:${MARCA.verdeOscuro};color:#fff;padding:11px 20px;border-radius:9px;
+                     font-weight:700;font-size:0.88rem;text-decoration:none;margin-bottom:20px;}
+          .btn-nuevo:hover{background:${MARCA.verde};}
+        </style>
+      </head>
+      <body>
+        <div class="topbar">
+          <div>${logoSvg("#FFFFFF", 22)}</div>
+          <a class="back" href="/stats?key=${key}">&larr; Volver al panel</a>
+        </div>
+        <div class="content">
+          <div class="eyebrow">Administración</div>
+          <h1 class="titulo-pagina">Negocios</h1>
+          <div class="subtitulo">Crea o edita negocios directamente, sin tocar código.</div>
+
+          <a class="btn-nuevo" href="/editar/nuevo?key=${key}">+ Agregar negocio nuevo</a>
+
+          <table>
+            <tr><th>Nombre</th><th>Enlace de toque</th><th>Categoría</th><th></th></tr>
+            ${filas || "<tr><td colspan='4'>Todavía no hay negocios.</td></tr>"}
+          </table>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Formulario para crear un negocio nuevo directamente (sin pasar por código de activación).
+app.get("/editar/nuevo", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const key = req.query.key;
+  res.send(formularioNegocio({ titulo: "Agregar negocio nuevo", accion: `/editar/nuevo?key=${key}`, key }));
+});
+
+app.post("/editar/nuevo", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const { nombre, googleUrl, categoria } = req.body;
+  if (!nombre || !googleUrl) {
+    return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
+  }
+
+  const codigos = leerCodigos();
+  let slug;
+  do {
+    slug = generarCodigo();
+  } while (codigos[slug] || NEGOCIOS[slug]);
+
+  codigos[slug] = {
+    activado: true,
+    creado: new Date().toISOString(),
+    activadoEl: new Date().toISOString(),
+    negocio: {
+      nombre,
+      googleUrl,
+      categoria: categoria || "otro",
+      claveAcceso: `${slug.toLowerCase()}-panel`,
+    },
+  };
+  guardarCodigos(codigos);
+
+  res.redirect(`/editar?key=${req.query.key}`);
+});
+
+// Editar un negocio dinámico existente (creado por código de activación o desde /editar/nuevo).
+app.get("/editar/:slug", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const { slug } = req.params;
+  if (NEGOCIOS[slug]) {
+    return res.status(400).send("Este negocio está definido directamente en server.js — edítalo ahí y vuelve a desplegar.");
+  }
+  const codigos = leerCodigos();
+  const entrada = codigos[slug];
+  if (!entrada || !entrada.activado) {
+    return res.status(404).send("Negocio no encontrado.");
+  }
+  const key = req.query.key;
+  res.send(formularioNegocio({
+    titulo: `Editar — ${entrada.negocio.nombre}`,
+    accion: `/editar/${slug}?key=${key}`,
+    key,
+    valores: entrada.negocio,
+  }));
+});
+
+app.post("/editar/:slug", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const { slug } = req.params;
+  const codigos = leerCodigos();
+  const entrada = codigos[slug];
+  if (!entrada || !entrada.activado) {
+    return res.status(404).send("Negocio no encontrado.");
+  }
+  const { nombre, googleUrl, categoria } = req.body;
+  if (!nombre || !googleUrl) {
+    return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
+  }
+  entrada.negocio.nombre = nombre;
+  entrada.negocio.googleUrl = googleUrl;
+  entrada.negocio.categoria = categoria || "otro";
+  guardarCodigos(codigos);
+
+  res.redirect(`/editar?key=${req.query.key}`);
+});
+
+// Plantilla reutilizable del formulario de crear/editar negocio.
+function formularioNegocio({ titulo, accion, key, valores = {} }) {
+  const categorias = ["restaurante", "peluqueria", "tienda", "clinica", "otro"];
+  const opciones = categorias
+    .map((c) => `<option value="${c}" ${valores.categoria === c ? "selected" : ""}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`)
+    .join("");
+
+  return `
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>${titulo} — Tapin</title>
+        <style>
+          ${ESTILO_BASE}
+          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;
+                     box-shadow:0 8px 24px rgba(11,61,44,0.06);}
+          label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin:14px 0 6px;}
+          label:first-of-type{margin-top:0;}
+          input,select{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;font-family:inherit;}
+          button{margin-top:22px;width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;
+                 padding:13px;font-size:0.95rem;font-weight:700;cursor:pointer;}
+          button:hover{background:${MARCA.verde};}
+        </style>
+      </head>
+      <body>
+        <div class="topbar">
+          <div>${logoSvg("#FFFFFF", 22)}</div>
+          <a class="back" href="/editar?key=${key}">&larr; Volver</a>
+        </div>
+        <div class="content">
+          <div class="eyebrow">Negocio</div>
+          <h1 class="titulo-pagina">${titulo}</h1>
+          <div class="subtitulo">Los cambios quedan activos de inmediato, sin redesplegar nada.</div>
+
+          <div class="form-card">
+            <form method="POST" action="${accion}">
+              <label>Nombre del negocio</label>
+              <input type="text" name="nombre" required value="${valores.nombre || ""}" placeholder="Ej: Restaurante La 21">
+
+              <label>Enlace de reseñas de Google</label>
+              <input type="url" name="googleUrl" required value="${valores.googleUrl || ""}" placeholder="https://g.page/r/.../review">
+
+              <label>Categoría</label>
+              <select name="categoria">${opciones}</select>
+
+              <button type="submit">Guardar</button>
+            </form>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+
+// Panel de generación y administración de códigos de activación.
+// Genera un código por cada tarjeta física ANTES de saber a qué negocio va.
+// Visítalo así: https://tu-dominio.com/codigos?key=TU_CLAVE
 app.get("/codigos", (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
@@ -789,7 +998,10 @@ app.get("/stats", (req, res) => {
       <body>
         <div class="topbar">
           <div style="display:flex;align-items:center;gap:0;">${logoSvg("#FFFFFF", 22)}</div>
-          <a href="/codigos?key=${key}" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;">+ Generar tarjetas</a>
+          <div>
+            <a href="/editar?key=${key}" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;margin-right:18px;">Editar negocios</a>
+            <a href="/codigos?key=${key}" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;">+ Generar tarjetas</a>
+          </div>
         </div>
         <div class="content">
 
