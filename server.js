@@ -124,6 +124,7 @@ function generarCodigo() {
 function obtenerNegocio(slug) {
   const codigos = leerCodigos();
   const entrada = codigos[slug];
+  if (entrada && entrada.desactivado) return null; // tarjeta quitada explícitamente
   if (entrada && entrada.activado && entrada.negocio) return entrada.negocio;
   if (NEGOCIOS[slug]) return NEGOCIOS[slug];
   return null;
@@ -303,11 +304,16 @@ function todosLosNegocios() {
   const codigos = leerCodigos();
   const dinamicos = {};
   for (const codigo in codigos) {
+    if (codigos[codigo].desactivado) continue;
     if (codigos[codigo].activado && codigos[codigo].negocio) {
       dinamicos[codigo] = codigos[codigo].negocio;
     }
   }
-  return { ...NEGOCIOS, ...dinamicos };
+  const resultado = { ...NEGOCIOS, ...dinamicos };
+  for (const slug in codigos) {
+    if (codigos[slug].desactivado) delete resultado[slug];
+  }
+  return resultado;
 }
 
 // Calcula el promedio de toques (últimos 7 días) de los negocios de la misma categoría,
@@ -469,7 +475,7 @@ app.get("/editar", (req, res) => {
         <td><b>${n.nombre}</b></td>
         <td><code class="codigo">/r/${slug}</code></td>
         <td>${n.categoria || "—"}</td>
-        <td><a href="/editar/${slug}?key=${key}">Editar</a></td>
+        <td><a href="/editar/${slug}?key=${key}">Editar</a> &nbsp;·&nbsp; <a href="/editar/${slug}/quitar?key=${key}" style="color:${MARCA.rojo};">Quitar</a></td>
       </tr>`;
     })
     .join("");
@@ -570,6 +576,7 @@ app.get("/editar/:slug", (req, res) => {
     accion: `/editar/${slug}?key=${key}`,
     key,
     valores: negocio,
+    slug,
   }));
 });
 
@@ -606,8 +613,74 @@ app.post("/editar/:slug", (req, res) => {
   res.redirect(`/editar?key=${req.query.key}`);
 });
 
+// Pantalla de confirmación antes de quitar una tarjeta (para evitar borrados accidentales).
+app.get("/editar/:slug/quitar", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  const key = req.query.key;
+
+  res.send(`
+    <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Quitar tarjeta — Tapin</title>
+      <style>
+        ${ESTILO_BASE}
+        .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;}
+        .btn-peligro{background:${MARCA.rojo};color:#fff;border:none;border-radius:9px;padding:13px;
+                     font-size:0.95rem;font-weight:700;cursor:pointer;width:100%;margin-top:10px;}
+        .btn-cancelar{display:block;text-align:center;margin-top:14px;color:${MARCA.textoSuave};font-size:0.85rem;}
+      </style></head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div></div>
+        <div class="content">
+          <div class="eyebrow">Atención</div>
+          <h1 class="titulo-pagina">¿Quitar esta tarjeta?</h1>
+          <div class="subtitulo">Vas a quitar <b>${negocio.nombre}</b> del panel.</div>
+          <div class="form-card">
+            <p style="font-size:0.88rem;color:${MARCA.textoSuave};line-height:1.5;">
+              La tarjeta deja de redirigir a Google y desaparece del panel. El historial de toques que ya tiene
+              <b>no se borra</b> — si más adelante reactivas este código o creas otro negocio con el mismo slug,
+              ese historial sigue ahí.
+            </p>
+            <form method="POST" action="/editar/${slug}/quitar?key=${key}">
+              <button type="submit" class="btn-peligro">Sí, quitar esta tarjeta</button>
+            </form>
+            <a class="btn-cancelar" href="/editar?key=${key}">Cancelar</a>
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Procesa la desactivación: la tarjeta deja de funcionar y desaparece del panel,
+// pero el historial de toques queda guardado en data.json por si se reactiva después.
+app.post("/editar/:slug/quitar", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  const codigos = leerCodigos();
+  if (!codigos[slug]) {
+    codigos[slug] = { creado: new Date().toISOString() };
+  }
+  codigos[slug].activado = false;
+  codigos[slug].desactivado = true;
+  codigos[slug].desactivadoEl = new Date().toISOString();
+  guardarCodigos(codigos);
+
+  res.redirect(`/editar?key=${req.query.key}`);
+});
+
 // Plantilla reutilizable del formulario de crear/editar negocio.
-function formularioNegocio({ titulo, accion, key, valores = {} }) {
+function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
   const categorias = ["restaurante", "peluqueria", "tienda", "clinica", "otro"];
   const opciones = categorias
     .map((c) => `<option value="${c}" ${valores.categoria === c ? "selected" : ""}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`)
@@ -629,6 +702,7 @@ function formularioNegocio({ titulo, accion, key, valores = {} }) {
           button{margin-top:22px;width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;
                  padding:13px;font-size:0.95rem;font-weight:700;cursor:pointer;}
           button:hover{background:${MARCA.verde};}
+          .quitar-link{display:block;text-align:center;margin-top:16px;color:${MARCA.rojo};font-size:0.84rem;font-weight:600;text-decoration:none;}
         </style>
       </head>
       <body>
@@ -654,6 +728,7 @@ function formularioNegocio({ titulo, accion, key, valores = {} }) {
 
               <button type="submit">Guardar</button>
             </form>
+            ${slug ? `<a class="quitar-link" href="/editar/${slug}/quitar?key=${key}">Quitar esta tarjeta</a>` : ""}
           </div>
         </div>
       </body>
