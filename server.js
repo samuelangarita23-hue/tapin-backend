@@ -16,7 +16,20 @@ const DATA_FILE = path.join(__dirname, "data.json");
 const ADMIN_KEY = process.env.ADMIN_KEY || "cambia-esta-clave";
 
 // Zona horaria de Colombia para mostrar fecha/hora legibles
-const TIMEZONE = "America/Bogota";
+// Zonas horarias soportadas por país. Cada negocio guarda cuál le corresponde
+// en su campo "zonaHoraria" — así los reportes muestran la hora local correcta
+// sin importar en qué país esté el negocio.
+const ZONAS_HORARIAS = {
+  colombia: "America/Bogota",
+  panama: "America/Panama",
+  paraguay: "America/Asuncion",
+  miami: "America/New_York", // Miami / Este de EE.UU.
+};
+const TIMEZONE_DEFAULT = ZONAS_HORARIAS.colombia;
+
+function zonaDe(negocio) {
+  return (negocio && ZONAS_HORARIAS[negocio.pais]) || TIMEZONE_DEFAULT;
+}
 
 // ---------- Marca Tapin ----------
 // Path vectorial real del logo (extraído del archivo de marca), reutilizado en todo el panel.
@@ -64,6 +77,7 @@ const NEGOCIOS = {
     nombre: "Mi Negocio",
     googleUrl: "https://g.page/r/REEMPLAZA_CON_TU_ENLACE/review",
     categoria: "restaurante",
+    pais: "colombia",
     claveAcceso: "mi-negocio-2026",
   },
   // "otro-local": {
@@ -191,17 +205,18 @@ function barraSemana(dias7) {
     .join("");
 }
 
-function registrarToque(slug, req) {
+function registrarToque(slug, req, negocio) {
   const datos = leerDatos();
   if (!datos[slug]) {
     datos[slug] = { total: 0, eventos: [] };
   }
 
   const ahora = new Date();
+  const tz = zonaDe(negocio);
 
   const evento = {
     fechaISO: ahora.toISOString(), // fecha exacta en formato estándar (para guardar/exportar)
-    fechaLegible: ahora.toLocaleString("es-CO", { timeZone: TIMEZONE }), // ej: 27/6/2026, 9:14:32 a. m.
+    fechaLegible: ahora.toLocaleString("es-CO", { timeZone: tz }), // ej: 27/6/2026, 9:14:32 a. m. (hora local del negocio)
     dispositivo: detectarDispositivo(req.headers["user-agent"]),
   };
 
@@ -217,14 +232,14 @@ function registrarToque(slug, req) {
   return evento;
 }
 
-function guardarQueja(slug, comentario) {
+function guardarQueja(slug, comentario, negocio) {
   const datos = leerDatos();
   if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
   if (!datos[slug].quejas) datos[slug].quejas = [];
   const ahora = new Date();
   datos[slug].quejas.push({
     fechaISO: ahora.toISOString(),
-    fechaLegible: ahora.toLocaleString("es-CO", { timeZone: TIMEZONE }),
+    fechaLegible: ahora.toLocaleString("es-CO", { timeZone: zonaDe(negocio) }),
     comentario,
   });
   guardarDatos(datos);
@@ -233,8 +248,9 @@ function guardarQueja(slug, comentario) {
 // Genera recomendaciones automáticas simples (reglas si-entonces) a partir de los
 // datos ya calculados — esto es lo que convierte "te muestro números" en
 // "te doy un consejo basado en tus números" (punto 8).
-function generarRecomendaciones(eventos, r) {
+function generarRecomendaciones(eventos, r, negocio) {
   const recos = [];
+  const tz = zonaDe(negocio);
 
   // Regla 1: comparación semana actual vs. semana anterior
   const ahora = new Date();
@@ -276,13 +292,13 @@ function generarRecomendaciones(eventos, r) {
     recos.push("Todavía no se ha registrado ningún toque. Confirma que la tarjeta esté colocada en un lugar visible para tus clientes.");
   }
 
-  // Regla 3: hora/día pico de la semana
+  // Regla 3: hora/día pico de la semana, usando la hora LOCAL del negocio (no la del servidor)
   const conteoPorDiaHora = {};
   for (const e of eventos) {
     const f = new Date(e.fechaISO);
-    const dia = f.toLocaleDateString("es-CO", { timeZone: TIMEZONE, weekday: "long" });
-    const hora = f.getHours();
-    const bloque = hora < 12 ? "en la mañana" : hora < 18 ? "en la tarde" : "en la noche";
+    const dia = f.toLocaleDateString("es-CO", { timeZone: tz, weekday: "long" });
+    const horaLocal = parseInt(f.toLocaleString("es-CO", { timeZone: tz, hour: "2-digit", hour12: false }), 10);
+    const bloque = horaLocal < 12 ? "en la mañana" : horaLocal < 18 ? "en la tarde" : "en la noche";
     const clave = `${dia} ${bloque}`;
     conteoPorDiaHora[clave] = (conteoPorDiaHora[clave] || 0) + 1;
   }
@@ -350,7 +366,7 @@ app.get("/r/:slug", (req, res) => {
     return res.status(404).send("Negocio no encontrado. Revisa el enlace del QR/NFC.");
   }
 
-  registrarToque(slug, req);
+  registrarToque(slug, req, negocio);
 
   res.send(`
     <html>
@@ -442,7 +458,7 @@ app.post("/calificar/:slug", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
-  guardarQueja(slug, req.body.comentario || "(sin comentario)");
+  guardarQueja(slug, req.body.comentario || "(sin comentario)", negocio);
 
   res.send(`
     <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -533,7 +549,7 @@ app.post("/editar/nuevo", (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
-  const { nombre, googleUrl, categoria } = req.body;
+  const { nombre, googleUrl, categoria, pais } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
@@ -552,6 +568,7 @@ app.post("/editar/nuevo", (req, res) => {
       nombre,
       googleUrl,
       categoria: categoria || "otro",
+      pais: pais || "colombia",
       claveAcceso: `${slug.toLowerCase()}-panel`,
     },
   };
@@ -589,7 +606,7 @@ app.post("/editar/:slug", (req, res) => {
   if (!negocioActual) {
     return res.status(404).send("Negocio no encontrado.");
   }
-  const { nombre, googleUrl, categoria } = req.body;
+  const { nombre, googleUrl, categoria, pais } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
@@ -606,6 +623,7 @@ app.post("/editar/:slug", (req, res) => {
     nombre,
     googleUrl,
     categoria: categoria || "otro",
+    pais: pais || negocioActual.pais || "colombia",
     claveAcceso: (codigos[slug].negocio && codigos[slug].negocio.claveAcceso) || negocioActual.claveAcceso || `${slug.toLowerCase()}-panel`,
   };
   guardarCodigos(codigos);
@@ -686,6 +704,16 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
     .map((c) => `<option value="${c}" ${valores.categoria === c ? "selected" : ""}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`)
     .join("");
 
+  const paises = {
+    colombia: "Colombia",
+    panama: "Panamá",
+    paraguay: "Paraguay",
+    miami: "Estados Unidos (Miami)",
+  };
+  const opcionesPais = Object.entries(paises)
+    .map(([valor, etiqueta]) => `<option value="${valor}" ${valores.pais === valor ? "selected" : ""}>${etiqueta}</option>`)
+    .join("");
+
   return `
     <html>
       <head>
@@ -725,6 +753,9 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
 
               <label>Categoría</label>
               <select name="categoria">${opciones}</select>
+
+              <label>País (define la hora local de los reportes)</label>
+              <select name="pais">${opcionesPais}</select>
 
               <button type="submit">Guardar</button>
             </form>
@@ -900,6 +931,14 @@ app.get("/activar/:codigo", (req, res) => {
                 <option value="otro">Otro</option>
               </select>
 
+              <label>País (define la hora local de los reportes)</label>
+              <select name="pais">
+                <option value="colombia">Colombia</option>
+                <option value="panama">Panamá</option>
+                <option value="paraguay">Paraguay</option>
+                <option value="miami">Estados Unidos (Miami)</option>
+              </select>
+
               <button type="submit">Activar tarjeta</button>
             </form>
           </div>
@@ -918,7 +957,7 @@ app.post("/activar/:codigo", (req, res) => {
   if (!entrada) return res.status(404).send("Código no válido.");
   if (entrada.activado) return res.status(400).send("Esta tarjeta ya fue activada antes.");
 
-  const { nombre, googleUrl, categoria } = req.body;
+  const { nombre, googleUrl, categoria, pais } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
@@ -929,6 +968,7 @@ app.post("/activar/:codigo", (req, res) => {
     nombre,
     googleUrl,
     categoria: categoria || "otro",
+    pais: pais || "colombia",
     claveAcceso: `${codigo.toLowerCase()}-panel`,
   };
 
@@ -1230,7 +1270,7 @@ app.get("/mi-panel/:slug", (req, res) => {
   const eventos = (datos[slug] && datos[slug].eventos) || [];
   const r = calcularResumen(eventos);
   const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
-  const recomendaciones = generarRecomendaciones(eventos, r);
+  const recomendaciones = generarRecomendaciones(eventos, r, negocio);
 
   const recomendacionesHtml = recomendaciones
     .map((texto) => `<div class="reco">💡 ${texto}</div>`)
@@ -1281,7 +1321,7 @@ app.get("/mi-panel/:slug", (req, res) => {
           <div class="seccion" style="text-align:center;">
             <div class="eyebrow" style="justify-content:center;">Panel del negocio</div>
             <h1 class="titulo-pagina">${negocio.nombre}</h1>
-            <div class="subtitulo">Actualizado al ${new Date().toLocaleDateString("es-CO", { timeZone: TIMEZONE })}</div>
+            <div class="subtitulo">Actualizado al ${new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) })}</div>
           </div>
 
           <div class="seccion">
@@ -1326,7 +1366,7 @@ app.get("/reporte/:slug", (req, res) => {
   const eventos = (datos[slug] && datos[slug].eventos) || [];
   const r = calcularResumen(eventos);
   const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
-  const recomendaciones = generarRecomendaciones(eventos, r);
+  const recomendaciones = generarRecomendaciones(eventos, r, negocio);
   const recomendacionesHtml = recomendaciones.map((texto) => `<div class="reco">💡 ${texto}</div>`).join("");
 
   const recientes = eventos
@@ -1366,7 +1406,7 @@ app.get("/reporte/:slug", (req, res) => {
         <a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a>
         <div class="card">
           <h1>${negocio.nombre}</h1>
-          <div class="fecha">Reporte generado el ${new Date().toLocaleDateString("es-CO", { timeZone: TIMEZONE })}</div>
+          <div class="fecha">Reporte generado el ${new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) })}</div>
           <div class="metrics">
             <div class="metric"><div class="metric-num">${r.total}</div><div class="metric-lbl">Total</div></div>
             <div class="metric"><div class="metric-num">${r.hoy}</div><div class="metric-lbl">Hoy</div></div>
@@ -1418,7 +1458,7 @@ app.get("/export/:slug.pdf", async (req, res) => {
   y -= 26;
   page.drawText(negocio.nombre, { x: 50, y, size: 14, font, color: verde });
   y -= 18;
-  page.drawText(`Generado el ${new Date().toLocaleDateString("es-CO", { timeZone: TIMEZONE })}`, {
+  page.drawText(`Generado el ${new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) })}`, {
     x: 50, y, size: 10, font, color: gris,
   });
 
@@ -1542,12 +1582,25 @@ app.get("/notificar/:slug", async (req, res) => {
 });
 
 // Misma información en JSON, útil si luego quieres conectar esto a un dashboard propio.
+// Misma información en JSON, útil para conectar la app móvil o un dashboard propio.
+// Incluye nombre y categoría de cada negocio (no solo los eventos), para que
+// la app no tenga que adivinar esa parte.
 app.get("/stats.json", (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).json({ error: "No autorizado" });
   }
   const datos = leerDatos();
-  res.json(datos);
+  const negociosTotal = todosLosNegocios();
+  const resultado = {};
+  for (const slug in negociosTotal) {
+    resultado[slug] = {
+      nombre: negociosTotal[slug].nombre,
+      categoria: negociosTotal[slug].categoria || null,
+      total: (datos[slug] && datos[slug].total) || 0,
+      eventos: (datos[slug] && datos[slug].eventos) || [],
+    };
+  }
+  res.json(resultado);
 });
 
 app.get("/", (req, res) => {
