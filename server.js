@@ -1023,14 +1023,21 @@ app.get("/stats", (req, res) => {
   }
 
   const PAISES_INFO = {
-    colombia: "Colombia",
-    panama: "Panamá",
-    paraguay: "Paraguay",
-    miami: "Estados Unidos (Miami)",
+    colombia: { nombre: "Colombia", bandera: "🇨🇴" },
+    panama: { nombre: "Panamá", bandera: "🇵🇦" },
+    paraguay: { nombre: "Paraguay", bandera: "🇵🇾" },
+    miami: { nombre: "Estados Unidos (Miami)", bandera: "🇺🇸" },
   };
 
-  let tarjetas = "";
+  // Agrupamos los negocios por país antes de armar el HTML.
+  const negociosPorPais = {};
   for (const slug in NEGOCIOS_TOTAL) {
+    const paisSlug = NEGOCIOS_TOTAL[slug].pais || "colombia";
+    if (!negociosPorPais[paisSlug]) negociosPorPais[paisSlug] = [];
+    negociosPorPais[paisSlug].push(slug);
+  }
+
+  function tarjetaHtml(slug) {
     const eventos = (datos[slug] && datos[slug].eventos) || [];
     const r = calcularResumen(eventos);
     const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
@@ -1041,10 +1048,8 @@ app.get("/stats", (req, res) => {
          </div>`
       : "";
 
-    const paisSlug = NEGOCIOS_TOTAL[slug].pais || "colombia";
-
-    tarjetas += `
-      <div class="card" data-pais="${paisSlug}">
+    return `
+      <div class="card">
         <div class="card-top">
           <div>
             <div class="card-nombre">${NEGOCIOS_TOTAL[slug].nombre}</div>
@@ -1074,19 +1079,31 @@ app.get("/stats", (req, res) => {
       </div>`;
   }
 
-  if (!tarjetas) {
-    tarjetas = `<p style="color:${MARCA.textoSuave}">No hay negocios configurados todavía en NEGOCIOS dentro de server.js.</p>`;
+  // Una sección completa por país, solo para los que tengan al menos un negocio.
+  let seccionesPaises = "";
+  for (const codigoPais of Object.keys(PAISES_INFO)) {
+    const slugs = negociosPorPais[codigoPais];
+    if (!slugs || slugs.length === 0) continue;
+
+    const totalPais = slugs.reduce((acc, slug) => {
+      const eventos = (datos[slug] && datos[slug].eventos) || [];
+      return acc + calcularResumen(eventos).total;
+    }, 0);
+
+    seccionesPaises += `
+      <div class="seccion-pais">
+        <div class="pais-header">
+          <div class="pais-titulo">${PAISES_INFO[codigoPais].bandera} ${PAISES_INFO[codigoPais].nombre}</div>
+          <div class="pais-conteo">${slugs.length} ${slugs.length === 1 ? "negocio" : "negocios"} · ${totalPais} toques totales</div>
+        </div>
+        <div class="lista-negocios">
+          ${slugs.map(tarjetaHtml).join("")}
+        </div>
+      </div>`;
   }
 
-  // Pestañas: "Todos" + un tab por cada país que realmente tenga al menos un negocio.
-  const paisesConNegocios = new Set(
-    Object.values(NEGOCIOS_TOTAL).map((n) => n.pais || "colombia")
-  );
-  let tabsHtml = `<button class="tab-pais activo" data-pais="todos">Todos</button>`;
-  for (const codigoPais of Object.keys(PAISES_INFO)) {
-    if (paisesConNegocios.has(codigoPais)) {
-      tabsHtml += `<button class="tab-pais" data-pais="${codigoPais}">${PAISES_INFO[codigoPais]}</button>`;
-    }
+  if (!seccionesPaises) {
+    seccionesPaises = `<p style="color:${MARCA.textoSuave}">No hay negocios configurados todavía en NEGOCIOS dentro de server.js.</p>`;
   }
 
   res.send(`
@@ -1137,11 +1154,11 @@ app.get("/stats", (req, res) => {
           .card-actions{display:flex;flex-wrap:wrap;}
           .card-actions a{color:${MARCA.verde};font-weight:600;text-decoration:none;font-size:0.78rem;white-space:nowrap;margin:0 14px 6px 0;}
           .card-actions a:hover{color:${MARCA.verdeOscuro};text-decoration:underline;}
-          .tabs-pais{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:24px;}
-          .tab-pais{background:#fff;border:1px solid ${MARCA.borde};color:${MARCA.textoSuave};font-weight:700;
-                    font-size:0.8rem;padding:8px 16px;border-radius:100px;cursor:pointer;font-family:inherit;}
-          .tab-pais.activo{background:${MARCA.verdeOscuro};color:#fff;border-color:${MARCA.verdeOscuro};}
-          .tab-pais:hover{border-color:${MARCA.verdeOscuro};}
+          .seccion-pais{margin-bottom:36px;}
+          .pais-header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;
+                       border-bottom:2px solid ${MARCA.verdeOscuro};padding-bottom:10px;margin-bottom:18px;}
+          .pais-titulo{font-size:1.15rem;font-weight:800;color:${MARCA.verdeOscuro};}
+          .pais-conteo{font-size:0.78rem;color:${MARCA.textoSuave};font-weight:600;}
         </style>
       </head>
       <body>
@@ -1175,33 +1192,14 @@ app.get("/stats", (req, res) => {
 
           <div class="seccion">
             <div class="seccion-header">
-              <div class="eyebrow">Por negocio</div>
-              <h2>Negocios uno por uno</h2>
-              <p>Detalle individual de cada tarjeta Tapin.</p>
+              <div class="eyebrow">Por país</div>
+              <h2>Negocios por país</h2>
+              <p>Cada país con su propia sección y sus negocios uno por uno.</p>
             </div>
-            <div class="tabs-pais">${tabsHtml}</div>
-            <div class="lista-negocios">
-              ${tarjetas}
-            </div>
+            ${seccionesPaises}
           </div>
 
         </div>
-        <script>
-          document.querySelectorAll('.tab-pais').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-              document.querySelectorAll('.tab-pais').forEach(function (b) { b.classList.remove('activo'); });
-              btn.classList.add('activo');
-              var pais = btn.getAttribute('data-pais');
-              document.querySelectorAll('.lista-negocios .card').forEach(function (card) {
-                if (pais === 'todos' || card.getAttribute('data-pais') === pais) {
-                  card.style.display = '';
-                } else {
-                  card.style.display = 'none';
-                }
-              });
-            });
-          });
-        </script>
       </body>
     </html>
   `);
