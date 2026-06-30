@@ -1091,7 +1091,7 @@ app.get("/stats", (req, res) => {
     }, 0);
 
     seccionesPaises += `
-      <div class="seccion-pais">
+      <div class="seccion-pais" id="pais-${codigoPais}">
         <div class="pais-header">
           <div class="pais-titulo">${PAISES_INFO[codigoPais].bandera} ${PAISES_INFO[codigoPais].nombre}</div>
           <div class="pais-conteo">${slugs.length} ${slugs.length === 1 ? "negocio" : "negocios"} · ${totalPais} toques totales</div>
@@ -1100,6 +1100,14 @@ app.get("/stats", (req, res) => {
           ${slugs.map(tarjetaHtml).join("")}
         </div>
       </div>`;
+  }
+
+  // Botones de acceso rápido arriba: uno por cada país que tenga negocios, saltan directo a su sección.
+  let botonesPaises = "";
+  for (const codigoPais of Object.keys(PAISES_INFO)) {
+    const slugs = negociosPorPais[codigoPais];
+    if (!slugs || slugs.length === 0) continue;
+    botonesPaises += `<a href="#pais-${codigoPais}" class="btn-pais">${PAISES_INFO[codigoPais].bandera} ${PAISES_INFO[codigoPais].nombre}</a>`;
   }
 
   if (!seccionesPaises) {
@@ -1159,6 +1167,11 @@ app.get("/stats", (req, res) => {
                        border-bottom:2px solid ${MARCA.verdeOscuro};padding-bottom:10px;margin-bottom:18px;}
           .pais-titulo{font-size:1.15rem;font-weight:800;color:${MARCA.verdeOscuro};}
           .pais-conteo{font-size:0.78rem;color:${MARCA.textoSuave};font-weight:600;}
+          .botones-paises{display:flex;flex-wrap:wrap;justify-content:center;margin-bottom:28px;}
+          .btn-pais{background:#fff;border:1px solid ${MARCA.borde};color:${MARCA.texto};font-weight:700;
+                    font-size:0.82rem;padding:9px 18px;border-radius:100px;text-decoration:none;
+                    margin:0 8px 8px 0;display:inline-block;}
+          .btn-pais:hover{border-color:${MARCA.verdeOscuro};background:${MARCA.verdeClaro};}
         </style>
       </head>
       <body>
@@ -1196,6 +1209,7 @@ app.get("/stats", (req, res) => {
               <h2>Negocios por país</h2>
               <p>Cada país con su propia sección y sus negocios uno por uno.</p>
             </div>
+            <div class="botones-paises">${botonesPaises}</div>
             ${seccionesPaises}
           </div>
 
