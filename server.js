@@ -6,11 +6,51 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const nodemailer = require("nodemailer");
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, "data.json");
+
+// ---------- Envío de correos (alertas, reportes mensuales, etc.) ----------
+// Funciona con cualquier SMTP. Para Gmail: activa verificación en 2 pasos en la
+// cuenta y genera una "contraseña de aplicación" (myaccount.google.com/apppasswords),
+// esa es la que va en EMAIL_PASS (NO tu contraseña normal de Gmail).
+// Variables de entorno necesarias en Render: EMAIL_USER, EMAIL_PASS.
+let transportadorEmail = null;
+function obtenerTransportador() {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return null;
+  if (!transportadorEmail) {
+    transportadorEmail = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST || "smtp.gmail.com",
+      port: parseInt(process.env.EMAIL_PORT, 10) || 465,
+      secure: true,
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+    });
+  }
+  return transportadorEmail;
+}
+
+async function enviarEmail(destinatario, asunto, html) {
+  const transportador = obtenerTransportador();
+  if (!transportador || !destinatario) {
+    console.log(`[email no enviado — falta config o destinatario] asunto: ${asunto}`);
+    return { ok: false, motivo: "Falta EMAIL_USER/EMAIL_PASS en el servidor o el negocio no tiene 'email' configurado." };
+  }
+  try {
+    await transportador.sendMail({
+      from: `"Tapin" <${process.env.EMAIL_USER}>`,
+      to: destinatario,
+      subject: asunto,
+      html,
+    });
+    return { ok: true };
+  } catch (err) {
+    console.error("Error enviando email:", err.message);
+    return { ok: false, motivo: err.message };
+  }
+}
 
 // Clave simple para proteger /stats, /historial y /export (cámbiala por la tuya)
 const ADMIN_KEY = process.env.ADMIN_KEY || "cambia-esta-clave";
@@ -79,12 +119,16 @@ const NEGOCIOS = {
     categoria: "restaurante",
     pais: "colombia",
     claveAcceso: "mi-negocio-2026",
+    email: "dueno@minegocio.com",
+    plan: "basico", // "basico" o "pro" — solo "pro" recibe alertas, reporte mensual y contenido
   },
   // "otro-local": {
   //   nombre: "Otro Local",
   //   googleUrl: "https://g.page/r/OTRO_ENLACE/review",
   //   categoria: "peluqueria",
   //   claveAcceso: "otro-local-2026",
+  //   email: "dueno@otrolocal.com",
+  //   plan: "pro",
   // },
 };
 
@@ -142,6 +186,14 @@ function obtenerNegocio(slug) {
   if (entrada && entrada.activado && entrada.negocio) return entrada.negocio;
   if (NEGOCIOS[slug]) return NEGOCIOS[slug];
   return null;
+}
+
+// Las 3 funciones de valor agregado (alerta instantánea de quejas, reporte mensual
+// por correo, y generador de contenido) están reservadas al Plan Pro.
+// Si el negocio no tiene plan "pro", simplemente no se disparan — sin importar
+// si el código las soporta técnicamente.
+function esPro(negocio) {
+  return !!negocio && negocio.plan === "pro";
 }
 
 // Detecta tipo de dispositivo de forma simple a partir del user-agent
@@ -232,7 +284,21 @@ function registrarToque(slug, req, negocio) {
   return evento;
 }
 
-function guardarQueja(slug, comentario, negocio) {
+function guardarTestimonio(slug, frase, valor, negocio) {
+  const datos = leerDatos();
+  if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
+  if (!datos[slug].testimonios) datos[slug].testimonios = [];
+  const ahora = new Date();
+  datos[slug].testimonios.push({
+    fechaISO: ahora.toISOString(),
+    fechaLegible: ahora.toLocaleString("es-CO", { timeZone: zonaDe(negocio) }),
+    frase,
+    valor,
+  });
+  guardarDatos(datos);
+}
+
+function guardarQueja(slug, comentario, negocio, telefono = "") {
   const datos = leerDatos();
   if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
   if (!datos[slug].quejas) datos[slug].quejas = [];
@@ -241,6 +307,8 @@ function guardarQueja(slug, comentario, negocio) {
     fechaISO: ahora.toISOString(),
     fechaLegible: ahora.toLocaleString("es-CO", { timeZone: zonaDe(negocio) }),
     comentario,
+    telefono,
+    estado: "pendiente", // pendiente | contactado | resuelto
   });
   guardarDatos(datos);
 }
@@ -416,7 +484,58 @@ app.get("/calificar/:slug", (req, res) => {
   const valor = parseInt(req.query.valor, 10);
 
   if (valor >= 4) {
-    return res.redirect(302, negocio.googleUrl);
+    // El generador de contenido (frases con un toque) es exclusivo del Plan Pro.
+    // Los negocios básicos van directo a Google, sin este paso extra.
+    if (!esPro(negocio)) {
+      return res.redirect(302, negocio.googleUrl);
+    }
+
+    const frases = [
+      "Excelente atención",
+      "Muy buena comida",
+      "Ambiente increíble",
+      "Rápido y eficiente",
+      "Lo recomiendo 100%",
+      "Volveré seguro",
+    ];
+    const chips = frases
+      .map(
+        (f) =>
+          `<a href="/testimonio/${slug}?valor=${valor}&frase=${encodeURIComponent(f)}" class="chip">${f}</a>`
+      )
+      .join("");
+
+    return res.send(`
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>${negocio.nombre}</title>
+          <style>
+            *{box-sizing:border-box;}
+            body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F8F4EC;
+                 display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;}
+            .box{background:#fff;border-radius:18px;padding:32px 26px;max-width:380px;width:100%;
+                 text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.08);}
+            h1{font-size:1.15rem;margin:0 0 6px;color:#16201C;}
+            p{color:#777;font-size:0.88rem;margin:0 0 20px;}
+            .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:18px;}
+            .chip{background:#F1F7F4;color:#0F5132;border:1px solid #DCEAE2;border-radius:100px;
+                  padding:10px 14px;font-size:0.85rem;font-weight:600;text-decoration:none;}
+            .chip:active{transform:scale(0.96);}
+            .saltar{display:block;color:#999;font-size:0.82rem;text-decoration:underline;}
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            <h1>¡Qué bueno! 🎉</h1>
+            <p>¿Qué fue lo que más te gustó? (toca una, opcional)</p>
+            <div class="chips">${chips}</div>
+            <a class="saltar" href="${negocio.googleUrl}">Saltar e ir directo a Google &rarr;</a>
+          </div>
+        </body>
+      </html>
+    `);
   }
 
   // Calificación negativa: mostramos un formulario privado en vez de mandarlo a Google
@@ -445,6 +564,7 @@ app.get("/calificar/:slug", (req, res) => {
           <p>Cuéntanos qué pasó — esto llega directo al negocio, no se publica en ningún lado.</p>
           <form method="POST" action="/calificar/${slug}">
             <textarea name="comentario" placeholder="Escribe aquí lo que pasó..."></textarea>
+            <input type="tel" name="telefono" placeholder="Tu teléfono (opcional, para que te llamen)" style="width:100%;margin-top:10px;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:0.92rem;font-family:inherit;">
             <button type="submit">Enviar</button>
           </form>
         </div>
@@ -453,12 +573,35 @@ app.get("/calificar/:slug", (req, res) => {
   `);
 });
 
-app.post("/calificar/:slug", (req, res) => {
+app.post("/calificar/:slug", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
-  guardarQueja(slug, req.body.comentario || "(sin comentario)", negocio);
+  const comentario = req.body.comentario || "(sin comentario)";
+  const telefono = req.body.telefono || "";
+  guardarQueja(slug, comentario, negocio, telefono);
+
+  // Alerta inmediata por correo — solo Plan Pro. El negocio básico igual evita
+  // que la queja se publique en Google, pero no recibe el aviso instantáneo.
+  if (esPro(negocio)) {
+    const horaLocal = new Date().toLocaleString("es-CO", { timeZone: zonaDe(negocio) });
+    enviarEmail(
+      negocio.email,
+      `🚨 Cliente insatisfecho en ${negocio.nombre} — actúa ahora`,
+      `
+        <div style="font-family:-apple-system,Arial,sans-serif;max-width:480px;">
+          <h2 style="color:#C0392B;margin-bottom:4px;">Un cliente no tuvo una buena experiencia</h2>
+          <p style="color:#666;font-size:0.9rem;margin-top:0;">${horaLocal}</p>
+          <div style="background:#FBEFE9;border-left:3px solid #C0392B;padding:14px 16px;border-radius:8px;margin:16px 0;">
+            <p style="margin:0;color:#16201C;">"${comentario}"</p>
+          </div>
+          ${telefono ? `<p><b>Teléfono para contactarlo:</b> <a href="tel:${telefono}">${telefono}</a></p>` : `<p style="color:#888;">No dejó teléfono de contacto.</p>`}
+          <p style="font-size:0.85rem;color:#888;margin-top:24px;">Entre más rápido respondas, más probable es convertir esto en un cliente recuperado en vez de una reseña negativa pública.</p>
+        </div>
+      `
+    ).catch(() => {});
+  }
 
   res.send(`
     <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -468,6 +611,20 @@ app.post("/calificar/:slug", (req, res) => {
     </style></head>
     <body><div class="box"><h2>Gracias por avisarnos 🙏</h2><p>El negocio ya recibió tu comentario y lo va a revisar.</p></div></body></html>
   `);
+});
+
+// Guarda el micro-testimonio elegido con un solo toque y manda al cliente a Google.
+// Esto alimenta el generador de contenido para redes (/contenido/:slug).
+app.get("/testimonio/:slug", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  const frase = req.query.frase || "";
+  const valor = parseInt(req.query.valor, 10) || 5;
+  if (frase && esPro(negocio)) guardarTestimonio(slug, frase, valor, negocio);
+
+  res.redirect(302, negocio.googleUrl);
 });
 
 // Panel visual: una tarjeta por negocio con totales de hoy, semana, y mini gráfica.
@@ -549,7 +706,7 @@ app.post("/editar/nuevo", (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
-  const { nombre, googleUrl, categoria, pais } = req.body;
+  const { nombre, googleUrl, categoria, pais, email, plan } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
@@ -570,6 +727,8 @@ app.post("/editar/nuevo", (req, res) => {
       categoria: categoria || "otro",
       pais: pais || "colombia",
       claveAcceso: `${slug.toLowerCase()}-panel`,
+      email: email || "",
+      plan: plan === "pro" ? "pro" : "basico",
     },
   };
   guardarCodigos(codigos);
@@ -606,7 +765,7 @@ app.post("/editar/:slug", (req, res) => {
   if (!negocioActual) {
     return res.status(404).send("Negocio no encontrado.");
   }
-  const { nombre, googleUrl, categoria, pais } = req.body;
+  const { nombre, googleUrl, categoria, pais, email, plan } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
@@ -625,6 +784,8 @@ app.post("/editar/:slug", (req, res) => {
     categoria: categoria || "otro",
     pais: pais || negocioActual.pais || "colombia",
     claveAcceso: (codigos[slug].negocio && codigos[slug].negocio.claveAcceso) || negocioActual.claveAcceso || `${slug.toLowerCase()}-panel`,
+    email: email || negocioActual.email || "",
+    plan: plan === "pro" ? "pro" : "basico",
   };
   guardarCodigos(codigos);
 
@@ -750,6 +911,15 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
 
               <label>Enlace de reseñas de Google</label>
               <input type="url" name="googleUrl" required value="${valores.googleUrl || ""}" placeholder="https://g.page/r/.../review">
+
+              <label>Email del negocio (alertas y reportes llegan aquí)</label>
+              <input type="email" name="email" required value="${valores.email || ""}" placeholder="dueno@negocio.com">
+
+              <label>Plan</label>
+              <select name="plan">
+                <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($89.900 — sin alertas ni reportes)</option>
+                <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($180.000/mes — alertas, reporte mensual, contenido)</option>
+              </select>
 
               <label>Categoría</label>
               <select name="categoria">${opciones}</select>
@@ -922,6 +1092,15 @@ app.get("/activar/:codigo", (req, res) => {
               <label>Enlace de reseñas de Google</label>
               <input type="url" name="googleUrl" required placeholder="https://g.page/r/.../review">
 
+              <label>Email del negocio (alertas y reportes llegan aquí)</label>
+              <input type="email" name="email" required placeholder="dueno@negocio.com">
+
+              <label>Plan</label>
+              <select name="plan">
+                <option value="basico">Básico ($89.900 — sin alertas ni reportes)</option>
+                <option value="pro">Pro ($180.000/mes — alertas, reporte mensual, contenido)</option>
+              </select>
+
               <label>Categoría</label>
               <select name="categoria">
                 <option value="restaurante">Restaurante</option>
@@ -957,7 +1136,7 @@ app.post("/activar/:codigo", (req, res) => {
   if (!entrada) return res.status(404).send("Código no válido.");
   if (entrada.activado) return res.status(400).send("Esta tarjeta ya fue activada antes.");
 
-  const { nombre, googleUrl, categoria, pais } = req.body;
+  const { nombre, googleUrl, categoria, pais, email, plan } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
@@ -970,6 +1149,8 @@ app.post("/activar/:codigo", (req, res) => {
     categoria: categoria || "otro",
     pais: pais || "colombia",
     claveAcceso: `${codigo.toLowerCase()}-panel`,
+    email: email || "",
+    plan: plan === "pro" ? "pro" : "basico",
   };
 
   guardarCodigos(codigos);
@@ -1052,7 +1233,7 @@ app.get("/stats", (req, res) => {
       <div class="card">
         <div class="card-top">
           <div>
-            <div class="card-nombre">${NEGOCIOS_TOTAL[slug].nombre}</div>
+            <div class="card-nombre">${NEGOCIOS_TOTAL[slug].nombre} ${esPro(NEGOCIOS_TOTAL[slug]) ? `<span class="badge-pro">PRO</span>` : `<span class="badge-basico">BÁSICO</span>`}</div>
             <div class="card-slug">/r/${slug}</div>
           </div>
           <div class="card-total">${r.total}<span>toques totales</span></div>
@@ -1075,6 +1256,8 @@ app.get("/stats", (req, res) => {
           <a href="/export/${slug}.csv?key=${key}">CSV</a>
           <a href="/export/${slug}.pdf?key=${key}">PDF</a>
           <a href="/quejas/${slug}?key=${key}">Quejas</a>
+          <a href="/contenido/${slug}?key=${key}">Contenido</a>
+          <a href="/notificar/${slug}?key=${key}">Enviar reporte por email</a>
         </div>
       </div>`;
   }
@@ -1148,6 +1331,8 @@ app.get("/stats", (req, res) => {
           .card:hover{box-shadow:0 1px 2px rgba(11,61,44,0.05), 0 12px 32px rgba(11,61,44,0.10);}
           .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
           .card-nombre{font-weight:700;font-size:1.08rem;letter-spacing:-0.01em;}
+          .badge-pro{background:${MARCA.oro};color:#fff;font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:100px;letter-spacing:0.04em;vertical-align:middle;}
+          .badge-basico{background:${MARCA.borde};color:${MARCA.textoSuave};font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:100px;letter-spacing:0.04em;vertical-align:middle;}
           .card-slug{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:2px;font-family:monospace;}
           .card-total{text-align:right;font-size:1.7rem;font-weight:700;color:${MARCA.verde};line-height:1;}
           .card-total span{display:block;font-size:0.6rem;font-weight:600;color:${MARCA.textoSuave};margin-top:4px;letter-spacing:0.04em;text-transform:uppercase;}
@@ -1281,30 +1466,188 @@ app.get("/quejas/:slug", (req, res) => {
 
   const datos = leerDatos();
   const quejas = (datos[slug] && datos[slug].quejas) || [];
+  const resueltas = quejas.filter((q) => q.estado === "resuelto").length;
+  const tasaRecuperacion = quejas.length ? Math.round((resueltas / quejas.length) * 100) : 0;
+
+  const colores = { pendiente: "#C0392B", contactado: "#C9A24B", resuelto: "#0F5132" };
+  const fondos = { pendiente: "#FBEFE9", contactado: "#FBF3E1", resuelto: "#E7F0EA" };
 
   const filas = quejas
-    .slice()
+    .map((q, i) => i) // índices reales antes de invertir, para los botones de acción
     .reverse()
-    .map((q) => `<tr><td>${q.fechaLegible}</td><td>${q.comentario}</td></tr>`)
+    .map((i) => {
+      const q = quejas[i];
+      const estado = q.estado || "pendiente";
+      return `<tr>
+        <td>${q.fechaLegible}</td>
+        <td>${q.comentario}</td>
+        <td>${q.telefono ? `<a href="tel:${q.telefono}">${q.telefono}</a>` : "—"}</td>
+        <td><span style="background:${fondos[estado]};color:${colores[estado]};padding:4px 10px;border-radius:100px;font-size:0.74rem;font-weight:700;">${estado}</span></td>
+        <td>
+          ${estado !== "contactado" ? `<a href="/quejas/${slug}/estado?key=${req.query.key}&i=${i}&estado=contactado" style="margin-right:8px;">Marcar contactado</a>` : ""}
+          ${estado !== "resuelto" ? `<a href="/quejas/${slug}/estado?key=${req.query.key}&i=${i}&estado=resuelto">Marcar resuelto</a>` : ""}
+        </td>
+      </tr>`;
+    })
     .join("");
 
   res.send(`
-    <html><head><meta charset="utf-8"><title>Quejas — ${negocio.nombre}</title>
+    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Quejas — ${negocio.nombre}</title>
     <style>
-      body{font-family:sans-serif;background:#F8F4EC;padding:40px;color:#16201C;}
-      table{border-collapse:collapse;width:100%;max-width:700px;background:#fff;border-radius:10px;overflow:hidden;}
-      th,td{padding:10px 16px;text-align:left;border-bottom:1px solid #eee;font-size:0.9rem;}
-      th{background:#16201C;color:#F8F4EC;}
-      a{color:#1F6E4E;font-weight:600;}
+      ${ESTILO_BASE}
+      .metrics{display:flex;gap:14px;margin-bottom:24px;max-width:600px;}
+      .metric{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:14px;flex:1;text-align:center;}
+      .metric-num{font-size:1.5rem;font-weight:700;color:${MARCA.verde};}
+      .metric-lbl{font-size:0.72rem;color:${MARCA.textoSuave};margin-top:4px;}
+      table{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden;border:1px solid ${MARCA.borde};}
+      th,td{padding:10px 16px;text-align:left;border-bottom:1px solid ${MARCA.borde};font-size:0.86rem;}
+      th{background:${MARCA.verdeOscuro};color:#fff;font-size:0.72rem;text-transform:uppercase;}
+      a{color:${MARCA.verde};font-weight:600;font-size:0.82rem;text-decoration:none;}
     </style></head>
     <body>
-      <p><a href="/stats?key=${req.query.key}">&larr; Volver al panel</a></p>
-      <h1>Quejas privadas — ${negocio.nombre}</h1>
-      <table><tr><th>Fecha</th><th>Comentario</th></tr>
-      ${filas || "<tr><td colspan='2'>Sin quejas registradas</td></tr>"}
-      </table>
+      <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
+      <div class="content">
+        <div class="eyebrow">Rescate de clientes</div>
+        <h1 class="titulo-pagina">Quejas privadas — ${negocio.nombre}</h1>
+        <div class="subtitulo">Cada reseña negativa se queda aquí en vez de publicarse. El dueño recibe un correo al instante para poder reaccionar.</div>
+        <div class="metrics">
+          <div class="metric"><div class="metric-num">${quejas.length}</div><div class="metric-lbl">Total quejas</div></div>
+          <div class="metric"><div class="metric-num">${resueltas}</div><div class="metric-lbl">Resueltas</div></div>
+          <div class="metric"><div class="metric-num">${tasaRecuperacion}%</div><div class="metric-lbl">Tasa de recuperación</div></div>
+        </div>
+        <table><tr><th>Fecha</th><th>Comentario</th><th>Teléfono</th><th>Estado</th><th>Acción</th></tr>
+        ${filas || "<tr><td colspan='5'>Sin quejas registradas</td></tr>"}
+        </table>
+      </div>
     </body></html>
   `);
+});
+
+// Cambia el estado de una queja (pendiente -> contactado -> resuelto), para llevar
+// el seguimiento de recuperación de clientes insatisfechos.
+app.get("/quejas/:slug/estado", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const { slug } = req.params;
+  const i = parseInt(req.query.i, 10);
+  const nuevoEstado = req.query.estado;
+  if (!["contactado", "resuelto", "pendiente"].includes(nuevoEstado)) {
+    return res.status(400).send("Estado inválido.");
+  }
+  const datos = leerDatos();
+  if (datos[slug] && datos[slug].quejas && datos[slug].quejas[i]) {
+    datos[slug].quejas[i].estado = nuevoEstado;
+    guardarDatos(datos);
+  }
+  res.redirect(`/quejas/${slug}?key=${req.query.key}`);
+});
+
+// Genera el SVG de una tarjeta de testimonio lista para redes sociales (formato cuadrado, 1080x1080).
+function tarjetaTestimonioSvg(frase, nombreNegocio, valor) {
+  const estrellas = "★".repeat(valor) + "☆".repeat(5 - valor);
+  const escapar = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<svg width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1080" height="1080" fill="${MARCA.crema}"/>
+    <rect x="40" y="40" width="1000" height="1000" rx="36" fill="${MARCA.verdeOscuro}"/>
+    <text x="540" y="300" font-family="Georgia, serif" font-size="180" fill="${MARCA.oro}" text-anchor="middle">&#8220;</text>
+    <text x="540" y="540" font-family="Arial, sans-serif" font-size="58" font-weight="700" fill="#FFFFFF" text-anchor="middle">${escapar(frase)}</text>
+    <text x="540" y="630" font-family="Arial, sans-serif" font-size="48" fill="${MARCA.oro}" text-anchor="middle" letter-spacing="6">${estrellas}</text>
+    <text x="540" y="900" font-family="Arial, sans-serif" font-size="40" font-weight="700" fill="#FFFFFF" text-anchor="middle">${escapar(nombreNegocio)}</text>
+    <text x="540" y="950" font-family="Arial, sans-serif" font-size="24" fill="#CFE3D8" text-anchor="middle">Reseña real via Tapin</text>
+  </svg>`;
+}
+
+// Galería de testimonios positivos listos para convertir en contenido de redes.
+// Visítalo así: https://tu-dominio.com/contenido/mi-negocio?key=TU_CLAVE
+app.get("/contenido/:slug", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  if (!esPro(negocio)) {
+    return res.status(402).send(
+      `Esta función (generador de contenido para redes) es exclusiva del Plan Pro. ` +
+      `Súbele el plan a "${negocio.nombre}" desde /editar/${slug}?key=${req.query.key} para activarla.`
+    );
+  }
+
+  const datos = leerDatos();
+  const testimonios = (datos[slug] && datos[slug].testimonios) || [];
+
+  const tarjetas = testimonios
+    .map((t, i) => i)
+    .reverse()
+    .map((i) => {
+      const t = testimonios[i];
+      const svgMini = tarjetaTestimonioSvg(t.frase, negocio.nombre, t.valor);
+      const svgB64 = Buffer.from(svgMini).toString("base64");
+      return `
+        <div class="tarjeta">
+          <img src="data:image/svg+xml;base64,${svgB64}" alt="${t.frase}">
+          <div class="tarjeta-pie">
+            <span>${t.fechaLegible}</span>
+            <a href="/contenido/${slug}/tarjeta.svg?key=${req.query.key}&i=${i}" download>Descargar</a>
+          </div>
+        </div>`;
+    })
+    .join("");
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Contenido para redes — ${negocio.nombre}</title>
+        <style>
+          ${ESTILO_BASE}
+          .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;}
+          .tarjeta{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.04);}
+          .tarjeta img{width:100%;display:block;}
+          .tarjeta-pie{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;font-size:0.78rem;color:${MARCA.textoSuave};}
+          .tarjeta-pie a{font-weight:700;color:${MARCA.verde};text-decoration:none;}
+        </style>
+      </head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
+        <div class="content">
+          <div class="eyebrow">Marketing automático</div>
+          <h1 class="titulo-pagina">Contenido para redes — ${negocio.nombre}</h1>
+          <div class="subtitulo">Cada vez que un cliente califica bien y elige una frase, se genera automáticamente una tarjeta lista para Instagram/Stories.</div>
+          <div class="grid">
+            ${tarjetas || "<p>Todavía no hay testimonios. Aparecerán aquí cuando los clientes califiquen positivo y elijan una frase.</p>"}
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Descarga el SVG individual de una tarjeta de testimonio.
+app.get("/contenido/:slug/tarjeta.svg", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!esPro(negocio)) {
+    return res.status(402).send("Esta función es exclusiva del Plan Pro.");
+  }
+
+  const datos = leerDatos();
+  const testimonios = (datos[slug] && datos[slug].testimonios) || [];
+  const i = parseInt(req.query.i, 10);
+  const t = testimonios[i];
+  if (!t) return res.status(404).send("Testimonio no encontrado.");
+
+  const svg = tarjetaTestimonioSvg(t.frase, negocio.nombre, t.valor);
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.setHeader("Content-Disposition", `attachment; filename="tapin-${slug}-${i}.svg"`);
+  res.send(svg);
 });
 
 // Panel individual de UN SOLO negocio, usando su propia clave (no la clave maestra).
@@ -1597,9 +1940,10 @@ app.get("/export/:slug.csv", (req, res) => {
   res.send(csv);
 });
 
-// Envía el resumen semanal de un negocio por WhatsApp usando CallMeBot (gratis).
+// Envía un reporte mensual completo por correo: métricas, recomendaciones automáticas
+// y comparación contra el promedio del sector — no solo números, sino contexto.
 // Esto NO se dispara solo — necesitas un servicio externo gratuito (cron-job.org)
-// que visite esta URL una vez por semana. Ver instrucciones en el README.
+// que visite esta URL una vez al mes. Ver instrucciones en el README.
 // Visítalo así: https://tu-dominio.com/notificar/mi-negocio?key=TU_CLAVE
 app.get("/notificar/:slug", async (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
@@ -1608,30 +1952,71 @@ app.get("/notificar/:slug", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.whatsapp || !negocio.callmebotApiKey) {
-    return res.status(400).send(
-      "Este negocio no tiene configurado 'whatsapp' y 'callmebotApiKey' en NEGOCIOS dentro de server.js."
+  if (!esPro(negocio)) {
+    return res.status(402).send(
+      `Esta función (reporte mensual por correo) es exclusiva del Plan Pro. ` +
+      `Súbele el plan a "${negocio.nombre}" desde /editar/${slug}?key=${req.query.key} para activarla.`
     );
+  }
+  if (!negocio.email) {
+    return res.status(400).send("Este negocio no tiene 'email' configurado. Agrégalo en /editar.");
   }
 
   const datos = leerDatos();
   const eventos = (datos[slug] && datos[slug].eventos) || [];
   const r = calcularResumen(eventos);
+  const recomendaciones = generarRecomendaciones(eventos, r, negocio);
+  const promedio = promedioSector(negocio.categoria, slug, datos);
 
-  const mensaje =
-    `Resumen semanal de Tapin - ${negocio.nombre}\n` +
-    `Toques esta semana: ${r.semana}\n` +
-    `Toques hoy: ${r.hoy}\n` +
-    `Total acumulado: ${r.total}`;
+  let comparativo = "";
+  if (promedio !== null) {
+    if (r.semana > promedio) {
+      comparativo = `Estás <b>por encima</b> del promedio de negocios de tu categoría (${r.semana} vs ${promedio} toques/semana).`;
+    } else if (r.semana < promedio) {
+      comparativo = `Estás <b>por debajo</b> del promedio de tu categoría (${r.semana} vs ${promedio} toques/semana). Hay espacio para mejorar.`;
+    } else {
+      comparativo = `Estás justo en el promedio de tu categoría (${promedio} toques/semana).`;
+    }
+  }
 
-  const url = `https://api.callmebot.com/whatsapp.php?phone=${negocio.whatsapp}&text=${encodeURIComponent(mensaje)}&apikey=${negocio.callmebotApiKey}`;
+  const filasBarra = barraSemana(r.dias7);
+  const recosHtml = recomendaciones
+    .map((texto) => `<div style="background:#F1F7F4;border-left:3px solid ${MARCA.verde};border-radius:8px;padding:12px 14px;font-size:0.88rem;margin-bottom:8px;color:#1F3D2E;">💡 ${texto}</div>`)
+    .join("");
 
-  try {
-    const resp = await fetch(url);
-    const texto = await resp.text();
-    res.send(`Notificación enviada. Respuesta de CallMeBot: ${texto}`);
-  } catch (err) {
-    res.status(500).send("Error enviando el mensaje: " + err.message);
+  const resultado = await enviarEmail(
+    negocio.email,
+    `📊 Reporte mensual de Tapin — ${negocio.nombre}`,
+    `
+      <div style="font-family:-apple-system,Arial,sans-serif;max-width:520px;">
+        <h2 style="color:${MARCA.verdeOscuro};margin-bottom:2px;">${negocio.nombre}</h2>
+        <p style="color:#888;font-size:0.85rem;margin-top:0;">Reporte generado el ${new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) })}</p>
+        <div style="display:flex;gap:10px;margin:18px 0;">
+          <div style="background:${MARCA.crema};border-radius:10px;padding:14px;flex:1;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:700;color:${MARCA.verde};">${r.total}</div>
+            <div style="font-size:0.7rem;color:#888;">Total</div>
+          </div>
+          <div style="background:${MARCA.crema};border-radius:10px;padding:14px;flex:1;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:700;color:${MARCA.verde};">${r.hoy}</div>
+            <div style="font-size:0.7rem;color:#888;">Hoy</div>
+          </div>
+          <div style="background:${MARCA.crema};border-radius:10px;padding:14px;flex:1;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:700;color:${MARCA.verde};">${r.semana}</div>
+            <div style="font-size:0.7rem;color:#888;">7 días</div>
+          </div>
+        </div>
+        ${comparativo ? `<p style="font-size:0.9rem;background:${MARCA.verdeClaro};padding:12px 14px;border-radius:8px;color:${MARCA.verdeOscuro};">📈 ${comparativo}</p>` : ""}
+        <h3 style="font-size:0.95rem;margin:20px 0 8px;">Recomendaciones</h3>
+        ${recosHtml}
+        <p style="font-size:0.78rem;color:#999;margin-top:24px;">Ver panel completo: ${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${negocio.claveAcceso || ""}</p>
+      </div>
+    `
+  );
+
+  if (resultado.ok) {
+    res.send(`Reporte mensual enviado a ${negocio.email}.`);
+  } else {
+    res.status(500).send("No se pudo enviar el correo: " + resultado.motivo);
   }
 });
 
