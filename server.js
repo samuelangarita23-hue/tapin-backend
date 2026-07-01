@@ -3067,14 +3067,14 @@ app.get("/test-email", async (req, res) => {
 
 app.get("/", (req, res) => {
   // Reseñas de ejemplo, puramente decorativas para el fondo — no corresponden
-  // a negocios reales, solo dan ambiente visual de "ciudad llena de reseñas".
+  // a negocios reales, solo dan ambiente visual.
   const resenasDecorativas = [
-    { texto: "Excelente atención, volveré seguro", zona: "Chapinero", estrellas: 5 },
-    { texto: "Muy buena comida, rápido y fresco", zona: "Usaquén", estrellas: 5 },
-    { texto: "Ambiente agradable y buen servicio", zona: "Zona T", estrellas: 4 },
-    { texto: "Atendieron rapidísimo, recomendado", zona: "La Candelaria", estrellas: 5 },
-    { texto: "Muy profesionales, quedé satisfecho", zona: "Chía", estrellas: 5 },
-    { texto: "Buena relación calidad-precio", zona: "Cedritos", estrellas: 4 },
+    { texto: "Excelente atención, volveré seguro", estrellas: 5 },
+    { texto: "Muy buena comida, rápido y fresco", estrellas: 5 },
+    { texto: "Ambiente agradable y buen servicio", estrellas: 4 },
+    { texto: "Atendieron rapidísimo, recomendado", estrellas: 5 },
+    { texto: "Muy profesionales, quedé satisfecho", estrellas: 5 },
+    { texto: "Buena relación calidad-precio", estrellas: 4 },
   ];
 
   res.send(`
@@ -3083,21 +3083,25 @@ app.get("/", (req, res) => {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Tapin</title>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
           *{box-sizing:border-box;}
           html, body{height:100%;}
           body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;
-               background:radial-gradient(circle at 50% 0%, #123D2C 0%, ${MARCA.verdeOscuro} 55%, #062017 100%);
+               background:${MARCA.verdeOscuro};
                margin:0;position:relative;overflow:hidden;
                display:flex;align-items:center;justify-content:center;padding:24px;}
-          .mapa-fondo{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;opacity:0.24;pointer-events:none;}
-          .review-flotante{position:fixed;z-index:0;background:rgba(255,255,255,0.42);border-radius:12px;
+          #mapa-fondo{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;
+                      filter:grayscale(45%) brightness(0.45) sepia(15%) hue-rotate(100deg);}
+          .mapa-overlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;
+                        background:radial-gradient(circle at 50% 0%, rgba(18,61,44,0.35) 0%, ${MARCA.verdeOscuro}CC 60%, ${MARCA.verdeOscuro} 100%);}
+          .review-flotante{position:fixed;z-index:1;background:rgba(255,255,255,0.42);border-radius:12px;
                             padding:12px 14px;max-width:170px;pointer-events:none;filter:blur(0.3px);
                             box-shadow:0 8px 24px rgba(0,0,0,0.10);backdrop-filter:blur(2px);}
           .review-flotante .rf-texto{font-size:0.72rem;color:${MARCA.texto};font-weight:600;line-height:1.3;margin-bottom:4px;opacity:0.85;}
-          .review-flotante .rf-meta{font-size:0.66rem;color:${MARCA.textoSuave};display:flex;justify-content:space-between;opacity:0.85;}
-          .review-flotante .rf-estrellas{color:${MARCA.oro};}
-          .wrap{max-width:440px;width:100%;text-align:center;position:relative;z-index:1;}
+          .review-flotante .rf-estrellas{color:${MARCA.oro};font-size:0.7rem;opacity:0.9;}
+          .wrap{max-width:440px;width:100%;text-align:center;position:relative;z-index:2;}
           .logo-grande{margin:0 auto 8px;display:flex;justify-content:center;}
           .raya{width:52px;height:3px;background:${MARCA.oro};border-radius:100px;margin:14px auto 30px;}
           h1{color:#fff;font-size:1.15rem;font-weight:500;margin:0 0 32px;opacity:0.92;}
@@ -3116,45 +3120,8 @@ app.get("/", (req, res) => {
         </style>
       </head>
       <body>
-        <!-- Mapa de fondo: cuadrícula de calles + cerros orientales + una zona resaltada por cada reseña -->
-        <svg class="mapa-fondo" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-          <!-- Cerros orientales (franja de montaña al costado, como en Bogotá real) -->
-          <polygon points="1050,0 1200,0 1200,900 1120,900 1000,450" fill="${MARCA.oro}" opacity="0.12"/>
-
-          <!-- Cuadrícula de calles -->
-          ${Array.from({ length: 13 }).map((_, i) => `<line x1="${i * 100}" y1="0" x2="${i * 100}" y2="900" stroke="#FFFFFF" stroke-width="1"/>`).join("")}
-          ${Array.from({ length: 10 }).map((_, i) => `<line x1="0" y1="${i * 100}" x2="1200" y2="${i * 100}" stroke="#FFFFFF" stroke-width="1"/>`).join("")}
-
-          <!-- Un río/avenida principal cruzando la ciudad -->
-          <path d="M 0 700 Q 300 620 550 660 T 1200 560" stroke="${MARCA.oro}" stroke-width="4" fill="none" opacity="0.4"/>
-
-          <!-- Zonas destacadas, una por cada reseña flotante -->
-          <g opacity="0.9">
-            <rect x="150" y="120" width="180" height="130" rx="14" fill="${MARCA.oro}" opacity="0.10"/>
-            <circle cx="220" cy="180" r="7" fill="${MARCA.oro}"/>
-            <text x="180" y="270" fill="#FFFFFF" font-size="15" font-family="Arial" opacity="0.5">Chapinero</text>
-
-            <rect x="650" y="190" width="190" height="130" rx="14" fill="${MARCA.oro}" opacity="0.10"/>
-            <circle cx="740" cy="260" r="7" fill="${MARCA.oro}"/>
-            <text x="670" y="345" fill="#FFFFFF" font-size="15" font-family="Arial" opacity="0.5">Usaquén</text>
-
-            <rect x="890" y="450" width="170" height="130" rx="14" fill="${MARCA.oro}" opacity="0.10"/>
-            <circle cx="980" cy="520" r="7" fill="${MARCA.oro}"/>
-            <text x="900" y="605" fill="#FFFFFF" font-size="15" font-family="Arial" opacity="0.5">Zona T</text>
-
-            <rect x="290" y="550" width="190" height="130" rx="14" fill="${MARCA.oro}" opacity="0.10"/>
-            <circle cx="380" cy="620" r="7" fill="${MARCA.oro}"/>
-            <text x="300" y="705" fill="#FFFFFF" font-size="15" font-family="Arial" opacity="0.5">La Candelaria</text>
-
-            <rect x="510" y="690" width="180" height="130" rx="14" fill="${MARCA.oro}" opacity="0.10"/>
-            <circle cx="600" cy="760" r="7" fill="${MARCA.oro}"/>
-            <text x="530" y="845" fill="#FFFFFF" font-size="15" font-family="Arial" opacity="0.5">Chía</text>
-
-            <rect x="60" y="410" width="180" height="130" rx="14" fill="${MARCA.oro}" opacity="0.10"/>
-            <circle cx="140" cy="480" r="7" fill="${MARCA.oro}"/>
-            <text x="75" y="565" fill="#FFFFFF" font-size="15" font-family="Arial" opacity="0.5">Cedritos</text>
-          </g>
-        </svg>
+        <div id="mapa-fondo"></div>
+        <div class="mapa-overlay"></div>
 
         ${resenasDecorativas.map((r, i) => {
           const posiciones = [
@@ -3164,7 +3131,7 @@ app.get("/", (req, res) => {
           return `
             <div class="review-flotante" style="${posiciones[i]}">
               <div class="rf-texto">"${r.texto}"</div>
-              <div class="rf-meta"><span class="rf-estrellas">${"★".repeat(r.estrellas)}${"☆".repeat(5 - r.estrellas)}</span><span>${r.zona}</span></div>
+              <div class="rf-estrellas">${"★".repeat(r.estrellas)}${"☆".repeat(5 - r.estrellas)}</div>
             </div>`;
         }).join("")}
 
@@ -3188,6 +3155,23 @@ app.get("/", (req, res) => {
           </div>
           <a class="admin-link" href="/admin">Entrar como administrador</a>
         </div>
+        <script>
+          // Mapa puramente decorativo: sin zoom, sin arrastre, sin controles —
+          // solo ambienta el fondo, igual estilo al mapa real de /descubre.
+          const mapaFondo = L.map('mapa-fondo', {
+            center: [4.7110, -74.0721],
+            zoom: 12.5,
+            zoomControl: false,
+            dragging: false,
+            scrollWheelZoom: false,
+            doubleClickZoom: false,
+            boxZoom: false,
+            keyboard: false,
+            touchZoom: false,
+            attributionControl: false,
+          });
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaFondo);
+        </script>
       </body>
     </html>
   `);
