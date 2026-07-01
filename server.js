@@ -1082,8 +1082,8 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
 
               <label>Plan</label>
               <select name="plan">
-                <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($89.900 — sin alertas ni reportes)</option>
-                <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($180.000/mes — alertas, reporte mensual, contenido)</option>
+                <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($120.000 — sin alertas ni reportes)</option>
+                <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($50.000/mes — alertas, reporte mensual, contenido)</option>
               </select>
 
               <label>Dirección (aparece en el mapa público de /descubre)</label>
@@ -1271,8 +1271,8 @@ app.get("/activar/:codigo", (req, res) => {
 
               <label>Plan</label>
               <select name="plan">
-                <option value="basico">Básico ($89.900 — sin alertas ni reportes)</option>
-                <option value="pro">Pro ($180.000/mes — alertas, reporte mensual, contenido)</option>
+                <option value="basico">Básico ($120.000 — sin alertas ni reportes)</option>
+                <option value="pro">Pro ($50.000/mes — alertas, reporte mensual, contenido)</option>
               </select>
 
               <label>Categoría</label>
@@ -3376,10 +3376,10 @@ app.get("/admin/entrar", (req, res) => {
 });
 
 // ---------- Flujo de compra: pedido → pago con Wompi → confirmación ----------
-// Esto es para el Plan Básico ($89.900 COP, pago único, incluye la tarjeta física
+// Esto es para el Plan Básico ($120.000 COP, pago único, incluye la tarjeta física
 // y el envío). El Plan Pro (mensual) necesita una integración distinta — ver nota
 // al final del archivo README sobre pagos recurrentes.
-const PRECIO_BASICO_COP = 89900;
+const PRECIO_BASICO_COP = 120000;
 
 // Formulario público donde alguien pide su tarjeta Tapin.
 app.get("/pedido", (req, res) => {
