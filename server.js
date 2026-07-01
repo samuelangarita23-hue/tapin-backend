@@ -2818,6 +2818,10 @@ app.get("/cliente", (req, res) => {
           .panel.activo{display:block;}
           input{width:100%;padding:13px;border:1px solid ${MARCA.borde};border-radius:10px;font-size:0.92rem;
                 margin-bottom:12px;font-family:inherit;}
+          .campo-clave{position:relative;}
+          .campo-clave input{padding-right:44px;}
+          .ver-clave{position:absolute;right:4px;top:4px;bottom:4px;width:36px;background:none;border:none;
+                     cursor:pointer;color:${MARCA.textoSuave};font-size:0.78rem;font-weight:700;padding:0;}
           button{width:100%;background:${MARCA.verde};color:#fff;border:none;padding:13px;border-radius:10px;
                  font-weight:700;font-size:0.92rem;cursor:pointer;}
           .error{background:#FBEFE9;color:${MARCA.rojo};padding:10px 14px;border-radius:8px;font-size:0.82rem;margin-bottom:14px;}
@@ -2839,7 +2843,10 @@ app.get("/cliente", (req, res) => {
             <p>Entra para ver tus favoritos y tu historial de reseñas.</p>
             <form method="POST" action="/cliente/login">
               <input type="email" name="email" required placeholder="Correo electrónico">
-              <input type="password" name="password" required placeholder="Contraseña">
+              <div class="campo-clave">
+                <input type="password" id="clave-login" name="password" required placeholder="Contraseña">
+                <button type="button" class="ver-clave" onclick="alternarClave('clave-login', this)">Ver</button>
+              </div>
               <button type="submit">Entrar</button>
             </form>
           </div>
@@ -2850,7 +2857,10 @@ app.get("/cliente", (req, res) => {
             <form method="POST" action="/cliente/registro">
               <input type="text" name="nombre" required placeholder="Tu nombre">
               <input type="email" name="email" required placeholder="Correo electrónico">
-              <input type="password" name="password" required minlength="6" placeholder="Contraseña (mínimo 6 caracteres)">
+              <div class="campo-clave">
+                <input type="password" id="clave-registro" name="password" required minlength="6" placeholder="Contraseña (mínimo 6 caracteres)">
+                <button type="button" class="ver-clave" onclick="alternarClave('clave-registro', this)">Ver</button>
+              </div>
               <button type="submit">Crear cuenta</button>
             </form>
           </div>
@@ -2861,6 +2871,12 @@ app.get("/cliente", (req, res) => {
             document.getElementById('tab-registro').className = 'tab' + (cual === 'registro' ? ' activo' : '');
             document.getElementById('panel-login').className = 'panel' + (cual === 'login' ? ' activo' : '');
             document.getElementById('panel-registro').className = 'panel' + (cual === 'registro' ? ' activo' : '');
+          }
+          function alternarClave(id, boton) {
+            const campo = document.getElementById(id);
+            const oculto = campo.type === 'password';
+            campo.type = oculto ? 'text' : 'password';
+            boton.textContent = oculto ? 'Ocultar' : 'Ver';
           }
         </script>
       </body>
@@ -3196,6 +3212,10 @@ app.get("/admin", (req, res) => {
           h1{font-size:1rem;color:${MARCA.texto};margin:0 0 18px;}
           input{width:100%;padding:13px;border:1px solid ${MARCA.borde};border-radius:10px;font-size:0.92rem;
                 margin-bottom:12px;font-family:inherit;}
+          .campo-clave{position:relative;}
+          .campo-clave input{padding-right:44px;}
+          .ver-clave{position:absolute;right:4px;top:4px;bottom:4px;width:36px;background:none;border:none;
+                     cursor:pointer;color:${MARCA.textoSuave};font-size:0.78rem;font-weight:700;padding:0;}
           button{width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;padding:13px;border-radius:10px;
                  font-weight:700;font-size:0.92rem;cursor:pointer;}
           .error{background:#FBEFE9;color:${MARCA.rojo};padding:10px 14px;border-radius:8px;font-size:0.8rem;margin-bottom:14px;}
@@ -3207,10 +3227,21 @@ app.get("/admin", (req, res) => {
           <h1>Acceso de administrador</h1>
           ${error ? `<div class="error">Clave incorrecta.</div>` : ""}
           <form method="GET" action="/admin/entrar">
-            <input type="password" name="key" required placeholder="Clave de administrador">
+            <div class="campo-clave">
+              <input type="password" id="clave-admin" name="key" required placeholder="Clave de administrador">
+              <button type="button" class="ver-clave" onclick="alternarClave('clave-admin', this)">Ver</button>
+            </div>
             <button type="submit">Entrar</button>
           </form>
         </div>
+        <script>
+          function alternarClave(id, boton) {
+            const campo = document.getElementById(id);
+            const oculto = campo.type === 'password';
+            campo.type = oculto ? 'text' : 'password';
+            boton.textContent = oculto ? 'Ocultar' : 'Ver';
+          }
+        </script>
       </body>
     </html>
   `);
