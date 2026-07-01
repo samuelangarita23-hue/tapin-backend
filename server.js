@@ -101,6 +101,11 @@ const MARCA = {
 };
 
 // Estilos base compartidos por todas las páginas del panel — look "pro" consistente.
+// Íconos de "mostrar/ocultar contraseña", reutilizados en los formularios de
+// login/registro de cliente y en el acceso de administrador.
+const ICONO_OJO_ABIERTO = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg>`;
+const ICONO_OJO_CERRADO = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 3L21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10.6 5.2C11.05 5.1 11.51 5 12 5C19 5 23 12 23 12C23 12 21.8 14.2 19.6 16.1M6.9 6.9C3.7 8.9 1 12 1 12C1 12 5 19 12 19C13.6 19 15 18.6 16.2 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.9 9.9C9.34 10.46 9 11.19 9 12C9 13.66 10.34 15 12 15C12.81 15 13.54 14.66 14.1 14.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+
 const ESTILO_BASE = `
   *{box-sizing:border-box;}
   body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};color:${MARCA.texto};margin:0;}
@@ -2821,7 +2826,8 @@ app.get("/cliente", (req, res) => {
           .campo-clave{position:relative;}
           .campo-clave input{padding-right:44px;}
           .ver-clave{position:absolute;right:4px;top:4px;bottom:4px;width:36px;background:none;border:none;
-                     cursor:pointer;color:${MARCA.textoSuave};font-size:0.78rem;font-weight:700;padding:0;}
+                     cursor:pointer;color:${MARCA.textoSuave};padding:0;display:flex;align-items:center;justify-content:center;}
+          .ver-clave:hover{color:${MARCA.texto};}
           button{width:100%;background:${MARCA.verde};color:#fff;border:none;padding:13px;border-radius:10px;
                  font-weight:700;font-size:0.92rem;cursor:pointer;}
           .error{background:#FBEFE9;color:${MARCA.rojo};padding:10px 14px;border-radius:8px;font-size:0.82rem;margin-bottom:14px;}
@@ -2845,7 +2851,7 @@ app.get("/cliente", (req, res) => {
               <input type="email" name="email" required placeholder="Correo electrónico">
               <div class="campo-clave">
                 <input type="password" id="clave-login" name="password" required placeholder="Contraseña">
-                <button type="button" class="ver-clave" onclick="alternarClave('clave-login', this)">Ver</button>
+                <button type="button" class="ver-clave" id="boton-clave-login" onclick="alternarClave('clave-login')">${ICONO_OJO_ABIERTO}</button>
               </div>
               <button type="submit">Entrar</button>
             </form>
@@ -2859,7 +2865,7 @@ app.get("/cliente", (req, res) => {
               <input type="email" name="email" required placeholder="Correo electrónico">
               <div class="campo-clave">
                 <input type="password" id="clave-registro" name="password" required minlength="6" placeholder="Contraseña (mínimo 6 caracteres)">
-                <button type="button" class="ver-clave" onclick="alternarClave('clave-registro', this)">Ver</button>
+                <button type="button" class="ver-clave" id="boton-clave-registro" onclick="alternarClave('clave-registro')">${ICONO_OJO_ABIERTO}</button>
               </div>
               <button type="submit">Crear cuenta</button>
             </form>
@@ -2872,11 +2878,12 @@ app.get("/cliente", (req, res) => {
             document.getElementById('panel-login').className = 'panel' + (cual === 'login' ? ' activo' : '');
             document.getElementById('panel-registro').className = 'panel' + (cual === 'registro' ? ' activo' : '');
           }
-          function alternarClave(id, boton) {
+          function alternarClave(id) {
             const campo = document.getElementById(id);
+            const boton = document.getElementById('boton-clave-' + id.replace('clave-', ''));
             const oculto = campo.type === 'password';
             campo.type = oculto ? 'text' : 'password';
-            boton.textContent = oculto ? 'Ocultar' : 'Ver';
+            boton.innerHTML = oculto ? ${JSON.stringify(ICONO_OJO_CERRADO)} : ${JSON.stringify(ICONO_OJO_ABIERTO)};
           }
         </script>
       </body>
@@ -3215,7 +3222,8 @@ app.get("/admin", (req, res) => {
           .campo-clave{position:relative;}
           .campo-clave input{padding-right:44px;}
           .ver-clave{position:absolute;right:4px;top:4px;bottom:4px;width:36px;background:none;border:none;
-                     cursor:pointer;color:${MARCA.textoSuave};font-size:0.78rem;font-weight:700;padding:0;}
+                     cursor:pointer;color:${MARCA.textoSuave};padding:0;display:flex;align-items:center;justify-content:center;}
+          .ver-clave:hover{color:${MARCA.texto};}
           button{width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;padding:13px;border-radius:10px;
                  font-weight:700;font-size:0.92rem;cursor:pointer;}
           .error{background:#FBEFE9;color:${MARCA.rojo};padding:10px 14px;border-radius:8px;font-size:0.8rem;margin-bottom:14px;}
@@ -3229,17 +3237,18 @@ app.get("/admin", (req, res) => {
           <form method="GET" action="/admin/entrar">
             <div class="campo-clave">
               <input type="password" id="clave-admin" name="key" required placeholder="Clave de administrador">
-              <button type="button" class="ver-clave" onclick="alternarClave('clave-admin', this)">Ver</button>
+              <button type="button" class="ver-clave" id="boton-clave-admin" onclick="alternarClave('clave-admin')">${ICONO_OJO_ABIERTO}</button>
             </div>
             <button type="submit">Entrar</button>
           </form>
         </div>
         <script>
-          function alternarClave(id, boton) {
+          function alternarClave(id) {
             const campo = document.getElementById(id);
+            const boton = document.getElementById('boton-clave-' + id.replace('clave-', ''));
             const oculto = campo.type === 'password';
             campo.type = oculto ? 'text' : 'password';
-            boton.textContent = oculto ? 'Ocultar' : 'Ver';
+            boton.innerHTML = oculto ? ${JSON.stringify(ICONO_OJO_CERRADO)} : ${JSON.stringify(ICONO_OJO_ABIERTO)};
           }
         </script>
       </body>
