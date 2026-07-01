@@ -2566,7 +2566,7 @@ app.get("/descubre", (req, res) => {
         <div class="topbar"><a class="back" href="/">&larr; Inicio</a><div>${logoSvg("#FFFFFF", 22)}</div><div style="width:60px;"></div></div>
         <div id="mapa"></div>
         <div class="leyenda">
-          <div class="leyenda-titulo">🔥 Mapa de negocios Tapin</div>
+          <div class="leyenda-titulo">Mapa de negocios Tapin</div>
           Entre más intenso el color, más actividad de clientes. Toca un punto para ver su reputación.
         </div>
         <script>
@@ -2710,7 +2710,7 @@ app.post("/mis-negocios/solicitar", async (req, res) => {
     <body style="font-family:-apple-system,Arial,sans-serif;background:${MARCA.verdeOscuro};min-height:100vh;
                  display:flex;align-items:center;justify-content:center;padding:24px;margin:0;">
       <div style="background:#fff;border-radius:18px;padding:36px 30px;max-width:380px;text-align:center;">
-        <h2 style="color:${MARCA.texto};">📩 Revisa tu correo</h2>
+        <h2 style="color:${MARCA.texto};">Revisa tu correo</h2>
         <p style="color:${MARCA.textoSuave};font-size:0.88rem;">Si ese correo tiene negocios registrados en Tapin, te llegó un link de acceso.</p>
       </div>
     </body></html>
@@ -2991,10 +2991,10 @@ app.get("/cuenta", (req, res) => {
           <h1 class="titulo-pagina">Hola, ${cliente.nombre.split(" ")[0]}</h1>
           <div class="subtitulo">${cliente.email}</div>
 
-          <div class="seccion-titulo">⭐ Tus negocios favoritos</div>
+          <div class="seccion-titulo">Tus negocios favoritos</div>
           ${favoritosHtml || `<div class="vacio-msg">Todavía no has guardado ningún negocio. Explora el <a href="/descubre">mapa de negocios</a> y guárdalos desde ahí.</div>`}
 
-          <div class="seccion-titulo">📝 Tu historial de reseñas</div>
+          <div class="seccion-titulo">Tu historial de reseñas</div>
           ${historialHtml || `<div class="vacio-msg">Todavía no has calificado ningún negocio con Tapin.</div>`}
         </div>
         <script>
@@ -3066,6 +3066,17 @@ app.get("/test-email", async (req, res) => {
 });
 
 app.get("/", (req, res) => {
+  // Reseñas de ejemplo, puramente decorativas para el fondo — no corresponden
+  // a negocios reales, solo dan ambiente visual de "ciudad llena de reseñas".
+  const resenasDecorativas = [
+    { texto: "Excelente atención, volveré seguro", zona: "Chapinero", estrellas: 5 },
+    { texto: "Muy buena comida, rápido y fresco", zona: "Usaquén", estrellas: 5 },
+    { texto: "Ambiente agradable y buen servicio", zona: "Zona T", estrellas: 4 },
+    { texto: "Atendieron rapidísimo, recomendado", zona: "La Candelaria", estrellas: 5 },
+    { texto: "Muy profesionales, quedé satisfecho", zona: "Chía", estrellas: 5 },
+    { texto: "Buena relación calidad-precio", zona: "Cedritos", estrellas: 4 },
+  ];
+
   res.send(`
     <html>
       <head>
@@ -3076,11 +3087,16 @@ app.get("/", (req, res) => {
           *{box-sizing:border-box;}
           html, body{height:100%;}
           body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;
-               background:radial-gradient(circle at 50% 0%, #123D2C 0%, ${MARCA.verdeOscuro} 55%, #06201730 100%);
-               margin:0;position:relative;overflow-x:hidden;
+               background:radial-gradient(circle at 50% 0%, #123D2C 0%, ${MARCA.verdeOscuro} 55%, #062017 100%);
+               margin:0;position:relative;overflow:hidden;
                display:flex;align-items:center;justify-content:center;padding:24px;}
-          .marca-fondo{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(2.4);
-                       opacity:0.05;pointer-events:none;z-index:0;}
+          .mapa-fondo{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;opacity:0.16;pointer-events:none;}
+          .review-flotante{position:fixed;z-index:0;background:rgba(255,255,255,0.9);border-radius:12px;
+                            padding:12px 14px;max-width:170px;pointer-events:none;filter:blur(0.3px);
+                            box-shadow:0 8px 24px rgba(0,0,0,0.15);}
+          .review-flotante .rf-texto{font-size:0.72rem;color:${MARCA.texto};font-weight:600;line-height:1.3;margin-bottom:4px;}
+          .review-flotante .rf-meta{font-size:0.66rem;color:${MARCA.textoSuave};display:flex;justify-content:space-between;}
+          .review-flotante .rf-estrellas{color:${MARCA.oro};}
           .wrap{max-width:440px;width:100%;text-align:center;position:relative;z-index:1;}
           .logo-grande{margin:0 auto 8px;display:flex;justify-content:center;}
           .raya{width:52px;height:3px;background:${MARCA.oro};border-radius:100px;margin:14px auto 30px;}
@@ -3096,25 +3112,49 @@ app.get("/", (req, res) => {
           .admin-link{display:inline-block;margin-top:44px;color:rgba(255,255,255,0.35);font-size:0.72rem;
                       text-decoration:none;letter-spacing:0.02em;}
           .admin-link:hover{color:rgba(255,255,255,0.6);}
+          @media (max-width: 700px){ .review-flotante{ display:none; } }
         </style>
       </head>
       <body>
-        <div class="marca-fondo">${logoSvg("#FFFFFF", 260)}</div>
+        <!-- Mapa abstracto de fondo: cuadrícula de calles estilo Bogotá + puntos de ubicación -->
+        <svg class="mapa-fondo" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          ${Array.from({ length: 13 }).map((_, i) => `<line x1="${i * 100}" y1="0" x2="${i * 100}" y2="900" stroke="#FFFFFF" stroke-width="1"/>`).join("")}
+          ${Array.from({ length: 10 }).map((_, i) => `<line x1="0" y1="${i * 100}" x2="1200" y2="${i * 100}" stroke="#FFFFFF" stroke-width="1"/>`).join("")}
+          <circle cx="220" cy="180" r="6" fill="${MARCA.oro}"/>
+          <circle cx="740" cy="260" r="6" fill="${MARCA.oro}"/>
+          <circle cx="980" cy="520" r="6" fill="${MARCA.oro}"/>
+          <circle cx="380" cy="620" r="6" fill="${MARCA.oro}"/>
+          <circle cx="600" cy="760" r="6" fill="${MARCA.oro}"/>
+          <circle cx="140" cy="480" r="6" fill="${MARCA.oro}"/>
+        </svg>
+
+        ${resenasDecorativas.map((r, i) => {
+          const posiciones = [
+            "top:12%;left:6%;", "top:22%;right:5%;", "top:58%;left:4%;",
+            "bottom:14%;right:6%;", "top:68%;right:16%;", "bottom:8%;left:14%;",
+          ];
+          return `
+            <div class="review-flotante" style="${posiciones[i]}">
+              <div class="rf-texto">"${r.texto}"</div>
+              <div class="rf-meta"><span class="rf-estrellas">${"★".repeat(r.estrellas)}${"☆".repeat(5 - r.estrellas)}</span><span>${r.zona}</span></div>
+            </div>`;
+        }).join("")}
+
         <div class="wrap">
           <div class="logo-grande">${logoSvg("#FFFFFF", 56)}</div>
           <div class="raya"></div>
           <h1>¿Qué quieres hacer?</h1>
           <div class="opciones">
             <a class="opcion" href="/descubre">
-              <div class="opcion-titulo">🔎 Descubrir negocios</div>
+              <div class="opcion-titulo">Descubrir negocios</div>
               <div class="opcion-desc">Mira el mapa de negocios que usan Tapin y su reputación</div>
             </a>
             <a class="opcion" href="/cliente">
-              <div class="opcion-titulo">👤 Soy cliente</div>
+              <div class="opcion-titulo">Soy cliente</div>
               <div class="opcion-desc">Crea tu cuenta — guarda favoritos y tu historial de reseñas</div>
             </a>
             <a class="opcion oro" href="/mis-negocios">
-              <div class="opcion-titulo">🏪 Soy un negocio</div>
+              <div class="opcion-titulo">Soy un negocio</div>
               <div class="opcion-desc">Entra a tu panel — tus locales, tus estadísticas</div>
             </a>
           </div>
