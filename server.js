@@ -3089,17 +3089,6 @@ app.get("/test-email", async (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  // Reseñas de ejemplo, puramente decorativas para el fondo — no corresponden
-  // a negocios reales, solo dan ambiente visual.
-  const resenasDecorativas = [
-    { texto: "Excelente atención, volveré seguro", estrellas: 5 },
-    { texto: "Muy buena comida, rápido y fresco", estrellas: 5 },
-    { texto: "Ambiente agradable y buen servicio", estrellas: 4 },
-    { texto: "Atendieron rapidísimo, recomendado", estrellas: 5 },
-    { texto: "Muy profesionales, quedé satisfecho", estrellas: 5 },
-    { texto: "Buena relación calidad-precio", estrellas: 4 },
-  ];
-
   res.send(`
     <html>
       <head>
@@ -3111,79 +3100,162 @@ app.get("/", (req, res) => {
         <style>
           *{box-sizing:border-box;}
           html, body{height:100%;}
-          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;
-               background:${MARCA.verdeOscuro};
-               margin:0;position:relative;overflow:hidden;
-               display:flex;align-items:center;justify-content:center;padding:24px;}
-          #mapa-fondo{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;
-                      filter:grayscale(45%) brightness(0.45) sepia(15%) hue-rotate(100deg);}
-          .mapa-overlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;
-                        background:radial-gradient(circle at 50% 0%, rgba(18,61,44,0.35) 0%, ${MARCA.verdeOscuro}CC 60%, ${MARCA.verdeOscuro} 100%);}
-          .review-flotante{position:fixed;z-index:1;background:rgba(255,255,255,0.42);border-radius:12px;
-                            padding:12px 14px;max-width:170px;pointer-events:none;filter:blur(0.3px);
-                            box-shadow:0 8px 24px rgba(0,0,0,0.10);backdrop-filter:blur(2px);}
-          .review-flotante .rf-texto{font-size:0.72rem;color:${MARCA.texto};font-weight:600;line-height:1.3;margin-bottom:4px;opacity:0.85;}
-          .review-flotante .rf-estrellas{color:${MARCA.oro};font-size:0.7rem;opacity:0.9;}
-          .wrap{max-width:440px;width:100%;text-align:center;position:relative;z-index:2;}
-          .logo-grande{margin:0 auto 8px;display:flex;justify-content:center;}
-          .raya{width:52px;height:3px;background:${MARCA.oro};border-radius:100px;margin:14px auto 30px;}
-          h1{color:#fff;font-size:1.15rem;font-weight:500;margin:0 0 32px;opacity:0.92;}
-          .opciones{display:flex;flex-direction:column;gap:14px;}
-          .opcion{display:block;background:rgba(255,255,255,0.98);border-radius:16px;padding:22px 24px;text-decoration:none;
-                  text-align:left;transition:transform 0.15s;box-shadow:0 8px 30px rgba(0,0,0,0.18);}
-          .opcion:active{transform:scale(0.98);}
-          .opcion-titulo{font-size:1.05rem;font-weight:700;color:${MARCA.texto};margin-bottom:4px;}
-          .opcion-desc{font-size:0.82rem;color:${MARCA.textoSuave};}
-          .opcion.oro{background:${MARCA.oro};}
-          .opcion.oro .opcion-titulo, .opcion.oro .opcion-desc{color:#fff;}
-          .admin-link{display:inline-block;margin-top:44px;color:rgba(255,255,255,0.35);font-size:0.72rem;
-                      text-decoration:none;letter-spacing:0.02em;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;margin:0;}
+
+          .hero{display:flex;min-height:100vh;}
+          .hero-izq{flex:1;background:${MARCA.verdeOscuro};color:#fff;padding:64px 56px;
+                     display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden;}
+          .hero-izq::before{content:"";position:absolute;top:-30%;right:-30%;width:70%;height:70%;
+                             background:radial-gradient(circle, ${MARCA.oro}22 0%, transparent 70%);}
+          .logo-hero{font-size:4.2rem;font-weight:800;letter-spacing:-0.03em;margin:0 0 18px;position:relative;z-index:1;}
+          .tagline{font-size:1.3rem;font-weight:400;color:#E4EEE8;line-height:1.5;margin:0 0 44px;max-width:420px;position:relative;z-index:1;}
+          .botones{display:flex;flex-direction:column;gap:12px;max-width:360px;position:relative;z-index:1;}
+          .boton-hero{display:block;background:rgba(255,255,255,0.97);border-radius:14px;padding:18px 22px;
+                       text-decoration:none;transition:transform 0.15s;box-shadow:0 8px 24px rgba(0,0,0,0.2);}
+          .boton-hero:active{transform:scale(0.98);}
+          .boton-hero-titulo{font-size:1rem;font-weight:700;color:${MARCA.texto};}
+          .boton-hero-desc{font-size:0.8rem;color:${MARCA.textoSuave};margin-top:2px;}
+          .boton-hero.oro{background:${MARCA.oro};}
+          .boton-hero.oro .boton-hero-titulo, .boton-hero.oro .boton-hero-desc{color:#fff;}
+          .admin-link{display:inline-block;margin-top:36px;color:rgba(255,255,255,0.35);font-size:0.75rem;
+                      text-decoration:none;position:relative;z-index:1;}
           .admin-link:hover{color:rgba(255,255,255,0.6);}
-          @media (max-width: 700px){ .review-flotante{ display:none; } }
+
+          .franja-features{display:flex;gap:36px;margin-top:56px;padding-top:32px;
+                            border-top:1px solid rgba(255,255,255,0.15);position:relative;z-index:1;flex-wrap:wrap;}
+          .feature{display:flex;align-items:center;gap:12px;}
+          .feature-icono{width:38px;height:38px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.4);
+                          display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+          .feature-titulo{font-size:0.85rem;font-weight:700;}
+          .feature-desc{font-size:0.72rem;color:#B9CCC2;}
+
+          .hero-der{flex:1;background:#EEF3EC;position:relative;display:flex;align-items:center;justify-content:center;
+                    padding:40px;overflow:hidden;}
+          #mapa-fondo{position:absolute;top:8%;left:10%;width:80%;height:84%;border-radius:24px;
+                      box-shadow:0 20px 60px rgba(0,0,0,0.18);filter:saturate(0.7) brightness(1.02);}
+          .mock-buscar{position:absolute;top:10%;left:13%;width:74%;background:#fff;border-radius:100px;
+                       padding:14px 20px;font-size:0.85rem;color:#9aa39d;box-shadow:0 6px 18px rgba(0,0,0,0.1);
+                       display:flex;justify-content:space-between;align-items:center;z-index:2;}
+          .mock-card{position:absolute;bottom:8%;right:6%;width:340px;background:#fff;border-radius:18px;
+                     box-shadow:0 20px 50px rgba(0,0,0,0.22);overflow:hidden;z-index:3;}
+          .mock-foto{height:110px;background:linear-gradient(135deg, ${MARCA.verde} 0%, ${MARCA.verdeOscuro} 100%);
+                     position:relative;}
+          .mock-foto::after{content:"";position:absolute;inset:0;
+                             background:repeating-linear-gradient(45deg, rgba(255,255,255,0.06) 0 2px, transparent 2px 14px);}
+          .mock-info{padding:16px 18px 12px;}
+          .mock-nombre{font-weight:700;font-size:1rem;color:${MARCA.texto};}
+          .mock-cat{font-size:0.78rem;color:${MARCA.textoSuave};margin:2px 0 6px;}
+          .mock-estrellas{color:${MARCA.oro};font-size:0.85rem;}
+          .mock-num{color:${MARCA.textoSuave};font-size:0.78rem;margin-left:4px;}
+          .mock-resenas{padding:12px 18px 18px;border-top:1px solid ${MARCA.borde};}
+          .mock-resenas-titulo{font-size:0.78rem;font-weight:700;color:${MARCA.texto};margin-bottom:10px;}
+          .mock-resena{display:flex;gap:10px;margin-bottom:10px;}
+          .mock-avatar{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;
+                       justify-content:center;color:#fff;font-size:0.7rem;font-weight:700;}
+          .mock-resena-cuerpo{flex:1;}
+          .mock-resena-linea1{display:flex;justify-content:space-between;font-size:0.76rem;}
+          .mock-resena-nombre{font-weight:700;color:${MARCA.texto};}
+          .mock-resena-fecha{color:${MARCA.textoSuave};}
+          .mock-resena-texto{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:1px;}
+
+          @media (max-width: 980px){
+            .hero{flex-direction:column;}
+            .hero-der{min-height:480px;}
+            .mock-card{width:82%;right:9%;}
+            .logo-hero{font-size:3rem;}
+          }
+          @media (max-width: 560px){
+            .hero-izq{padding:44px 26px;}
+            .franja-features{flex-direction:column;gap:16px;}
+            .mock-card{width:88%;right:6%;bottom:5%;}
+          }
         </style>
       </head>
       <body>
-        <div id="mapa-fondo"></div>
-        <div class="mapa-overlay"></div>
+        <div class="hero">
+          <div class="hero-izq">
+            <div class="logo-hero">Tapin</div>
+            <p class="tagline">Descubre negocios locales.<br>Confía en lo que encuentras.</p>
 
-        ${resenasDecorativas.map((r, i) => {
-          const posiciones = [
-            "top:12%;left:6%;", "top:22%;right:5%;", "top:58%;left:4%;",
-            "bottom:14%;right:6%;", "top:68%;right:16%;", "bottom:8%;left:14%;",
-          ];
-          return `
-            <div class="review-flotante" style="${posiciones[i]}">
-              <div class="rf-texto">"${r.texto}"</div>
-              <div class="rf-estrellas">${"★".repeat(r.estrellas)}${"☆".repeat(5 - r.estrellas)}</div>
-            </div>`;
-        }).join("")}
+            <div class="botones">
+              <a class="boton-hero" href="/descubre">
+                <div class="boton-hero-titulo">Descubrir negocios</div>
+                <div class="boton-hero-desc">Mira el mapa de negocios que usan Tapin y su reputación</div>
+              </a>
+              <a class="boton-hero" href="/cliente">
+                <div class="boton-hero-titulo">Soy cliente</div>
+                <div class="boton-hero-desc">Crea tu cuenta — guarda favoritos y tu historial de reseñas</div>
+              </a>
+              <a class="boton-hero oro" href="/mis-negocios">
+                <div class="boton-hero-titulo">Soy un negocio</div>
+                <div class="boton-hero-desc">Entra a tu panel — tus locales, tus estadísticas</div>
+              </a>
+            </div>
 
-        <div class="wrap">
-          <div class="logo-grande">${logoSvg("#FFFFFF", 56)}</div>
-          <div class="raya"></div>
-          <h1>¿Qué quieres hacer?</h1>
-          <div class="opciones">
-            <a class="opcion" href="/descubre">
-              <div class="opcion-titulo">Descubrir negocios</div>
-              <div class="opcion-desc">Mira el mapa de negocios que usan Tapin y su reputación</div>
-            </a>
-            <a class="opcion" href="/cliente">
-              <div class="opcion-titulo">Soy cliente</div>
-              <div class="opcion-desc">Crea tu cuenta — guarda favoritos y tu historial de reseñas</div>
-            </a>
-            <a class="opcion oro" href="/mis-negocios">
-              <div class="opcion-titulo">Soy un negocio</div>
-              <div class="opcion-desc">Entra a tu panel — tus locales, tus estadísticas</div>
-            </a>
+            <div class="franja-features">
+              <div class="feature">
+                <div class="feature-icono">★</div>
+                <div>
+                  <div class="feature-titulo">Favoritos</div>
+                  <div class="feature-desc">Guarda los lugares que te gustan</div>
+                </div>
+              </div>
+              <div class="feature">
+                <div class="feature-icono">⏱</div>
+                <div>
+                  <div class="feature-titulo">Historial de reseñas</div>
+                  <div class="feature-desc">Todas tus calificaciones en un solo lugar</div>
+                </div>
+              </div>
+              <div class="feature">
+                <div class="feature-icono">↗</div>
+                <div>
+                  <div class="feature-titulo">Estadísticas del negocio</div>
+                  <div class="feature-desc">Sigue tu reputación y crecimiento</div>
+                </div>
+              </div>
+            </div>
+
+            <a class="admin-link" href="/admin">Entrar como administrador</a>
           </div>
-          <a class="admin-link" href="/admin">Entrar como administrador</a>
+
+          <div class="hero-der">
+            <div id="mapa-fondo"></div>
+            <div class="mock-buscar"><span>Buscar negocios o lugares</span><span>🔍</span></div>
+
+            <div class="mock-card">
+              <div class="mock-foto"></div>
+              <div class="mock-info">
+                <div class="mock-nombre">Café Central</div>
+                <div class="mock-cat">Cafetería · Centro</div>
+                <div><span class="mock-estrellas">★★★★★</span><span class="mock-num">4.8 (312)</span></div>
+              </div>
+              <div class="mock-resenas">
+                <div class="mock-resenas-titulo">Lo que dicen los clientes</div>
+                <div class="mock-resena">
+                  <div class="mock-avatar" style="background:${MARCA.verde};">SL</div>
+                  <div class="mock-resena-cuerpo">
+                    <div class="mock-resena-linea1"><span class="mock-resena-nombre">Sofía L.</span><span class="mock-resena-fecha">hace 2 días</span></div>
+                    <div class="mock-resena-texto">Excelente café y ambiente muy acogedor.</div>
+                  </div>
+                </div>
+                <div class="mock-resena">
+                  <div class="mock-avatar" style="background:${MARCA.oro};">JT</div>
+                  <div class="mock-resena-cuerpo">
+                    <div class="mock-resena-linea1"><span class="mock-resena-nombre">Juan T.</span><span class="mock-resena-fecha">hace 1 semana</span></div>
+                    <div class="mock-resena-texto">Atención muy amable, me encantó el lugar.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+
         <script>
-          // Mapa puramente decorativo: sin zoom, sin arrastre, sin controles —
-          // solo ambienta el fondo, igual estilo al mapa real de /descubre.
+          // Mapa puramente decorativo: sin zoom, sin arrastre, sin controles.
           const mapaFondo = L.map('mapa-fondo', {
             center: [4.7110, -74.0721],
-            zoom: 12.5,
+            zoom: 13,
             zoomControl: false,
             dragging: false,
             scrollWheelZoom: false,
