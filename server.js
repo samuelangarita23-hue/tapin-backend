@@ -22,10 +22,15 @@ let transportadorEmail = null;
 function obtenerTransportador() {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return null;
   if (!transportadorEmail) {
+    const puerto = parseInt(process.env.EMAIL_PORT, 10) || 465;
     transportadorEmail = nodemailer.createTransport({
       host: process.env.EMAIL_HOST || "smtp.gmail.com",
-      port: parseInt(process.env.EMAIL_PORT, 10) || 465,
-      secure: true,
+      port: puerto,
+      // BUG CORREGIDO: antes esto era siempre "true", lo cual rompe la conexión
+      // si alguien configura EMAIL_PORT=587 (Gmail con STARTTLS en vez de SSL directo).
+      // El puerto 465 usa SSL directo (secure:true); el 587 usa STARTTLS (secure:false).
+      secure: puerto === 465,
+      connectionTimeout: 10000, // 10s — si Render bloquea el puerto saliente, falla rápido en vez de colgarse
       auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
     });
   }
@@ -45,9 +50,12 @@ async function enviarEmail(destinatario, asunto, html) {
       subject: asunto,
       html,
     });
+    console.log(`[email enviado] a ${destinatario} — "${asunto}"`);
     return { ok: true };
   } catch (err) {
-    console.error("Error enviando email:", err.message);
+    // Log completo en la consola de Render para poder diagnosticar (antes solo
+    // se veía "Error enviando email" sin detalle suficiente para saber la causa real).
+    console.error(`[error enviando email] a ${destinatario} — "${asunto}":`, err.message, err.code || "");
     return { ok: false, motivo: err.message };
   }
 }
@@ -121,6 +129,9 @@ const NEGOCIOS = {
     claveAcceso: "mi-negocio-2026",
     email: "dueno@minegocio.com",
     plan: "basico", // "basico" o "pro" — solo "pro" recibe alertas, reporte mensual y contenido
+    direccion: "",  // dirección legible, opcional (para mostrar en el mapa público)
+    lat: null,      // latitud, opcional (para el mapa de calor de /descubre)
+    lng: null,      // longitud, opcional
   },
   // "otro-local": {
   //   nombre: "Otro Local",
@@ -129,6 +140,9 @@ const NEGOCIOS = {
   //   claveAcceso: "otro-local-2026",
   //   email: "dueno@otrolocal.com",
   //   plan: "pro",
+  //   direccion: "Cra 7 # 12-34, Chía",
+  //   lat: 4.8617,
+  //   lng: -74.0397,
   // },
 };
 
@@ -164,6 +178,103 @@ function leerCodigos() {
 
 function guardarCodigos(codigos) {
   fs.writeFileSync(CODIGOS_FILE, JSON.stringify(codigos, null, 2));
+}
+
+// ---------- Login mágico de dueños (sin contraseña) ----------
+// Un dueño puede tener varios locales (varios slugs). En vez de manejar
+// usuarios y contraseñas, mandamos un link temporal por correo que, al
+// abrirse, muestra todos los negocios cuyo campo "email" coincide.
+const TOKENS_FILE = path.join(__dirname, "tokens.json");
+function leerTokens() {
+  if (!fs.existsSync(TOKENS_FILE)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(TOKENS_FILE, "utf8"));
+  } catch {
+    return {};
+  }
+}
+function guardarTokens(tokens) {
+  fs.writeFileSync(TOKENS_FILE, JSON.stringify(tokens, null, 2));
+}
+function generarToken() {
+  const chars = "abcdefghijkmnpqrstuvwxyz23456789";
+  let t = "";
+  for (let i = 0; i < 24; i++) t += chars[Math.floor(Math.random() * chars.length)];
+  return t;
+}
+
+// ---------- Cuentas de cliente (persona normal) ----------
+// A diferencia del dueño de negocio (que entra sin contraseña, por link mágico),
+// el cliente sí crea una cuenta real con correo + contraseña, porque necesitamos
+// identificarlo de forma persistente para guardar sus favoritos y su historial
+// de reseñas entre visitas.
+const crypto = require("crypto");
+const CLIENTES_FILE = path.join(__dirname, "clientes.json");
+const SESIONES_FILE = path.join(__dirname, "sesiones-clientes.json");
+
+function leerClientes() {
+  if (!fs.existsSync(CLIENTES_FILE)) return {};
+  try { return JSON.parse(fs.readFileSync(CLIENTES_FILE, "utf8")); } catch { return {}; }
+}
+function guardarClientes(clientes) {
+  fs.writeFileSync(CLIENTES_FILE, JSON.stringify(clientes, null, 2));
+}
+function leerSesionesClientes() {
+  if (!fs.existsSync(SESIONES_FILE)) return {};
+  try { return JSON.parse(fs.readFileSync(SESIONES_FILE, "utf8")); } catch { return {}; }
+}
+function guardarSesionesClientes(sesiones) {
+  fs.writeFileSync(SESIONES_FILE, JSON.stringify(sesiones, null, 2));
+}
+
+// Hashea la contraseña con scrypt (nativo de Node, no necesita librerías externas
+// como bcrypt). Cada cuenta tiene su propia "sal" aleatoria.
+function hashPassword(password, salt) {
+  return crypto.scryptSync(password, salt, 64).toString("hex");
+}
+function crearHashConSal(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  return { salt, hash: hashPassword(password, salt) };
+}
+function verificarPassword(password, salt, hashGuardado) {
+  const hashIntento = hashPassword(password, salt);
+  // Comparación en tiempo constante para no filtrar info por timing.
+  const a = Buffer.from(hashIntento, "hex");
+  const b = Buffer.from(hashGuardado, "hex");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// Lee cookies manualmente del header (sin depender de cookie-parser).
+function leerCookies(req) {
+  const header = req.headers.cookie;
+  const cookies = {};
+  if (!header) return cookies;
+  header.split(";").forEach((parte) => {
+    const [k, ...v] = parte.trim().split("=");
+    if (k) cookies[k] = decodeURIComponent(v.join("=") || "");
+  });
+  return cookies;
+}
+
+// Dado un request, devuelve el cliente logueado (o null) a partir de la cookie de sesión.
+function clienteActual(req) {
+  const cookies = leerCookies(req);
+  const token = cookies.tapin_sesion;
+  if (!token) return null;
+  const sesiones = leerSesionesClientes();
+  const clienteId = sesiones[token];
+  if (!clienteId) return null;
+  const clientes = leerClientes();
+  return clientes[clienteId] ? { id: clienteId, ...clientes[clienteId] } : null;
+}
+
+function iniciarSesionCliente(res, clienteId) {
+  const sesiones = leerSesionesClientes();
+  const token = generarToken() + generarToken(); // más largo que los magic links, es persistente
+  sesiones[token] = clienteId;
+  guardarSesionesClientes(sesiones);
+  const TREINTA_DIAS = 30 * 24 * 60 * 60;
+  res.setHeader("Set-Cookie", `tapin_sesion=${token}; HttpOnly; Path=/; Max-Age=${TREINTA_DIAS}; SameSite=Lax`);
 }
 
 function generarCodigo() {
@@ -483,6 +594,25 @@ app.get("/calificar/:slug", (req, res) => {
 
   const valor = parseInt(req.query.valor, 10);
 
+  // Si el cliente tiene sesión iniciada, guardamos esta calificación en su
+  // historial personal — funciona sin importar si el negocio es Pro o básico.
+  if (valor >= 1 && valor <= 5) {
+    const cliente = clienteActual(req);
+    if (cliente) {
+      const clientes = leerClientes();
+      if (clientes[cliente.id]) {
+        if (!clientes[cliente.id].historial) clientes[cliente.id].historial = [];
+        clientes[cliente.id].historial.push({
+          slug,
+          negocioNombre: negocio.nombre,
+          valor,
+          fecha: new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" }),
+        });
+        guardarClientes(clientes);
+      }
+    }
+  }
+
   if (valor >= 4) {
     // El generador de contenido (frases con un toque) es exclusivo del Plan Pro.
     // Los negocios básicos van directo a Google, sin este paso extra.
@@ -706,7 +836,7 @@ app.post("/editar/nuevo", (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
-  const { nombre, googleUrl, categoria, pais, email, plan } = req.body;
+  const { nombre, googleUrl, categoria, pais, email, plan, direccion, lat, lng } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
@@ -729,6 +859,9 @@ app.post("/editar/nuevo", (req, res) => {
       claveAcceso: `${slug.toLowerCase()}-panel`,
       email: email || "",
       plan: plan === "pro" ? "pro" : "basico",
+      direccion: direccion || "",
+      lat: lat ? parseFloat(lat) : null,
+      lng: lng ? parseFloat(lng) : null,
     },
   };
   guardarCodigos(codigos);
@@ -765,7 +898,7 @@ app.post("/editar/:slug", (req, res) => {
   if (!negocioActual) {
     return res.status(404).send("Negocio no encontrado.");
   }
-  const { nombre, googleUrl, categoria, pais, email, plan } = req.body;
+  const { nombre, googleUrl, categoria, pais, email, plan, direccion, lat, lng } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
@@ -786,6 +919,9 @@ app.post("/editar/:slug", (req, res) => {
     claveAcceso: (codigos[slug].negocio && codigos[slug].negocio.claveAcceso) || negocioActual.claveAcceso || `${slug.toLowerCase()}-panel`,
     email: email || negocioActual.email || "",
     plan: plan === "pro" ? "pro" : "basico",
+    direccion: direccion || "",
+    lat: lat ? parseFloat(lat) : null,
+    lng: lng ? parseFloat(lng) : null,
   };
   guardarCodigos(codigos);
 
@@ -920,6 +1056,15 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
                 <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($89.900 — sin alertas ni reportes)</option>
                 <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($180.000/mes — alertas, reporte mensual, contenido)</option>
               </select>
+
+              <label>Dirección (aparece en el mapa público de /descubre)</label>
+              <input type="text" name="direccion" value="${valores.direccion || ""}" placeholder="Cra 7 # 12-34, Chía">
+
+              <label>Latitud (opcional, para el mapa)</label>
+              <input type="text" name="lat" value="${valores.lat != null ? valores.lat : ""}" placeholder="4.8617">
+
+              <label>Longitud (opcional, para el mapa)</label>
+              <input type="text" name="lng" value="${valores.lng != null ? valores.lng : ""}" placeholder="-74.0397">
 
               <label>Categoría</label>
               <select name="categoria">${opciones}</select>
@@ -1255,6 +1400,8 @@ app.get("/stats", (req, res) => {
           ${NEGOCIOS_TOTAL[slug].claveAcceso ? `<a href="/mi-panel/${slug}?key=${NEGOCIOS_TOTAL[slug].claveAcceso}" target="_blank">Panel del negocio</a>` : ""}
           <a href="/export/${slug}.csv?key=${key}">CSV</a>
           <a href="/export/${slug}.pdf?key=${key}">PDF</a>
+          <a href="/export/${slug}.docx?key=${key}">Word</a>
+          <a href="/entrega/${slug}.pdf?key=${key}">Acta de entrega</a>
           <a href="/quejas/${slug}?key=${key}">Quejas</a>
           <a href="/contenido/${slug}?key=${key}">Contenido</a>
           <a href="/notificar/${slug}?key=${key}">Enviar reporte por email</a>
@@ -1363,6 +1510,7 @@ app.get("/stats", (req, res) => {
         <div class="topbar">
           <div style="display:flex;align-items:center;gap:0;">${logoSvg("#FFFFFF", 22)}</div>
           <div>
+            <a href="/descubre" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;margin-right:18px;" target="_blank">Mapa público</a>
             <a href="/editar?key=${key}" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;margin-right:18px;">Editar negocios</a>
             <a href="/codigos?key=${key}" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;">+ Generar tarjetas</a>
           </div>
@@ -1824,8 +1972,9 @@ app.get("/reporte/:slug", (req, res) => {
   `);
 });
 
-// Reporte mensual en PDF, con diseño simple de marca — para entregar al cliente
-// en vez de un CSV plano (punto 7).
+// Reporte mensual en PDF, con diseño profesional de 3 páginas (portada, resumen
+// ejecutivo con gráfica y recomendaciones, y detalle de interacciones) — pensado
+// para entregar formalmente al cliente, no un volante de una sola hoja.
 // Visítalo así: https://tu-dominio.com/export/mi-negocio.pdf?key=TU_CLAVE
 app.get("/export/:slug.pdf", async (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
@@ -1840,26 +1989,66 @@ app.get("/export/:slug.pdf", async (req, res) => {
   const datos = leerDatos();
   const eventos = (datos[slug] && datos[slug].eventos) || [];
   const r = calcularResumen(eventos);
+  const recomendaciones = generarRecomendaciones(eventos, r, negocio);
+  const promSector = promedioSector(negocio.categoria, slug, datos);
+  const fechaGenerado = new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" });
 
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([595, 842]); // A4
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-  const verde = rgb(0.12, 0.43, 0.31);
-  const oscuro = rgb(0.09, 0.13, 0.11);
-  const gris = rgb(0.5, 0.5, 0.5);
+  const verdeOscuro = rgb(0.043, 0.239, 0.173); // #0B3D2C
+  const verde = rgb(0.059, 0.318, 0.196);       // #0F5132
+  const verdeClaro = rgb(0.906, 0.941, 0.918);  // #E7F0EA
+  const oro = rgb(0.788, 0.635, 0.294);         // #C9A24B
+  const crema = rgb(0.980, 0.980, 0.973);       // #FAFAF8
+  const oscuro = rgb(0.086, 0.125, 0.109);      // #16201C
+  const gris = rgb(0.42, 0.46, 0.44);
+  const blanco = rgb(1, 1, 1);
 
-  let y = 790;
-  page.drawText("Reporte Tapin", { x: 50, y, size: 22, font: fontBold, color: oscuro });
-  y -= 26;
-  page.drawText(negocio.nombre, { x: 50, y, size: 14, font, color: verde });
-  y -= 18;
-  page.drawText(`Generado el ${new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) })}`, {
-    x: 50, y, size: 10, font, color: gris,
+  const ANCHO = 595, ALTO = 842; // A4
+  let numeroPagina = 0;
+
+  function piePagina(page) {
+    numeroPagina++;
+    page.drawLine({ start: { x: 50, y: 56 }, end: { x: ANCHO - 50, y: 56 }, thickness: 0.5, color: verdeClaro });
+    page.drawText("Tapin", { x: 50, y: 38, size: 9, font: fontBold, color: verde });
+    page.drawText(`Informe de desempeño · ${negocio.nombre}`, { x: 90, y: 38, size: 8, font, color: gris });
+    page.drawText(`${numeroPagina}`, { x: ANCHO - 60, y: 38, size: 8, font, color: gris });
+  }
+
+  function encabezadoSeccion(page, titulo) {
+    page.drawRectangle({ x: 0, y: ALTO - 70, width: ANCHO, height: 70, color: verdeOscuro });
+    page.drawText(titulo, { x: 50, y: ALTO - 44, size: 16, font: fontBold, color: blanco });
+    page.drawText(negocio.nombre, { x: 50, y: ALTO - 60, size: 9, font, color: rgb(0.81, 0.89, 0.85) });
+  }
+
+  // ---------- Página 1: Portada ----------
+  const portada = pdfDoc.addPage([ANCHO, ALTO]);
+  portada.drawRectangle({ x: 0, y: 0, width: ANCHO, height: ALTO, color: verdeOscuro });
+  portada.drawRectangle({ x: 0, y: ALTO - 8, width: ANCHO, height: 8, color: oro });
+  portada.drawText("TAPIN", { x: 50, y: ALTO - 120, size: 34, font: fontBold, color: blanco });
+  portada.drawText("Informe de desempeño", { x: 50, y: ALTO - 150, size: 14, font, color: rgb(0.81, 0.89, 0.85) });
+
+  portada.drawLine({ start: { x: 50, y: ALTO - 200 }, end: { x: 250, y: ALTO - 200 }, thickness: 1.5, color: oro });
+  portada.drawText(negocio.nombre, { x: 50, y: ALTO - 240, size: 26, font: fontBold, color: blanco });
+  portada.drawText(`Categoría: ${negocio.categoria || "—"}`, { x: 50, y: ALTO - 264, size: 11, font, color: rgb(0.81, 0.89, 0.85) });
+  portada.drawText(`Generado el ${fechaGenerado}`, { x: 50, y: ALTO - 282, size: 11, font, color: rgb(0.81, 0.89, 0.85) });
+
+  portada.drawRectangle({ x: 50, y: 120, width: ANCHO - 100, height: 1, color: rgb(0.3, 0.45, 0.38) });
+  portada.drawText("Preparado automáticamente a partir de la actividad real registrada en la tarjeta Tapin de este negocio.", {
+    x: 50, y: 95, size: 9, font, color: rgb(0.7, 0.8, 0.75), maxWidth: ANCHO - 100, lineHeight: 13,
   });
+  portada.drawText("Tapin", { x: 50, y: 50, size: 9, font: fontBold, color: oro });
 
-  y -= 50;
+  // ---------- Página 2: Resumen ejecutivo ----------
+  const resumen = pdfDoc.addPage([ANCHO, ALTO]);
+  encabezadoSeccion(resumen, "Resumen ejecutivo");
+
+  let y = ALTO - 110;
+  resumen.drawText("Métricas clave", { x: 50, y, size: 11, font: fontBold, color: oscuro });
+  y -= 16;
+
   const metrics = [
     ["Toques totales", r.total],
     ["Toques hoy", r.hoy],
@@ -1867,21 +2056,32 @@ app.get("/export/:slug.pdf", async (req, res) => {
   ];
   let x = 50;
   metrics.forEach(([label, val]) => {
-    page.drawRectangle({ x, y: y - 50, width: 150, height: 60, color: rgb(0.97, 0.96, 0.93) });
-    page.drawText(String(val), { x: x + 14, y: y - 18, size: 22, font: fontBold, color: verde });
-    page.drawText(label, { x: x + 14, y: y - 40, size: 9, font, color: gris });
-    x += 165;
+    resumen.drawRectangle({ x, y: y - 58, width: 158, height: 58, color: crema });
+    resumen.drawRectangle({ x, y: y - 58, width: 4, height: 58, color: verde });
+    resumen.drawText(String(val), { x: x + 16, y: y - 24, size: 22, font: fontBold, color: verde });
+    resumen.drawText(label, { x: x + 16, y: y - 42, size: 8.5, font, color: gris });
+    x += 168;
   });
-
   y -= 90;
-  page.drawText("Toques por día (últimos 7 días)", { x: 50, y, size: 12, font: fontBold, color: oscuro });
-  y -= 20;
+
+  if (promSector !== null) {
+    const diferencia = r.semana - promSector;
+    const texto = diferencia >= 0
+      ? `Por encima del promedio de tu categoría (+${diferencia} toques/semana vs. ${promSector})`
+      : `Por debajo del promedio de tu categoría (${diferencia} toques/semana vs. ${promSector})`;
+    resumen.drawRectangle({ x: 50, y: y - 26, width: ANCHO - 100, height: 26, color: verdeClaro });
+    resumen.drawText(texto, { x: 60, y: y - 17, size: 9, font: fontBold, color: verdeOscuro });
+    y -= 46;
+  }
+
+  resumen.drawText("Toques por día (últimos 7 días)", { x: 50, y, size: 11, font: fontBold, color: oscuro });
+  y -= 16;
 
   const max = Math.max(1, ...r.dias7);
   const nombresDias = [];
-  const ahora = new Date();
+  const ahoraD = new Date();
   for (let i = 6; i >= 0; i--) {
-    const d = new Date(ahora);
+    const d = new Date(ahoraD);
     d.setDate(d.getDate() - i);
     nombresDias.push(d.toLocaleDateString("es-CO", { weekday: "short" }));
   }
@@ -1890,32 +2090,276 @@ app.get("/export/:slug.pdf", async (req, res) => {
   r.dias7.forEach((v, i) => {
     const barHeight = (v / max) * barAreaHeight;
     const bx = 50 + i * 70;
-    page.drawRectangle({
-      x: bx, y: barAreaTop - barAreaHeight, width: 36, height: barHeight || 1,
-      color: verde,
-    });
-    page.drawText(String(v), { x: bx + 12, y: barAreaTop - barAreaHeight - 14, size: 9, font, color: gris });
-    page.drawText(nombresDias[i], { x: bx, y: barAreaTop - barAreaHeight - 28, size: 9, font, color: oscuro });
+    resumen.drawRectangle({ x: bx, y: barAreaTop - barAreaHeight, width: 36, height: barHeight || 1, color: verde });
+    resumen.drawText(String(v), { x: bx + 12, y: barAreaTop - barAreaHeight - 14, size: 9, font, color: gris });
+    resumen.drawText(nombresDias[i], { x: bx, y: barAreaTop - barAreaHeight - 28, size: 9, font, color: oscuro });
   });
 
   y = barAreaTop - barAreaHeight - 60;
-  page.drawText("Ultimas interacciones", { x: 50, y, size: 12, font: fontBold, color: oscuro });
+  resumen.drawText("Recomendaciones", { x: 50, y, size: 11, font: fontBold, color: oscuro });
+  y -= 18;
+  recomendaciones.forEach((texto) => {
+    if (y < 90) return;
+    resumen.drawRectangle({ x: 50, y: y - 28, width: ANCHO - 100, height: 28, color: crema });
+    resumen.drawRectangle({ x: 50, y: y - 28, width: 3, height: 28, color: oro });
+    resumen.drawText(texto, { x: 62, y: y - 18, size: 8.5, font, color: oscuro, maxWidth: ANCHO - 130, lineHeight: 11 });
+    y -= 36;
+  });
+  piePagina(resumen);
+
+  // ---------- Página 3: Detalle de interacciones ----------
+  const detalle = pdfDoc.addPage([ANCHO, ALTO]);
+  encabezadoSeccion(detalle, "Detalle de interacciones");
+
+  y = ALTO - 110;
+  detalle.drawText("Últimas interacciones registradas", { x: 50, y, size: 11, font: fontBold, color: oscuro });
+  y -= 22;
+
+  detalle.drawRectangle({ x: 50, y: y - 18, width: ANCHO - 100, height: 18, color: verdeOscuro });
+  detalle.drawText("Fecha y hora", { x: 58, y: y - 13, size: 8.5, font: fontBold, color: blanco });
+  detalle.drawText("Dispositivo", { x: 320, y: y - 13, size: 8.5, font: fontBold, color: blanco });
   y -= 18;
 
-  const recientes = eventos.slice(-12).reverse();
-  recientes.forEach((e) => {
-    if (y < 60) return;
-    page.drawText(`${e.fechaLegible}  -  ${e.dispositivo}`, { x: 50, y, size: 9, font, color: gris });
-    y -= 14;
+  const recientes = eventos.slice(-30).reverse();
+  recientes.forEach((e, i) => {
+    if (y < 90) return;
+    if (i % 2 === 0) detalle.drawRectangle({ x: 50, y: y - 16, width: ANCHO - 100, height: 16, color: crema });
+    detalle.drawText(e.fechaLegible, { x: 58, y: y - 12, size: 8.5, font, color: oscuro });
+    detalle.drawText(e.dispositivo, { x: 320, y: y - 12, size: 8.5, font, color: oscuro });
+    y -= 16;
+  });
+  if (recientes.length === 0) {
+    detalle.drawText("Sin interacciones registradas todavía.", { x: 58, y: y - 12, size: 9, font, color: gris });
+  }
+  piePagina(detalle);
+
+  const pdfBytes = await pdfDoc.save();
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="informe-tapin-${slug}.pdf"`);
+  res.send(Buffer.from(pdfBytes));
+});
+
+// Informe de entrega en Word (.docx) — editable, para que tú o el cliente lo
+// personalicen, lo peguen en una propuesta, o lo usen como acta formal.
+// Visítalo así: https://tu-dominio.com/export/mi-negocio.docx?key=TU_CLAVE
+app.get("/export/:slug.docx", async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  const {
+    Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
+    Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType,
+  } = require("docx");
+
+  const datos = leerDatos();
+  const eventos = (datos[slug] && datos[slug].eventos) || [];
+  const r = calcularResumen(eventos);
+  const recomendaciones = generarRecomendaciones(eventos, r, negocio);
+  const promSector = promedioSector(negocio.categoria, slug, datos);
+  const fechaGenerado = new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" });
+
+  const VERDE = "0F5132";
+  const ORO = "C9A24B";
+  const GRIS = "6B726F";
+
+  function celda(texto, opciones = {}) {
+    return new TableCell({
+      width: { size: opciones.width || 50, type: WidthType.PERCENTAGE },
+      shading: opciones.fondo ? { type: ShadingType.CLEAR, fill: opciones.fondo } : undefined,
+      children: [new Paragraph({
+        children: [new TextRun({ text: texto, bold: !!opciones.bold, color: opciones.color || "16201C", size: opciones.size || 20 })],
+      })],
+    });
+  }
+
+  const tablaMetricas = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({ children: [
+        celda("Métrica", { bold: true, fondo: VERDE, color: "FFFFFF" }),
+        celda("Valor", { bold: true, fondo: VERDE, color: "FFFFFF" }),
+      ]}),
+      new TableRow({ children: [celda("Toques totales"), celda(String(r.total))] }),
+      new TableRow({ children: [celda("Toques hoy"), celda(String(r.hoy))] }),
+      new TableRow({ children: [celda("Últimos 7 días"), celda(String(r.semana))] }),
+    ],
+  });
+
+  const filasInteracciones = eventos.slice(-20).reverse().map((e) =>
+    new TableRow({ children: [celda(e.fechaLegible, { size: 18 }), celda(e.dispositivo, { size: 18 })] })
+  );
+
+  const tablaInteracciones = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({ children: [
+        celda("Fecha y hora", { bold: true, fondo: "E7F0EA" }),
+        celda("Dispositivo", { bold: true, fondo: "E7F0EA" }),
+      ]}),
+      ...filasInteracciones,
+    ],
+  });
+
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: [
+        new Paragraph({
+          children: [new TextRun({ text: "TAPIN", bold: true, size: 48, color: VERDE })],
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: "Informe de desempeño", size: 26, color: GRIS })],
+          spacing: { after: 200 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: negocio.nombre, bold: true, size: 32 })],
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: `Categoría: ${negocio.categoria || "—"}  ·  Generado el ${fechaGenerado}`, size: 20, color: GRIS })],
+          spacing: { after: 400 },
+        }),
+
+        new Paragraph({ text: "Resumen ejecutivo", heading: HeadingLevel.HEADING_1, spacing: { after: 200 } }),
+        tablaMetricas,
+
+        new Paragraph({ text: "", spacing: { after: 200 } }),
+        ...(promSector !== null ? [
+          new Paragraph({
+            children: [new TextRun({
+              text: r.semana >= promSector
+                ? `Este negocio está por encima del promedio de su categoría (${r.semana} vs. ${promSector} toques/semana).`
+                : `Este negocio está por debajo del promedio de su categoría (${r.semana} vs. ${promSector} toques/semana).`,
+              italics: true, color: VERDE, size: 20,
+            })],
+            spacing: { after: 300 },
+          }),
+        ] : []),
+
+        new Paragraph({ text: "Recomendaciones", heading: HeadingLevel.HEADING_1, spacing: { before: 200, after: 200 } }),
+        ...recomendaciones.map((texto) => new Paragraph({
+          bullet: { level: 0 },
+          children: [new TextRun({ text: texto, size: 20 })],
+          spacing: { after: 100 },
+        })),
+
+        new Paragraph({ text: "Detalle de interacciones recientes", heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 200 } }),
+        tablaInteracciones,
+
+        new Paragraph({
+          children: [new TextRun({ text: "Preparado automáticamente por Tapin a partir de la actividad real registrada en la tarjeta de este negocio.", italics: true, size: 16, color: GRIS })],
+          spacing: { before: 400 },
+        }),
+      ],
+    }],
+  });
+
+  const buffer = await Packer.toBuffer(doc);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+  res.setHeader("Content-Disposition", `attachment; filename="informe-tapin-${slug}.docx"`);
+  res.send(buffer);
+});
+
+// Acta de entrega / certificado de instalación — documento formal de una página
+// que respalda el cobro inicial y deja constancia de la fecha de activación
+// y las condiciones del servicio. Útil como soporte comercial con el cliente.
+// Visítalo así: https://tu-dominio.com/entrega/mi-negocio.pdf?key=TU_CLAVE
+app.get("/entrega/:slug.pdf", async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
+
+  const codigos = leerCodigos();
+  const entrada = codigos[slug];
+  const fechaActivacion = (entrada && entrada.activadoEl)
+    ? new Date(entrada.activadoEl).toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" })
+    : new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" });
+
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([595, 842]);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+  const verdeOscuro = rgb(0.043, 0.239, 0.173);
+  const verde = rgb(0.059, 0.318, 0.196);
+  const oro = rgb(0.788, 0.635, 0.294);
+  const oscuro = rgb(0.086, 0.125, 0.109);
+  const gris = rgb(0.42, 0.46, 0.44);
+  const blanco = rgb(1, 1, 1);
+  const crema = rgb(0.980, 0.980, 0.973);
+  const ANCHO = 595, ALTO = 842;
+
+  page.drawRectangle({ x: 0, y: ALTO - 90, width: ANCHO, height: 90, color: verdeOscuro });
+  page.drawRectangle({ x: 0, y: ALTO - 90, width: ANCHO, height: 4, color: oro });
+  page.drawText("TAPIN", { x: 50, y: ALTO - 45, size: 22, font: fontBold, color: blanco });
+  page.drawText("Acta de entrega e instalación", { x: 50, y: ALTO - 68, size: 12, font, color: rgb(0.81, 0.89, 0.85) });
+
+  let y = ALTO - 140;
+  page.drawText("Datos del servicio", { x: 50, y, size: 12, font: fontBold, color: oscuro });
+  y -= 24;
+
+  const filas = [
+    ["Negocio", negocio.nombre],
+    ["Categoría", negocio.categoria || "—"],
+    ["Fecha de activación", fechaActivacion],
+    ["Enlace de reseñas configurado", "Sí"],
+    ["Plan contratado", esPro(negocio) ? "Pro (mensual)" : "Básico (pago único)"],
+    ["Código de tarjeta", slug],
+  ];
+  filas.forEach(([label, val], i) => {
+    if (i % 2 === 0) page.drawRectangle({ x: 50, y: y - 20, width: ANCHO - 100, height: 20, color: crema });
+    page.drawText(label, { x: 58, y: y - 15, size: 10, font: fontBold, color: oscuro });
+    page.drawText(String(val), { x: 280, y: y - 15, size: 10, font, color: oscuro });
+    y -= 20;
+  });
+
+  y -= 30;
+  page.drawText("Alcance del servicio entregado", { x: 50, y, size: 12, font: fontBold, color: oscuro });
+  y -= 20;
+  const alcance = [
+    "Tarjeta física con tecnología NFC, configurada y activada.",
+    "Redirección automática a la página de reseñas de Google del negocio.",
+    "Filtro de reputación: reseñas negativas se capturan en privado, no se publican.",
+    "Panel de estadísticas con historial de toques y exportación de reportes.",
+  ];
+  alcance.forEach((linea) => {
+    page.drawText(`•  ${linea}`, { x: 58, y, size: 9.5, font, color: oscuro, maxWidth: ANCHO - 116, lineHeight: 13 });
+    y -= 18;
+  });
+
+  y -= 20;
+  page.drawRectangle({ x: 50, y: y - 60, width: ANCHO - 100, height: 60, color: rgb(0.906, 0.941, 0.918) });
+  page.drawText("Este documento certifica que el servicio Tapin fue entregado, instalado y", {
+    x: 62, y: y - 22, size: 9.5, font, color: verdeOscuro,
+  });
+  page.drawText("puesto en funcionamiento en la fecha indicada, quedando activo y operativo.", {
+    x: 62, y: y - 36, size: 9.5, font, color: verdeOscuro,
+  });
+
+  y -= 110;
+  page.drawLine({ start: { x: 60, y }, end: { x: 260, y }, thickness: 1, color: gris });
+  page.drawText("Firma - Tapin", { x: 60, y: y - 14, size: 9, font, color: gris });
+
+  page.drawLine({ start: { x: 340, y }, end: { x: 540, y }, thickness: 1, color: gris });
+  page.drawText("Firma - Cliente", { x: 340, y: y - 14, size: 9, font, color: gris });
+
+  page.drawText(`Generado el ${new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) })}`, {
+    x: 50, y: 40, size: 8, font, color: gris,
   });
 
   const pdfBytes = await pdfDoc.save();
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="reporte-tapin-${slug}.pdf"`);
+  res.setHeader("Content-Disposition", `attachment; filename="acta-entrega-tapin-${slug}.pdf"`);
   res.send(Buffer.from(pdfBytes));
 });
-
-// Exporta el historial completo de un negocio como archivo CSV.
 // Ideal para entregarle el reporte a tu cliente (Excel/Google Sheets lo abre directo).
 // Visítalo así: https://tu-dominio.com/export/mi-negocio.csv?key=TU_CLAVE
 app.get("/export/:slug.csv", (req, res) => {
@@ -2042,8 +2486,631 @@ app.get("/stats.json", (req, res) => {
   res.json(resultado);
 });
 
+// ---------- Dashboard de clientes: mapa de calor público ----------
+// Calcula una "reputación" aproximada de un negocio a partir de sus quejas
+// privadas vs. su total de toques (no tenemos un conteo directo de "positivos",
+// así que la aproximamos: total - quejas = toques que no terminaron en queja).
+function reputacionNegocio(slug, datos) {
+  const info = datos[slug] || { total: 0 };
+  const quejas = (info.quejas || []).length;
+  const total = info.total || 0;
+  const positivos = Math.max(0, total - quejas);
+  const porcentaje = total > 0 ? Math.round((positivos / total) * 100) : 100;
+  const estrellas = total > 0 ? Math.max(1, Math.round((positivos / total) * 5)) : 5;
+  return { total, quejas, porcentaje, estrellas };
+}
+
+// Página pública para clientes: mapa de calor con todos los negocios Tapin
+// que tengan ubicación configurada, mostrando su reputación al tocarlos.
+// Visítalo así: https://tu-dominio.com/descubre
+app.get("/descubre", (req, res) => {
+  const todos = todosLosNegocios();
+  const datos = leerDatos();
+  const cliente = clienteActual(req);
+  const misFavoritos = cliente ? (cliente.favoritos || []) : [];
+
+  const puntos = Object.keys(todos)
+    .map((slug) => ({ slug, negocio: todos[slug] }))
+    .filter(({ negocio }) => negocio.lat != null && negocio.lng != null)
+    .map(({ slug, negocio }) => {
+      const rep = reputacionNegocio(slug, datos);
+      return {
+        slug,
+        nombre: negocio.nombre,
+        categoria: negocio.categoria || "negocio",
+        direccion: negocio.direccion || "",
+        lat: negocio.lat,
+        lng: negocio.lng,
+        googleUrl: negocio.googleUrl,
+        esFavorito: misFavoritos.includes(slug),
+        ...rep,
+      };
+    });
+
+  const puntosJSON = JSON.stringify(puntos);
+  const centroLat = puntos.length ? puntos.reduce((s, p) => s + p.lat, 0) / puntos.length : 4.8617;
+  const centroLng = puntos.length ? puntos.reduce((s, p) => s + p.lng, 0) / puntos.length : -74.0397;
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Descubre negocios Tapin</title>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+        <style>
+          ${ESTILO_BASE}
+          html, body { height: 100%; }
+          .content{padding:0;max-width:none;}
+          .topbar{position:relative;z-index:1000;}
+          #mapa{height:calc(100vh - 68px);width:100%;}
+          .leyenda{position:absolute;bottom:20px;left:20px;z-index:900;background:#fff;border-radius:12px;
+                   padding:12px 16px;box-shadow:0 4px 20px rgba(0,0,0,0.12);font-size:0.78rem;max-width:220px;}
+          .leyenda-titulo{font-weight:700;margin-bottom:6px;color:${MARCA.texto};}
+          .popup-nombre{font-weight:700;font-size:0.95rem;margin-bottom:2px;}
+          .popup-cat{color:${MARCA.textoSuave};font-size:0.75rem;text-transform:capitalize;margin-bottom:6px;}
+          .popup-estrellas{color:${MARCA.oro};font-size:0.9rem;margin-bottom:2px;}
+          .popup-link{display:inline-block;margin-top:6px;background:${MARCA.verde};color:#fff;text-decoration:none;
+                      padding:6px 12px;border-radius:100px;font-size:0.76rem;font-weight:600;}
+          .popup-fav{display:inline-block;margin-top:6px;margin-left:6px;background:${MARCA.crema};color:${MARCA.texto};
+                     text-decoration:none;padding:6px 12px;border-radius:100px;font-size:0.76rem;font-weight:600;
+                     border:1px solid ${MARCA.borde};cursor:pointer;}
+          .popup-fav.activo{background:${MARCA.oro};color:#fff;border-color:${MARCA.oro};}
+          .vacio{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:900;text-align:center;
+                 background:#fff;padding:24px 30px;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,0.12);}
+        </style>
+      </head>
+      <body>
+        <div class="topbar"><a class="back" href="/">&larr; Inicio</a><div>${logoSvg("#FFFFFF", 22)}</div><div style="width:60px;"></div></div>
+        <div id="mapa"></div>
+        <div class="leyenda">
+          <div class="leyenda-titulo">🔥 Mapa de negocios Tapin</div>
+          Entre más intenso el color, más actividad de clientes. Toca un punto para ver su reputación.
+        </div>
+        <script>
+          const puntos = ${puntosJSON};
+          const hayCliente = ${cliente ? "true" : "false"};
+          const mapa = L.map('mapa').setView([${centroLat}, ${centroLng}], 12);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap'
+          }).addTo(mapa);
+
+          async function alternarFavorito(slug, boton) {
+            if (!hayCliente) { window.location.href = '/cliente'; return; }
+            const esFav = boton.classList.contains('activo');
+            const ruta = esFav ? 'quitar' : 'guardar';
+            await fetch('/favoritos/' + slug + '/' + ruta, { method: 'POST' });
+            boton.classList.toggle('activo');
+            boton.textContent = boton.classList.contains('activo') ? '★ Guardado' : '☆ Guardar';
+          }
+
+          if (puntos.length === 0) {
+            document.querySelector('.leyenda').style.display = 'none';
+            const div = document.createElement('div');
+            div.className = 'vacio';
+            div.innerHTML = '<b>Todavía no hay negocios con ubicación configurada.</b>';
+            document.getElementById('mapa').parentElement.appendChild(div);
+          } else {
+            const heatData = puntos.map(p => [p.lat, p.lng, Math.max(0.3, Math.min(1, p.total / 50))]);
+            L.heatLayer(heatData, { radius: 45, blur: 35, maxZoom: 15 }).addTo(mapa);
+
+            puntos.forEach(p => {
+              const estrellasHtml = '★'.repeat(p.estrellas) + '☆'.repeat(5 - p.estrellas);
+              const marker = L.circleMarker([p.lat, p.lng], {
+                radius: 8, color: '#0F5132', fillColor: '#C9A24B', fillOpacity: 0.9, weight: 2
+              }).addTo(mapa);
+
+              const contenedor = document.createElement('div');
+              contenedor.innerHTML =
+                '<div class="popup-nombre">' + p.nombre + '</div>' +
+                '<div class="popup-cat">' + p.categoria + '</div>' +
+                '<div class="popup-estrellas">' + estrellasHtml + ' (' + p.porcentaje + '% positivas)</div>' +
+                (p.direccion ? '<div style="font-size:0.78rem;color:#888;">' + p.direccion + '</div>' : '') +
+                '<a class="popup-link" href="' + p.googleUrl + '" target="_blank">Ver en Google</a>';
+
+              const botonFav = document.createElement('button');
+              botonFav.className = 'popup-fav' + (p.esFavorito ? ' activo' : '');
+              botonFav.textContent = p.esFavorito ? '★ Guardado' : '☆ Guardar';
+              botonFav.onclick = function () { alternarFavorito(p.slug, botonFav); };
+              contenedor.appendChild(botonFav);
+
+              marker.bindPopup(contenedor);
+            });
+          }
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+// ---------- Dashboard de dueños: login mágico por correo, sin contraseña ----------
+// Un dueño puede tener varios locales (varios slugs) — se agrupan por email.
+app.get("/mis-negocios", (req, res) => {
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Mis negocios — Tapin</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.verdeOscuro};
+               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .box{background:#fff;border-radius:18px;padding:36px 30px;max-width:380px;width:100%;text-align:center;}
+          .logo{margin-bottom:24px;}
+          h1{font-size:1.15rem;color:${MARCA.texto};margin:0 0 6px;}
+          p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0 0 22px;}
+          input{width:100%;padding:14px;border:1px solid ${MARCA.borde};border-radius:10px;font-size:0.95rem;
+                margin-bottom:14px;font-family:inherit;}
+          button{width:100%;background:${MARCA.verde};color:#fff;border:none;padding:14px;border-radius:10px;
+                 font-weight:700;font-size:0.95rem;cursor:pointer;}
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 30)}</div>
+          <h1>Panel de tu negocio</h1>
+          <p>Escribe el correo con el que registraste tu(s) tarjeta(s) Tapin. Te mandamos un link de acceso, sin contraseña que recordar.</p>
+          <form method="POST" action="/mis-negocios/solicitar">
+            <input type="email" name="email" required placeholder="tu@negocio.com">
+            <button type="submit">Enviarme el acceso</button>
+          </form>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.post("/mis-negocios/solicitar", async (req, res) => {
+  const email = (req.body.email || "").trim().toLowerCase();
+  if (!email) return res.status(400).send("Falta el correo.");
+
+  const todos = todosLosNegocios();
+  const misSlugs = Object.keys(todos).filter(
+    (slug) => (todos[slug].email || "").trim().toLowerCase() === email
+  );
+
+  // Por seguridad, respondemos igual exista o no el correo (no revelamos si un
+  // email está o no registrado) — pero solo mandamos el link si sí hay negocios.
+  if (misSlugs.length > 0) {
+    const tokens = leerTokens();
+
+    // Limpieza: aprovechamos este momento para borrar tokens vencidos (24h)
+    // de cualquier usuario, así tokens.json no crece sin control.
+    const VEINTICUATRO_HORAS_MS = 24 * 60 * 60 * 1000;
+    for (const t in tokens) {
+      if (Date.now() - new Date(tokens[t].creado).getTime() > VEINTICUATRO_HORAS_MS) {
+        delete tokens[t];
+      }
+    }
+
+    const token = generarToken();
+    tokens[token] = { email, creado: new Date().toISOString() };
+    guardarTokens(tokens);
+
+    const link = `${req.protocol}://${req.get("host")}/mis-negocios/${token}`;
+    await enviarEmail(
+      email,
+      "Tu acceso a Tapin",
+      `
+        <div style="font-family:-apple-system,Arial,sans-serif;max-width:420px;">
+          <h2 style="color:${MARCA.verdeOscuro};">Tu panel de Tapin</h2>
+          <p>Toca el botón para entrar a tu panel — puedes ver todos tus negocios registrados con este correo.</p>
+          <a href="${link}" style="display:inline-block;background:${MARCA.verde};color:#fff;text-decoration:none;padding:14px 24px;border-radius:10px;font-weight:700;margin:16px 0;">Entrar a mi panel</a>
+          <p style="font-size:0.8rem;color:#888;">Este link funciona por 24 horas. Si no pediste este acceso, ignora este correo.</p>
+        </div>
+      `
+    ).catch(() => {});
+  }
+
+  res.send(`
+    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="font-family:-apple-system,Arial,sans-serif;background:${MARCA.verdeOscuro};min-height:100vh;
+                 display:flex;align-items:center;justify-content:center;padding:24px;margin:0;">
+      <div style="background:#fff;border-radius:18px;padding:36px 30px;max-width:380px;text-align:center;">
+        <h2 style="color:${MARCA.texto};">📩 Revisa tu correo</h2>
+        <p style="color:${MARCA.textoSuave};font-size:0.88rem;">Si ese correo tiene negocios registrados en Tapin, te llegó un link de acceso.</p>
+      </div>
+    </body></html>
+  `);
+});
+
+// El link mágico en sí — muestra todos los negocios del dueño, cada uno como
+// una tarjeta bonita, con acceso directo a su panel individual.
+app.get("/mis-negocios/:token", (req, res) => {
+  const tokens = leerTokens();
+  const entrada = tokens[req.params.token];
+  if (!entrada) {
+    return res.status(401).send("Este link no es válido o ya expiró. Solicita uno nuevo en /mis-negocios.");
+  }
+
+  // Expiración de 24 horas — un link mágico viejo ya no debe funcionar.
+  const VEINTICUATRO_HORAS_MS = 24 * 60 * 60 * 1000;
+  const antiguedad = Date.now() - new Date(entrada.creado).getTime();
+  if (antiguedad > VEINTICUATRO_HORAS_MS) {
+    delete tokens[req.params.token];
+    guardarTokens(tokens);
+    return res.status(401).send(
+      `Este link expiró (los links de acceso duran 24 horas por seguridad). ` +
+      `<a href="/mis-negocios">Solicita uno nuevo aquí</a>.`
+    );
+  }
+
+  const todos = todosLosNegocios();
+  const datos = leerDatos();
+  const misSlugs = Object.keys(todos).filter(
+    (slug) => (todos[slug].email || "").trim().toLowerCase() === entrada.email
+  );
+
+  const tarjetas = misSlugs.map((slug) => {
+    const negocio = todos[slug];
+    const r = calcularResumen((datos[slug] && datos[slug].eventos) || []);
+    return `
+      <a class="card" href="/mi-panel/${slug}?key=${negocio.claveAcceso || ""}">
+        <div class="card-top">
+          <div class="card-nombre">${negocio.nombre} ${esPro(negocio) ? `<span class="badge-pro">PRO</span>` : `<span class="badge-basico">BÁSICO</span>`}</div>
+          <div class="card-total">${r.total}<span>toques totales</span></div>
+        </div>
+        <div class="card-meta">${negocio.categoria || "—"} ${negocio.direccion ? "· " + negocio.direccion : ""}</div>
+        <div class="card-cta">Ver panel completo &rarr;</div>
+      </a>`;
+  }).join("");
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Mis negocios — Tapin</title>
+        <style>
+          ${ESTILO_BASE}
+          .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
+          .card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:22px;text-decoration:none;
+                display:block;box-shadow:0 2px 10px rgba(0,0,0,0.03);transition:transform 0.15s;}
+          .card:active{transform:scale(0.98);}
+          .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+          .card-nombre{font-weight:700;font-size:1.05rem;color:${MARCA.texto};}
+          .badge-pro{background:${MARCA.oro};color:#fff;font-size:0.6rem;font-weight:800;padding:2px 7px;border-radius:100px;vertical-align:middle;margin-left:4px;}
+          .badge-basico{background:${MARCA.borde};color:${MARCA.textoSuave};font-size:0.6rem;font-weight:800;padding:2px 7px;border-radius:100px;vertical-align:middle;margin-left:4px;}
+          .card-total{font-size:1.3rem;font-weight:700;color:${MARCA.verde};text-align:right;}
+          .card-total span{display:block;font-size:0.65rem;font-weight:500;color:${MARCA.textoSuave};}
+          .card-meta{color:${MARCA.textoSuave};font-size:0.8rem;margin-bottom:14px;text-transform:capitalize;}
+          .card-cta{color:${MARCA.verde};font-size:0.82rem;font-weight:700;}
+        </style>
+      </head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div><a class="back" href="/">Inicio</a></div>
+        <div class="content">
+          <div class="eyebrow">Panel de dueño</div>
+          <h1 class="titulo-pagina">Tus negocios</h1>
+          <div class="subtitulo">${misSlugs.length} ${misSlugs.length === 1 ? "local registrado" : "locales registrados"} con este correo.</div>
+          <div class="grid">${tarjetas || "<p>No encontramos negocios asociados a este correo.</p>"}</div>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// ---------- Páginas de cliente: registro / login / cuenta ----------
+
+// Página combinada de registro e inicio de sesión para clientes (personas normales).
+app.get("/cliente", (req, res) => {
+  const error = req.query.error;
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Mi cuenta — Tapin</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.verdeOscuro};
+               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .box{background:#fff;border-radius:18px;padding:32px 30px;max-width:380px;width:100%;}
+          .logo{text-align:center;margin-bottom:20px;}
+          .tabs{display:flex;background:${MARCA.crema};border-radius:100px;padding:4px;margin-bottom:22px;}
+          .tab{flex:1;text-align:center;padding:10px;border-radius:100px;font-size:0.85rem;font-weight:700;
+               cursor:pointer;color:${MARCA.textoSuave};}
+          .tab.activo{background:${MARCA.verde};color:#fff;}
+          .panel{display:none;}
+          .panel.activo{display:block;}
+          input{width:100%;padding:13px;border:1px solid ${MARCA.borde};border-radius:10px;font-size:0.92rem;
+                margin-bottom:12px;font-family:inherit;}
+          button{width:100%;background:${MARCA.verde};color:#fff;border:none;padding:13px;border-radius:10px;
+                 font-weight:700;font-size:0.92rem;cursor:pointer;}
+          .error{background:#FBEFE9;color:${MARCA.rojo};padding:10px 14px;border-radius:8px;font-size:0.82rem;margin-bottom:14px;}
+          h2{font-size:1.05rem;margin:0 0 4px;color:${MARCA.texto};}
+          p{color:${MARCA.textoSuave};font-size:0.82rem;margin:0 0 18px;}
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 28)}</div>
+          <div class="tabs">
+            <div class="tab activo" id="tab-login" onclick="mostrar('login')">Iniciar sesión</div>
+            <div class="tab" id="tab-registro" onclick="mostrar('registro')">Crear cuenta</div>
+          </div>
+          ${error ? `<div class="error">${error === "credenciales" ? "Correo o contraseña incorrectos." : error === "existe" ? "Ya existe una cuenta con ese correo." : "Faltan datos."}</div>` : ""}
+
+          <div class="panel activo" id="panel-login">
+            <h2>Bienvenido de vuelta</h2>
+            <p>Entra para ver tus favoritos y tu historial de reseñas.</p>
+            <form method="POST" action="/cliente/login">
+              <input type="email" name="email" required placeholder="Correo electrónico">
+              <input type="password" name="password" required placeholder="Contraseña">
+              <button type="submit">Entrar</button>
+            </form>
+          </div>
+
+          <div class="panel" id="panel-registro">
+            <h2>Crea tu cuenta</h2>
+            <p>Guarda tus negocios favoritos y lleva el registro de tus reseñas.</p>
+            <form method="POST" action="/cliente/registro">
+              <input type="text" name="nombre" required placeholder="Tu nombre">
+              <input type="email" name="email" required placeholder="Correo electrónico">
+              <input type="password" name="password" required minlength="6" placeholder="Contraseña (mínimo 6 caracteres)">
+              <button type="submit">Crear cuenta</button>
+            </form>
+          </div>
+        </div>
+        <script>
+          function mostrar(cual) {
+            document.getElementById('tab-login').className = 'tab' + (cual === 'login' ? ' activo' : '');
+            document.getElementById('tab-registro').className = 'tab' + (cual === 'registro' ? ' activo' : '');
+            document.getElementById('panel-login').className = 'panel' + (cual === 'login' ? ' activo' : '');
+            document.getElementById('panel-registro').className = 'panel' + (cual === 'registro' ? ' activo' : '');
+          }
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+app.post("/cliente/registro", (req, res) => {
+  const nombre = (req.body.nombre || "").trim();
+  const email = (req.body.email || "").trim().toLowerCase();
+  const password = req.body.password || "";
+  if (!nombre || !email || password.length < 6) {
+    return res.redirect("/cliente?error=faltan");
+  }
+
+  const clientes = leerClientes();
+  const yaExiste = Object.values(clientes).some((c) => c.email === email);
+  if (yaExiste) {
+    return res.redirect("/cliente?error=existe");
+  }
+
+  const { salt, hash } = crearHashConSal(password);
+  const clienteId = generarToken();
+  clientes[clienteId] = {
+    nombre, email, salt, hash,
+    favoritos: [],
+    historial: [],
+    creado: new Date().toISOString(),
+  };
+  guardarClientes(clientes);
+
+  iniciarSesionCliente(res, clienteId);
+  res.redirect("/cuenta");
+});
+
+app.post("/cliente/login", (req, res) => {
+  const email = (req.body.email || "").trim().toLowerCase();
+  const password = req.body.password || "";
+
+  const clientes = leerClientes();
+  const entrada = Object.entries(clientes).find(([, c]) => c.email === email);
+  if (!entrada || !verificarPassword(password, entrada[1].salt, entrada[1].hash)) {
+    return res.redirect("/cliente?error=credenciales");
+  }
+
+  iniciarSesionCliente(res, entrada[0]);
+  res.redirect("/cuenta");
+});
+
+app.get("/cliente/salir", (req, res) => {
+  const cookies = leerCookies(req);
+  if (cookies.tapin_sesion) {
+    const sesiones = leerSesionesClientes();
+    delete sesiones[cookies.tapin_sesion];
+    guardarSesionesClientes(sesiones);
+  }
+  res.setHeader("Set-Cookie", "tapin_sesion=; HttpOnly; Path=/; Max-Age=0");
+  res.redirect("/");
+});
+
+// Panel del cliente: sus favoritos y su historial de reseñas.
+app.get("/cuenta", (req, res) => {
+  const cliente = clienteActual(req);
+  if (!cliente) return res.redirect("/cliente");
+
+  const todos = todosLosNegocios();
+
+  const favoritosHtml = (cliente.favoritos || [])
+    .filter((slug) => todos[slug])
+    .map((slug) => {
+      const n = todos[slug];
+      return `
+        <div class="fav-card">
+          <div>
+            <div class="fav-nombre">${n.nombre}</div>
+            <div class="fav-cat">${n.categoria || "—"} ${n.direccion ? "· " + n.direccion : ""}</div>
+          </div>
+          <div class="fav-acciones">
+            <a href="${n.googleUrl}" target="_blank">Ver en Google</a>
+            <a href="#" onclick="quitar('${slug}');return false;" class="quitar">Quitar</a>
+          </div>
+        </div>`;
+    }).join("");
+
+  const historialHtml = (cliente.historial || [])
+    .slice()
+    .reverse()
+    .map((h) => `
+      <div class="hist-fila">
+        <div>
+          <b>${h.negocioNombre}</b>
+          <span class="hist-fecha">${h.fecha}</span>
+        </div>
+        <div class="hist-estrellas">${"★".repeat(h.valor)}${"☆".repeat(5 - h.valor)}</div>
+      </div>`
+    ).join("");
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Mi cuenta — Tapin</title>
+        <style>
+          ${ESTILO_BASE}
+          .seccion-titulo{font-size:1.05rem;font-weight:700;margin:32px 0 14px;}
+          .fav-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;padding:16px 18px;
+                    display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+          .fav-nombre{font-weight:700;font-size:0.95rem;}
+          .fav-cat{color:${MARCA.textoSuave};font-size:0.78rem;text-transform:capitalize;}
+          .fav-acciones a{font-size:0.78rem;font-weight:700;text-decoration:none;margin-left:14px;}
+          .fav-acciones .quitar{color:${MARCA.rojo};}
+          .hist-fila{background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;padding:14px 18px;
+                     display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+          .hist-fecha{color:${MARCA.textoSuave};font-size:0.76rem;display:block;}
+          .hist-estrellas{color:${MARCA.oro};}
+          .vacio-msg{color:${MARCA.textoSuave};font-size:0.85rem;background:#fff;padding:20px;border-radius:12px;
+                     border:1px dashed ${MARCA.borde};}
+        </style>
+      </head>
+      <body>
+        <div class="topbar">
+          <div>${logoSvg("#FFFFFF", 22)}</div>
+          <a class="back" href="/cliente/salir">Cerrar sesión</a>
+        </div>
+        <div class="content">
+          <div class="eyebrow">Mi cuenta</div>
+          <h1 class="titulo-pagina">Hola, ${cliente.nombre.split(" ")[0]}</h1>
+          <div class="subtitulo">${cliente.email}</div>
+
+          <div class="seccion-titulo">⭐ Tus negocios favoritos</div>
+          ${favoritosHtml || `<div class="vacio-msg">Todavía no has guardado ningún negocio. Explora el <a href="/descubre">mapa de negocios</a> y guárdalos desde ahí.</div>`}
+
+          <div class="seccion-titulo">📝 Tu historial de reseñas</div>
+          ${historialHtml || `<div class="vacio-msg">Todavía no has calificado ningún negocio con Tapin.</div>`}
+        </div>
+        <script>
+          async function quitar(slug) {
+            await fetch('/favoritos/' + slug + '/quitar', { method: 'POST' });
+            location.reload();
+          }
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+// Guarda o quita un negocio de favoritos — requiere sesión de cliente.
+app.post("/favoritos/:slug/guardar", (req, res) => {
+  const cliente = clienteActual(req);
+  if (!cliente) return res.status(401).json({ ok: false, motivo: "No has iniciado sesión." });
+
+  const clientes = leerClientes();
+  if (!clientes[cliente.id].favoritos) clientes[cliente.id].favoritos = [];
+  if (!clientes[cliente.id].favoritos.includes(req.params.slug)) {
+    clientes[cliente.id].favoritos.push(req.params.slug);
+    guardarClientes(clientes);
+  }
+  res.json({ ok: true });
+});
+
+app.post("/favoritos/:slug/quitar", (req, res) => {
+  const cliente = clienteActual(req);
+  if (!cliente) return res.status(401).json({ ok: false, motivo: "No has iniciado sesión." });
+
+  const clientes = leerClientes();
+  clientes[cliente.id].favoritos = (clientes[cliente.id].favoritos || []).filter((s) => s !== req.params.slug);
+  guardarClientes(clientes);
+  res.json({ ok: true });
+});
+
+
+// algo falla (antes era difícil saber por qué un correo no llegaba). Bórrala o
+// no la uses en producción si te preocupa que alguien la descubra — está protegida
+// con ADMIN_KEY de todas formas.
+// Visítalo así: https://tu-dominio.com/test-email?key=TU_CLAVE&to=tu@correo.com
+app.get("/test-email", async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  const destino = req.query.to;
+  if (!destino) return res.status(400).send("Agrega &to=tu@correo.com a la URL.");
+
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    return res.status(400).send(
+      "Faltan las variables de entorno EMAIL_USER y/o EMAIL_PASS en Render. " +
+      "Ve a tu servicio en Render → Environment → agrégalas, y vuelve a intentar."
+    );
+  }
+
+  const resultado = await enviarEmail(
+    destino,
+    "✅ Correo de prueba — Tapin",
+    `<p>Si ves esto, el envío de correos está funcionando correctamente.</p>
+     <p style="color:#888;font-size:0.85rem;">Enviado desde /test-email el ${new Date().toLocaleString("es-CO")}</p>`
+  );
+
+  if (resultado.ok) {
+    res.send(`✅ Correo enviado exitosamente a ${destino}. Revisa la bandeja de entrada (y spam).`);
+  } else {
+    res.status(500).send(`❌ Falló el envío. Motivo exacto: ${resultado.motivo}`);
+  }
+});
+
 app.get("/", (req, res) => {
-  res.send("Servidor de Tapin activo. Usa /r/:slug para los QR/NFC y /stats?key=... para ver el conteo.");
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Tapin</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.verdeOscuro};
+               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .wrap{max-width:440px;width:100%;text-align:center;}
+          .logo{margin-bottom:36px;}
+          h1{color:#fff;font-size:1.3rem;font-weight:600;margin:0 0 40px;}
+          .opciones{display:flex;flex-direction:column;gap:14px;}
+          .opcion{display:block;background:#fff;border-radius:16px;padding:22px 24px;text-decoration:none;
+                  text-align:left;transition:transform 0.15s;}
+          .opcion:active{transform:scale(0.98);}
+          .opcion-titulo{font-size:1.05rem;font-weight:700;color:${MARCA.texto};margin-bottom:4px;}
+          .opcion-desc{font-size:0.82rem;color:${MARCA.textoSuave};}
+          .opcion.oro{background:${MARCA.oro};}
+          .opcion.oro .opcion-titulo, .opcion.oro .opcion-desc{color:#fff;}
+        </style>
+      </head>
+      <body>
+        <div class="wrap">
+          <div class="logo">${logoSvg("#FFFFFF", 40)}</div>
+          <h1>¿Qué quieres hacer?</h1>
+          <div class="opciones">
+            <a class="opcion" href="/descubre">
+              <div class="opcion-titulo">🔎 Descubrir negocios</div>
+              <div class="opcion-desc">Mira el mapa de negocios que usan Tapin y su reputación</div>
+            </a>
+            <a class="opcion" href="/cliente">
+              <div class="opcion-titulo">👤 Soy cliente</div>
+              <div class="opcion-desc">Crea tu cuenta — guarda favoritos y tu historial de reseñas</div>
+            </a>
+            <a class="opcion oro" href="/mis-negocios">
+              <div class="opcion-titulo">🏪 Soy un negocio</div>
+              <div class="opcion-desc">Entra a tu panel — tus locales, tus estadísticas</div>
+            </a>
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
 });
 
 app.listen(PORT, () => {
