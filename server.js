@@ -3074,24 +3074,35 @@ app.get("/", (req, res) => {
         <title>Tapin</title>
         <style>
           *{box-sizing:border-box;}
-          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.verdeOscuro};
-               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
-          .wrap{max-width:440px;width:100%;text-align:center;}
-          .logo{margin-bottom:36px;}
-          h1{color:#fff;font-size:1.3rem;font-weight:600;margin:0 0 40px;}
+          html, body{height:100%;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;
+               background:radial-gradient(circle at 50% 0%, #123D2C 0%, ${MARCA.verdeOscuro} 55%, #06201730 100%);
+               margin:0;position:relative;overflow-x:hidden;
+               display:flex;align-items:center;justify-content:center;padding:24px;}
+          .marca-fondo{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(2.4);
+                       opacity:0.05;pointer-events:none;z-index:0;}
+          .wrap{max-width:440px;width:100%;text-align:center;position:relative;z-index:1;}
+          .logo-grande{margin:0 auto 8px;display:flex;justify-content:center;}
+          .raya{width:52px;height:3px;background:${MARCA.oro};border-radius:100px;margin:14px auto 30px;}
+          h1{color:#fff;font-size:1.15rem;font-weight:500;margin:0 0 32px;opacity:0.92;}
           .opciones{display:flex;flex-direction:column;gap:14px;}
-          .opcion{display:block;background:#fff;border-radius:16px;padding:22px 24px;text-decoration:none;
-                  text-align:left;transition:transform 0.15s;}
+          .opcion{display:block;background:rgba(255,255,255,0.98);border-radius:16px;padding:22px 24px;text-decoration:none;
+                  text-align:left;transition:transform 0.15s;box-shadow:0 8px 30px rgba(0,0,0,0.18);}
           .opcion:active{transform:scale(0.98);}
           .opcion-titulo{font-size:1.05rem;font-weight:700;color:${MARCA.texto};margin-bottom:4px;}
           .opcion-desc{font-size:0.82rem;color:${MARCA.textoSuave};}
           .opcion.oro{background:${MARCA.oro};}
           .opcion.oro .opcion-titulo, .opcion.oro .opcion-desc{color:#fff;}
+          .admin-link{display:inline-block;margin-top:44px;color:rgba(255,255,255,0.35);font-size:0.72rem;
+                      text-decoration:none;letter-spacing:0.02em;}
+          .admin-link:hover{color:rgba(255,255,255,0.6);}
         </style>
       </head>
       <body>
+        <div class="marca-fondo">${logoSvg("#FFFFFF", 260)}</div>
         <div class="wrap">
-          <div class="logo">${logoSvg("#FFFFFF", 40)}</div>
+          <div class="logo-grande">${logoSvg("#FFFFFF", 56)}</div>
+          <div class="raya"></div>
           <h1>¿Qué quieres hacer?</h1>
           <div class="opciones">
             <a class="opcion" href="/descubre">
@@ -3107,10 +3118,57 @@ app.get("/", (req, res) => {
               <div class="opcion-desc">Entra a tu panel — tus locales, tus estadísticas</div>
             </a>
           </div>
+          <a class="admin-link" href="/admin">Entrar como administrador</a>
         </div>
       </body>
     </html>
   `);
+});
+
+// Puerta discreta de administrador — no aparece como botón grande en la página
+// principal, solo un link chiquito abajo. Pide la clave y redirige al panel.
+app.get("/admin", (req, res) => {
+  const error = req.query.error;
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Administrador — Tapin</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.verdeOscuro};
+               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .box{background:#fff;border-radius:16px;padding:30px 28px;max-width:340px;width:100%;text-align:center;}
+          .logo{margin-bottom:18px;display:flex;justify-content:center;}
+          h1{font-size:1rem;color:${MARCA.texto};margin:0 0 18px;}
+          input{width:100%;padding:13px;border:1px solid ${MARCA.borde};border-radius:10px;font-size:0.92rem;
+                margin-bottom:12px;font-family:inherit;}
+          button{width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;padding:13px;border-radius:10px;
+                 font-weight:700;font-size:0.92rem;cursor:pointer;}
+          .error{background:#FBEFE9;color:${MARCA.rojo};padding:10px 14px;border-radius:8px;font-size:0.8rem;margin-bottom:14px;}
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
+          <h1>Acceso de administrador</h1>
+          ${error ? `<div class="error">Clave incorrecta.</div>` : ""}
+          <form method="GET" action="/admin/entrar">
+            <input type="password" name="key" required placeholder="Clave de administrador">
+            <button type="submit">Entrar</button>
+          </form>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.get("/admin/entrar", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.redirect("/admin?error=1");
+  }
+  res.redirect(`/stats?key=${encodeURIComponent(req.query.key)}`);
 });
 
 app.listen(PORT, () => {
