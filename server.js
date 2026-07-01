@@ -3090,12 +3090,12 @@ app.get("/", (req, res) => {
                background:radial-gradient(circle at 50% 0%, #123D2C 0%, ${MARCA.verdeOscuro} 55%, #062017 100%);
                margin:0;position:relative;overflow:hidden;
                display:flex;align-items:center;justify-content:center;padding:24px;}
-          .mapa-fondo{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;opacity:0.16;pointer-events:none;}
-          .review-flotante{position:fixed;z-index:0;background:rgba(255,255,255,0.9);border-radius:12px;
+          .mapa-fondo{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;opacity:0.24;pointer-events:none;}
+          .review-flotante{position:fixed;z-index:0;background:rgba(255,255,255,0.42);border-radius:12px;
                             padding:12px 14px;max-width:170px;pointer-events:none;filter:blur(0.3px);
-                            box-shadow:0 8px 24px rgba(0,0,0,0.15);}
-          .review-flotante .rf-texto{font-size:0.72rem;color:${MARCA.texto};font-weight:600;line-height:1.3;margin-bottom:4px;}
-          .review-flotante .rf-meta{font-size:0.66rem;color:${MARCA.textoSuave};display:flex;justify-content:space-between;}
+                            box-shadow:0 8px 24px rgba(0,0,0,0.10);backdrop-filter:blur(2px);}
+          .review-flotante .rf-texto{font-size:0.72rem;color:${MARCA.texto};font-weight:600;line-height:1.3;margin-bottom:4px;opacity:0.85;}
+          .review-flotante .rf-meta{font-size:0.66rem;color:${MARCA.textoSuave};display:flex;justify-content:space-between;opacity:0.85;}
           .review-flotante .rf-estrellas{color:${MARCA.oro};}
           .wrap{max-width:440px;width:100%;text-align:center;position:relative;z-index:1;}
           .logo-grande{margin:0 auto 8px;display:flex;justify-content:center;}
@@ -3116,16 +3116,44 @@ app.get("/", (req, res) => {
         </style>
       </head>
       <body>
-        <!-- Mapa abstracto de fondo: cuadrícula de calles estilo Bogotá + puntos de ubicación -->
+        <!-- Mapa de fondo: cuadrícula de calles + cerros orientales + una zona resaltada por cada reseña -->
         <svg class="mapa-fondo" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          <!-- Cerros orientales (franja de montaña al costado, como en Bogotá real) -->
+          <polygon points="1050,0 1200,0 1200,900 1120,900 1000,450" fill="${MARCA.oro}" opacity="0.12"/>
+
+          <!-- Cuadrícula de calles -->
           ${Array.from({ length: 13 }).map((_, i) => `<line x1="${i * 100}" y1="0" x2="${i * 100}" y2="900" stroke="#FFFFFF" stroke-width="1"/>`).join("")}
           ${Array.from({ length: 10 }).map((_, i) => `<line x1="0" y1="${i * 100}" x2="1200" y2="${i * 100}" stroke="#FFFFFF" stroke-width="1"/>`).join("")}
-          <circle cx="220" cy="180" r="6" fill="${MARCA.oro}"/>
-          <circle cx="740" cy="260" r="6" fill="${MARCA.oro}"/>
-          <circle cx="980" cy="520" r="6" fill="${MARCA.oro}"/>
-          <circle cx="380" cy="620" r="6" fill="${MARCA.oro}"/>
-          <circle cx="600" cy="760" r="6" fill="${MARCA.oro}"/>
-          <circle cx="140" cy="480" r="6" fill="${MARCA.oro}"/>
+
+          <!-- Un río/avenida principal cruzando la ciudad -->
+          <path d="M 0 700 Q 300 620 550 660 T 1200 560" stroke="${MARCA.oro}" stroke-width="4" fill="none" opacity="0.4"/>
+
+          <!-- Zonas destacadas, una por cada reseña flotante -->
+          <g opacity="0.9">
+            <rect x="150" y="120" width="180" height="130" rx="14" fill="${MARCA.oro}" opacity="0.10"/>
+            <circle cx="220" cy="180" r="7" fill="${MARCA.oro}"/>
+            <text x="180" y="270" fill="#FFFFFF" font-size="15" font-family="Arial" opacity="0.5">Chapinero</text>
+
+            <rect x="650" y="190" width="190" height="130" rx="14" fill="${MARCA.oro}" opacity="0.10"/>
+            <circle cx="740" cy="260" r="7" fill="${MARCA.oro}"/>
+            <text x="670" y="345" fill="#FFFFFF" font-size="15" font-family="Arial" opacity="0.5">Usaquén</text>
+
+            <rect x="890" y="450" width="170" height="130" rx="14" fill="${MARCA.oro}" opacity="0.10"/>
+            <circle cx="980" cy="520" r="7" fill="${MARCA.oro}"/>
+            <text x="900" y="605" fill="#FFFFFF" font-size="15" font-family="Arial" opacity="0.5">Zona T</text>
+
+            <rect x="290" y="550" width="190" height="130" rx="14" fill="${MARCA.oro}" opacity="0.10"/>
+            <circle cx="380" cy="620" r="7" fill="${MARCA.oro}"/>
+            <text x="300" y="705" fill="#FFFFFF" font-size="15" font-family="Arial" opacity="0.5">La Candelaria</text>
+
+            <rect x="510" y="690" width="180" height="130" rx="14" fill="${MARCA.oro}" opacity="0.10"/>
+            <circle cx="600" cy="760" r="7" fill="${MARCA.oro}"/>
+            <text x="530" y="845" fill="#FFFFFF" font-size="15" font-family="Arial" opacity="0.5">Chía</text>
+
+            <rect x="60" y="410" width="180" height="130" rx="14" fill="${MARCA.oro}" opacity="0.10"/>
+            <circle cx="140" cy="480" r="7" fill="${MARCA.oro}"/>
+            <text x="75" y="565" fill="#FFFFFF" font-size="15" font-family="Arial" opacity="0.5">Cedritos</text>
+          </g>
         </svg>
 
         ${resenasDecorativas.map((r, i) => {
