@@ -208,6 +208,30 @@ function generarToken() {
   return t;
 }
 
+// ---------- Pagos con Wompi (checkout del Plan Básico) ----------
+// Necesitas dos variables de entorno en Render, sacadas de tu dashboard de
+// comercio en Wompi (comercios.wompi.co → Desarrolladores):
+//   WOMPI_PUBLIC_KEY      → empieza con "pub_test_" (pruebas) o "pub_prod_" (real)
+//   WOMPI_INTEGRITY_SECRET → tu "Secreto de integridad" (NUNCA la Llave Privada,
+//                             son cosas distintas). Se usa solo en el servidor,
+//                             nunca se envía al navegador.
+const PEDIDOS_FILE = path.join(__dirname, "pedidos.json");
+function leerPedidos() {
+  if (!fs.existsSync(PEDIDOS_FILE)) return {};
+  try { return JSON.parse(fs.readFileSync(PEDIDOS_FILE, "utf8")); } catch { return {}; }
+}
+function guardarPedidos(pedidos) {
+  fs.writeFileSync(PEDIDOS_FILE, JSON.stringify(pedidos, null, 2));
+}
+
+// Genera la firma de integridad que exige Wompi: SHA256 de
+// referencia + monto_en_centavos + moneda + secreto_de_integridad (en ese orden,
+// todo concatenado sin separadores). Esto se hace en el servidor por seguridad.
+function firmaIntegridadWompi(referencia, montoCentavos, moneda) {
+  const cadena = `${referencia}${montoCentavos}${moneda}${process.env.WOMPI_INTEGRITY_SECRET}`;
+  return crypto.createHash("sha256").update(cadena).digest("hex");
+}
+
 // ---------- Cuentas de cliente (persona normal) ----------
 // A diferencia del dueño de negocio (que entra sin contraseña, por link mágico),
 // el cliente sí crea una cuenta real con correo + contraseña, porque necesitamos
@@ -3103,10 +3127,22 @@ app.get("/", (req, res) => {
           body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;margin:0;}
 
           .hero{display:flex;min-height:100vh;}
-          .hero-izq{flex:1;background:${MARCA.verdeOscuro};color:#fff;padding:64px 56px;
+          .hero-izq{flex:1;background:
+                       radial-gradient(circle at 15% 85%, #1A4A36 0%, transparent 45%),
+                       radial-gradient(circle at 90% 15%, #0D2E20 0%, transparent 50%),
+                       linear-gradient(160deg, #16473368 0%, ${MARCA.verdeOscuro} 55%, #0A2A1D 100%);
+                     color:#fff;padding:64px 56px;
                      display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden;}
           .hero-izq::before{content:"";position:absolute;top:-30%;right:-30%;width:70%;height:70%;
                              background:radial-gradient(circle, ${MARCA.oro}22 0%, transparent 70%);}
+          .hero-izq::after{content:"";position:absolute;inset:0;opacity:0.5;pointer-events:none;
+                            background-image:radial-gradient(rgba(255,255,255,0.09) 1px, transparent 1px);
+                            background-size:22px 22px;}
+          .forma-organica{position:absolute;bottom:-18%;left:-12%;width:60%;height:60%;
+                           background:${MARCA.oro};opacity:0.08;border-radius:42% 58% 65% 35% / 45% 40% 60% 55%;
+                           filter:blur(2px);}
+          .forma-organica-2{position:absolute;top:8%;left:52%;width:34%;height:34%;
+                             background:#FFFFFF;opacity:0.04;border-radius:60% 40% 55% 45% / 50% 60% 40% 50%;}
           .logo-hero{font-size:4.2rem;font-weight:800;letter-spacing:-0.03em;margin:0 0 18px;position:relative;z-index:1;}
           .tagline{font-size:1.3rem;font-weight:400;color:#E4EEE8;line-height:1.5;margin:0 0 44px;max-width:420px;position:relative;z-index:1;}
           .botones{display:flex;flex-direction:column;gap:12px;max-width:360px;position:relative;z-index:1;}
@@ -3174,6 +3210,8 @@ app.get("/", (req, res) => {
       <body>
         <div class="hero">
           <div class="hero-izq">
+            <div class="forma-organica"></div>
+            <div class="forma-organica-2"></div>
             <div class="logo-hero">Tapin</div>
             <p class="tagline">Descubre negocios locales.<br>Confía en lo que encuentras.</p>
 
@@ -3191,6 +3229,8 @@ app.get("/", (req, res) => {
                 <div class="boton-hero-desc">Entra a tu panel — tus locales, tus estadísticas</div>
               </a>
             </div>
+
+            <a class="admin-link" href="/pedido" style="margin-top:18px;">¿Todavía no tienes tarjeta? Pídela aquí →</a>
 
             <div class="franja-features">
               <div class="feature">
@@ -3333,6 +3373,221 @@ app.get("/admin/entrar", (req, res) => {
     return res.redirect("/admin?error=1");
   }
   res.redirect(`/stats?key=${encodeURIComponent(req.query.key)}`);
+});
+
+// ---------- Flujo de compra: pedido → pago con Wompi → confirmación ----------
+// Esto es para el Plan Básico ($89.900 COP, pago único, incluye la tarjeta física
+// y el envío). El Plan Pro (mensual) necesita una integración distinta — ver nota
+// al final del archivo README sobre pagos recurrentes.
+const PRECIO_BASICO_COP = 89900;
+
+// Formulario público donde alguien pide su tarjeta Tapin.
+app.get("/pedido", (req, res) => {
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Pedir mi tarjeta Tapin</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
+               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:420px;width:100%;
+               box-shadow:0 10px 40px rgba(0,0,0,0.08);}
+          .logo{margin-bottom:6px;}
+          h1{font-size:1.2rem;color:${MARCA.texto};margin:14px 0 4px;}
+          p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0 0 22px;}
+          label{display:block;font-size:0.78rem;font-weight:700;color:${MARCA.texto};margin:0 0 5px;}
+          input,select{width:100%;padding:12px;border:1px solid ${MARCA.borde};border-radius:10px;font-size:0.9rem;
+                margin-bottom:14px;font-family:inherit;}
+          .precio{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};padding:14px 16px;border-radius:10px;
+                   font-weight:700;text-align:center;margin-bottom:18px;}
+          button{width:100%;background:${MARCA.verde};color:#fff;border:none;padding:14px;border-radius:10px;
+                 font-weight:700;font-size:0.95rem;cursor:pointer;}
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
+          <h1>Pide tu tarjeta Tapin</h1>
+          <p>Llena tus datos, paga en línea con Wompi, y te enviamos la tarjeta a tu negocio.</p>
+          <div class="precio">Plan Básico — $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP (incluye envío)</div>
+          <form method="POST" action="/pedido">
+            <label>Nombre del negocio</label>
+            <input type="text" name="nombreNegocio" required>
+
+            <label>Tu correo</label>
+            <input type="email" name="email" required>
+
+            <label>Teléfono</label>
+            <input type="tel" name="telefono" required placeholder="300 000 0000">
+
+            <label>Dirección de envío</label>
+            <input type="text" name="direccion" required placeholder="Calle/Carrera, número, barrio">
+
+            <label>Ciudad</label>
+            <input type="text" name="ciudad" required>
+
+            <button type="submit">Continuar al pago</button>
+          </form>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.post("/pedido", (req, res) => {
+  const { nombreNegocio, email, telefono, direccion, ciudad } = req.body;
+  if (!nombreNegocio || !email || !telefono || !direccion || !ciudad) {
+    return res.status(400).send("Faltan datos del pedido.");
+  }
+
+  const pedidos = leerPedidos();
+  const id = generarToken();
+  pedidos[id] = {
+    nombreNegocio, email, telefono, direccion, ciudad,
+    monto: PRECIO_BASICO_COP,
+    estado: "pendiente", // pendiente | aprobado | rechazado
+    creado: new Date().toISOString(),
+  };
+  guardarPedidos(pedidos);
+
+  res.redirect(`/pagar/${id}`);
+});
+
+// Página de pago — embebe el widget oficial de Wompi con la firma de integridad
+// calculada en el servidor (nunca se expone el secreto al navegador).
+app.get("/pagar/:id", (req, res) => {
+  const pedidos = leerPedidos();
+  const pedido = pedidos[req.params.id];
+  if (!pedido) return res.status(404).send("Pedido no encontrado.");
+
+  if (!process.env.WOMPI_PUBLIC_KEY || !process.env.WOMPI_INTEGRITY_SECRET) {
+    return res.status(500).send(
+      "Los pagos todavía no están configurados. Faltan WOMPI_PUBLIC_KEY y/o " +
+      "WOMPI_INTEGRITY_SECRET como variables de entorno en Render."
+    );
+  }
+
+  const referencia = `tapin-${req.params.id}`;
+  const montoCentavos = pedido.monto * 100;
+  const moneda = "COP";
+  const firma = firmaIntegridadWompi(referencia, montoCentavos, moneda);
+  const redirectUrl = `${req.protocol}://${req.get("host")}/pago-confirmado?pedido=${req.params.id}`;
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Pagar — Tapin</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
+               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:420px;width:100%;text-align:center;
+               box-shadow:0 10px 40px rgba(0,0,0,0.08);}
+          h1{font-size:1.1rem;color:${MARCA.texto};margin:14px 0 6px;}
+          .resumen{background:${MARCA.crema};border-radius:10px;padding:16px;margin:18px 0;text-align:left;font-size:0.85rem;color:${MARCA.textoSuave};}
+          .resumen b{color:${MARCA.texto};}
+          .monto{font-size:1.6rem;font-weight:800;color:${MARCA.verde};margin:12px 0;}
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
+          <h1>Confirma tu pago</h1>
+          <div class="resumen">
+            <div><b>Negocio:</b> ${pedido.nombreNegocio}</div>
+            <div><b>Envío a:</b> ${pedido.direccion}, ${pedido.ciudad}</div>
+          </div>
+          <div class="monto">$${pedido.monto.toLocaleString("es-CO")} COP</div>
+
+          <script
+            src="https://checkout.wompi.co/widget.js"
+            data-render="button"
+            data-public-key="${process.env.WOMPI_PUBLIC_KEY}"
+            data-currency="${moneda}"
+            data-amount-in-cents="${montoCentavos}"
+            data-reference="${referencia}"
+            data-signature:integrity="${firma}"
+            data-redirect-url="${redirectUrl}"
+            data-shipping-address:address-line-1="${pedido.direccion}"
+            data-shipping-address:city="${pedido.ciudad}"
+            data-shipping-address:phone-number="${pedido.telefono}"
+            data-shipping-address:country="CO">
+          </script>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Wompi redirige aquí después del pago, con ?id=TRANSACTION_ID en la URL.
+// Consultamos el estado real de la transacción contra la API de Wompi (nunca
+// confiamos solo en lo que diga la URL, porque se podría manipular).
+app.get("/pago-confirmado", async (req, res) => {
+  const pedidoId = req.query.pedido;
+  const transaccionId = req.query.id;
+  const pedidos = leerPedidos();
+  const pedido = pedidos[pedidoId];
+
+  let estado = "desconocido";
+  let mensaje = "No pudimos confirmar el estado de tu pago automáticamente.";
+
+  if (transaccionId && process.env.WOMPI_PUBLIC_KEY) {
+    try {
+      const base = process.env.WOMPI_PUBLIC_KEY.startsWith("pub_prod_")
+        ? "https://production.wompi.co/v1"
+        : "https://sandbox.wompi.co/v1";
+      const resp = await fetch(`${base}/transactions/${transaccionId}`);
+      const data = await resp.json();
+      estado = data?.data?.status || "desconocido";
+    } catch (err) {
+      console.error("Error consultando transacción Wompi:", err.message);
+    }
+  }
+
+  if (pedido) {
+    if (estado === "APPROVED") {
+      pedido.estado = "aprobado";
+      mensaje = "¡Pago aprobado! Tu tarjeta Tapin va en camino.";
+    } else if (estado === "DECLINED" || estado === "ERROR") {
+      pedido.estado = "rechazado";
+      mensaje = "El pago no pudo procesarse. Puedes intentar de nuevo.";
+    } else if (estado === "PENDING") {
+      mensaje = "Tu pago está siendo procesado. Te avisamos por correo cuando se confirme.";
+    }
+    pedidos[pedidoId] = pedido;
+    guardarPedidos(pedidos);
+  }
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Confirmación de pago — Tapin</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
+               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:400px;width:100%;text-align:center;
+               box-shadow:0 10px 40px rgba(0,0,0,0.08);}
+          h1{font-size:1.15rem;color:${MARCA.texto};margin:16px 0 8px;}
+          p{color:${MARCA.textoSuave};font-size:0.88rem;}
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
+          <h1>${mensaje}</h1>
+          <p>Si tienes dudas sobre tu pedido, contáctanos con tu correo de referencia.</p>
+        </div>
+      </body>
+    </html>
+  `);
 });
 
 app.listen(PORT, () => {
