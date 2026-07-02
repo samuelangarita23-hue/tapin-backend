@@ -2861,58 +2861,11 @@ app.get("/conoce", (req, res) => {
           </div>
         </div>
 
-        <div class="contenido">
-          <div class="paso">
-            <div class="paso-num">1</div>
-            <div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta (o escaneando el QR), se abre una página simple donde el cliente califica su experiencia.</p></div>
-          </div>
-          <div class="paso">
-            <div class="paso-num">2</div>
-            <div><h3>Si calificó bien, va directo a Google</h3><p>Lo mandamos automáticamente a dejar la reseña pública en tu perfil de Google — sin pasos extra, sin fricción.</p></div>
-          </div>
-          <div class="paso">
-            <div class="paso-num">3</div>
-            <div><h3>Si calificó mal, queda como retroalimentación privada</h3><p>En vez de publicarse, ese comentario llega directo a ti — nunca se vuelve una reseña negativa pública. Es información que te sirve para mejorar, no un golpe a tu reputación.</p></div>
-          </div>
-          <div class="paso">
-            <div class="paso-num">4</div>
-            <div><h3>Todo queda registrado</h3><p>Cada toque queda guardado con fecha, hora y dispositivo — tu propio historial de actividad, disponible en tu panel cuando quieras verlo.</p></div>
-          </div>
-
-          <div class="seccion-titulo">Qué incluye cada plan</div>
-          <div class="planes">
-            <div class="plan">
-              <div class="plan-nombre">Pago único</div>
-              <div class="plan-precio">$120.000 <span>COP</span></div>
-              <ul>
-                <li><span class="check">✓</span> Tarjeta NFC física + envío incluido</li>
-                <li><span class="check">✓</span> Redirección automática a tus reseñas de Google</li>
-                <li><span class="check">✓</span> Panel con historial y estadísticas</li>
-                <li><span class="check">✓</span> Acta de entrega formal</li>
-              </ul>
-            </div>
-            <div class="plan pro">
-              <div class="plan-badge">RECOMENDADO</div>
-              <div class="plan-nombre">Mensualidad Pro</div>
-              <div class="plan-precio">$50.000 <span>COP / mes</span></div>
-              <ul>
-                <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
-                <li><span class="check">✓</span> Alerta instantánea por correo ante retroalimentación negativa</li>
-                <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
-                <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
-                <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
-                <li><span class="check">✓</span> Generador de contenido para redes sociales</li>
-                <li><span class="check">✓</span> Comparación contra el promedio de tu categoría</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="nota">
-            <b>Sobre la retroalimentación:</b> cuando un cliente no tiene una buena experiencia, esa información nunca se convierte en una reseña pública negativa. Se queda contigo, en privado, como una oportunidad para mejorar o para contactar directamente a ese cliente — no como un golpe a tu reputación en línea.
-          </div>
-
-          <a class="cta" href="/pedido">Pedir mi tarjeta Tapin →</a>
+        <div class="contenido" style="text-align:center;padding-top:20px;">
+          <div class="seccion-titulo" style="margin-top:0;">Próximamente</div>
+          <p style="color:${MARCA.textoSuave};font-size:0.95rem;max-width:420px;margin:0 auto;">
+            Estamos afinando esta página. Muy pronto vas a poder ver aquí exactamente cómo funciona Tapin y qué incluye cada plan.
+          </p>
         </div>
       </body>
     </html>
