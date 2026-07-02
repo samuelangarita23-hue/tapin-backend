@@ -11,7 +11,22 @@ const nodemailer = require("nodemailer");
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 const PORT = process.env.PORT || 3000;
-const DATA_FILE = path.join(__dirname, "data.json");
+
+// ---------- IMPORTANTE: almacenamiento persistente ----------
+// Todos los archivos .json que usa este backend como "base de datos" (toques,
+// negocios activados, clientes, pedidos) se guardan en DATA_DIR. Por defecto
+// apunta a la misma carpeta del código (__dirname), lo cual funciona bien en
+// tu computador — PERO en Render, la carpeta del código se reconstruye desde
+// cero cada vez que subes código nuevo, así que cualquier archivo guardado ahí
+// se BORRA en cada redeploy.
+//
+// Para que los datos sobrevivan entre redeploys en Render, crea un "Persistent
+// Disk" en tu servicio (Settings → Disks → Add Disk), móntalo por ejemplo en
+// /var/data, y agrega la variable de entorno DATA_DIR=/var/data. A partir de
+// ahí, todo lo que se guarde (negocios, planes, clientes, pedidos) sobrevive
+// sin importar cuántas veces redespliegues.
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+const DATA_FILE = path.join(DATA_DIR, "data.json");
 
 // ---------- Envío de correos (alertas, reportes mensuales, etc.) ----------
 // Funciona con cualquier SMTP. Para Gmail: activa verificación en 2 pasos en la
@@ -37,7 +52,7 @@ function obtenerTransportador() {
   return transportadorEmail;
 }
 
-async function enviarEmail(destinatario, asunto, html) {
+async function enviarEmail(destinatario, asunto, html, adjuntos = []) {
   const transportador = obtenerTransportador();
   if (!transportador || !destinatario) {
     console.log(`[email no enviado — falta config o destinatario] asunto: ${asunto}`);
@@ -49,6 +64,7 @@ async function enviarEmail(destinatario, asunto, html) {
       to: destinatario,
       subject: asunto,
       html,
+      attachments: adjuntos, // [{ filename, content }] — usado para adjuntar el PDF del reporte mensual
     });
     console.log(`[email enviado] a ${destinatario} — "${asunto}"`);
     return { ok: true };
@@ -170,7 +186,7 @@ function guardarDatos(datos) {
 // a qué negocio va a parar. Programas el QR/NFC con ese código, y cuando consigas
 // el cliente, lo activas con sus datos reales (nombre, enlace de Google, categoría).
 
-const CODIGOS_FILE = path.join(__dirname, "codigos.json");
+const CODIGOS_FILE = path.join(DATA_DIR, "codigos.json");
 
 function leerCodigos() {
   if (!fs.existsSync(CODIGOS_FILE)) return {};
@@ -189,7 +205,7 @@ function guardarCodigos(codigos) {
 // Un dueño puede tener varios locales (varios slugs). En vez de manejar
 // usuarios y contraseñas, mandamos un link temporal por correo que, al
 // abrirse, muestra todos los negocios cuyo campo "email" coincide.
-const TOKENS_FILE = path.join(__dirname, "tokens.json");
+const TOKENS_FILE = path.join(DATA_DIR, "tokens.json");
 function leerTokens() {
   if (!fs.existsSync(TOKENS_FILE)) return {};
   try {
@@ -215,7 +231,7 @@ function generarToken() {
 //   WOMPI_INTEGRITY_SECRET → tu "Secreto de integridad" (NUNCA la Llave Privada,
 //                             son cosas distintas). Se usa solo en el servidor,
 //                             nunca se envía al navegador.
-const PEDIDOS_FILE = path.join(__dirname, "pedidos.json");
+const PEDIDOS_FILE = path.join(DATA_DIR, "pedidos.json");
 function leerPedidos() {
   if (!fs.existsSync(PEDIDOS_FILE)) return {};
   try { return JSON.parse(fs.readFileSync(PEDIDOS_FILE, "utf8")); } catch { return {}; }
@@ -238,8 +254,8 @@ function firmaIntegridadWompi(referencia, montoCentavos, moneda) {
 // identificarlo de forma persistente para guardar sus favoritos y su historial
 // de reseñas entre visitas.
 const crypto = require("crypto");
-const CLIENTES_FILE = path.join(__dirname, "clientes.json");
-const SESIONES_FILE = path.join(__dirname, "sesiones-clientes.json");
+const CLIENTES_FILE = path.join(DATA_DIR, "clientes.json");
+const SESIONES_FILE = path.join(DATA_DIR, "sesiones-clientes.json");
 
 function leerClientes() {
   if (!fs.existsSync(CLIENTES_FILE)) return {};
@@ -373,6 +389,69 @@ function calcularResumen(eventos) {
   const ultimo = eventos.length ? eventos[eventos.length - 1] : null;
 
   return { hoy, semana, dias7, ultimo, total: eventos.length };
+}
+
+// Analiza la actividad por hora del día (0-23) durante el último mes, para
+// identificar picos (horas de más movimiento) y caídas (horas muertas).
+// También compara la última semana contra la anterior para ver si el pico
+// de actividad está subiendo o bajando.
+function analizarHoras(eventos, negocio) {
+  const ahora = new Date();
+  const hace30Dias = new Date(ahora);
+  hace30Dias.setDate(hace30Dias.getDate() - 30);
+
+  const porHora = new Array(24).fill(0);
+  let totalMes = 0;
+
+  for (const e of eventos) {
+    const fecha = new Date(e.fechaISO);
+    if (fecha < hace30Dias) continue;
+    totalMes++;
+    // Usamos la hora local del negocio, no la del servidor, para que el
+    // pico/caída refleje la realidad del negocio (ej: hora de almuerzo real).
+    const horaLocalStr = fecha.toLocaleString("en-US", { timeZone: zonaDe(negocio), hour: "2-digit", hour12: false });
+    const hora = parseInt(horaLocalStr, 10) % 24;
+    porHora[hora]++;
+  }
+
+  const maxToques = Math.max(...porHora);
+  const horasConDatos = porHora.filter((v) => v > 0).length;
+  const picoHora = porHora.indexOf(maxToques);
+
+  // "Caída" = la hora con menos actividad, mirando solo horas dentro del
+  // rango donde el negocio SÍ ha tenido algún toque alguna vez (para no
+  // marcar como "caída" la 3am si el negocio nunca abre a esa hora).
+  let horaCaida = null;
+  let minToques = Infinity;
+  const horasActivas = porHora
+    .map((v, h) => ({ h, v }))
+    .filter(({ h }) => porHora[h] > 0 || (h >= 6 && h <= 22)); // rango razonable de horario comercial
+  horasActivas.forEach(({ h, v }) => {
+    if (v < minToques) { minToques = v; horaCaida = h; }
+  });
+
+  // Comparativo semana actual vs semana anterior, en la hora pico detectada.
+  const inicioSemanaActual = new Date(ahora);
+  inicioSemanaActual.setDate(inicioSemanaActual.getDate() - 7);
+  const inicioSemanaAnterior = new Date(ahora);
+  inicioSemanaAnterior.setDate(inicioSemanaAnterior.getDate() - 14);
+
+  let picoSemanaActual = 0;
+  let picoSemanaAnterior = 0;
+  for (const e of eventos) {
+    const fecha = new Date(e.fechaISO);
+    const horaLocalStr = fecha.toLocaleString("en-US", { timeZone: zonaDe(negocio), hour: "2-digit", hour12: false });
+    const hora = parseInt(horaLocalStr, 10) % 24;
+    if (hora !== picoHora) continue;
+    if (fecha >= inicioSemanaActual) picoSemanaActual++;
+    else if (fecha >= inicioSemanaAnterior) picoSemanaAnterior++;
+  }
+
+  return {
+    porHora, totalMes, maxToques, picoHora, horaCaida, minToques: minToques === Infinity ? 0 : minToques,
+    horasConDatos, picoSemanaActual, picoSemanaAnterior,
+    tendenciaPico: picoSemanaActual - picoSemanaAnterior,
+  };
 }
 
 function barraSemana(dias7) {
@@ -1431,7 +1510,7 @@ app.get("/stats", (req, res) => {
           <a href="/export/${slug}.pdf?key=${key}">PDF</a>
           <a href="/export/${slug}.docx?key=${key}">Word</a>
           <a href="/entrega/${slug}.pdf?key=${key}">Acta de entrega</a>
-          <a href="/quejas/${slug}?key=${key}">Quejas</a>
+          <a href="/quejas/${slug}?key=${key}">Retroalimentación</a>
           <a href="/contenido/${slug}?key=${key}">Contenido</a>
           <a href="/notificar/${slug}?key=${key}">Enviar reporte por email</a>
         </div>
@@ -1669,7 +1748,7 @@ app.get("/quejas/:slug", (req, res) => {
     .join("");
 
   res.send(`
-    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Quejas — ${negocio.nombre}</title>
+    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Retroalimentación — ${negocio.nombre}</title>
     <style>
       ${ESTILO_BASE}
       .metrics{display:flex;gap:14px;margin-bottom:24px;max-width:600px;}
@@ -1685,15 +1764,15 @@ app.get("/quejas/:slug", (req, res) => {
       <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
       <div class="content">
         <div class="eyebrow">Rescate de clientes</div>
-        <h1 class="titulo-pagina">Quejas privadas — ${negocio.nombre}</h1>
+        <h1 class="titulo-pagina">Retroalimentación privada — ${negocio.nombre}</h1>
         <div class="subtitulo">Cada reseña negativa se queda aquí en vez de publicarse. El dueño recibe un correo al instante para poder reaccionar.</div>
         <div class="metrics">
-          <div class="metric"><div class="metric-num">${quejas.length}</div><div class="metric-lbl">Total quejas</div></div>
+          <div class="metric"><div class="metric-num">${quejas.length}</div><div class="metric-lbl">Total recibida</div></div>
           <div class="metric"><div class="metric-num">${resueltas}</div><div class="metric-lbl">Resueltas</div></div>
           <div class="metric"><div class="metric-num">${tasaRecuperacion}%</div><div class="metric-lbl">Tasa de recuperación</div></div>
         </div>
         <table><tr><th>Fecha</th><th>Comentario</th><th>Teléfono</th><th>Estado</th><th>Acción</th></tr>
-        ${filas || "<tr><td colspan='5'>Sin quejas registradas</td></tr>"}
+        ${filas || "<tr><td colspan='5'>Sin retroalimentación registrada todavía.</td></tr>"}
         </table>
       </div>
     </body></html>
@@ -2013,6 +2092,17 @@ app.get("/export/:slug.pdf", async (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
+  const pdfBytes = await generarInformePDF(negocio, slug);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="informe-tapin-${slug}.pdf"`);
+  res.send(Buffer.from(pdfBytes));
+});
+
+// Genera el informe completo en PDF (4 páginas: portada, resumen ejecutivo,
+// análisis por horas con picos/caídas, y detalle de interacciones). Reutilizado
+// tanto por la descarga manual (/export/:slug.pdf) como por el correo mensual
+// automático, para que el adjunto del correo sea el mismo informe completo.
+async function generarInformePDF(negocio, slug) {
   const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
 
   const datos = leerDatos();
@@ -2020,6 +2110,7 @@ app.get("/export/:slug.pdf", async (req, res) => {
   const r = calcularResumen(eventos);
   const recomendaciones = generarRecomendaciones(eventos, r, negocio);
   const promSector = promedioSector(negocio.categoria, slug, datos);
+  const horas = analizarHoras(eventos, negocio);
   const fechaGenerado = new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" });
 
   const pdfDoc = await PDFDocument.create();
@@ -2030,6 +2121,7 @@ app.get("/export/:slug.pdf", async (req, res) => {
   const verde = rgb(0.059, 0.318, 0.196);       // #0F5132
   const verdeClaro = rgb(0.906, 0.941, 0.918);  // #E7F0EA
   const oro = rgb(0.788, 0.635, 0.294);         // #C9A24B
+  const rojo = rgb(0.753, 0.224, 0.169);        // similar a MARCA.rojo
   const crema = rgb(0.980, 0.980, 0.973);       // #FAFAF8
   const oscuro = rgb(0.086, 0.125, 0.109);      // #16201C
   const gris = rgb(0.42, 0.46, 0.44);
@@ -2136,7 +2228,76 @@ app.get("/export/:slug.pdf", async (req, res) => {
   });
   piePagina(resumen);
 
-  // ---------- Página 3: Detalle de interacciones ----------
+  // ---------- Página 3: Análisis por horas — picos y caídas ----------
+  const paginaHoras = pdfDoc.addPage([ANCHO, ALTO]);
+  encabezadoSeccion(paginaHoras, "Picos y caídas por hora");
+
+  y = ALTO - 108;
+  paginaHoras.drawText("Basado en los últimos 30 días de actividad", { x: 50, y, size: 9, font, color: gris });
+  y -= 24;
+
+  // Tarjetas de pico y caída
+  const horaTexto = (h) => `${h}:00 - ${(h + 1) % 24}:00`;
+  const tarjetasHora = [
+    ["Hora pico", horaTexto(horas.picoHora), `${horas.maxToques} toques`, verde],
+    ["Hora más floja", horas.horaCaida != null ? horaTexto(horas.horaCaida) : "—", `${horas.minToques} toques`, rojo],
+  ];
+  x = 50;
+  tarjetasHora.forEach(([label, hora, sub, color]) => {
+    paginaHoras.drawRectangle({ x, y: y - 66, width: 246, height: 66, color: crema });
+    paginaHoras.drawRectangle({ x, y: y - 66, width: 4, height: 66, color });
+    paginaHoras.drawText(label, { x: x + 16, y: y - 20, size: 8.5, font, color: gris });
+    paginaHoras.drawText(hora, { x: x + 16, y: y - 42, size: 18, font: fontBold, color: oscuro });
+    paginaHoras.drawText(sub, { x: x + 16, y: y - 56, size: 8.5, font, color: gris });
+    x += 256;
+  });
+  y -= 90;
+
+  if (horas.totalMes > 0) {
+    let textoTendencia;
+    if (horas.tendenciaPico > 0) {
+      textoTendencia = `La hora pico (${horaTexto(horas.picoHora)}) tuvo ${horas.tendenciaPico} toques más esta semana que la anterior — la actividad está subiendo.`;
+    } else if (horas.tendenciaPico < 0) {
+      textoTendencia = `La hora pico (${horaTexto(horas.picoHora)}) tuvo ${Math.abs(horas.tendenciaPico)} toques menos esta semana que la anterior — vale la pena revisar qué cambió.`;
+    } else {
+      textoTendencia = `La hora pico (${horaTexto(horas.picoHora)}) se mantuvo estable esta semana comparada con la anterior.`;
+    }
+    paginaHoras.drawRectangle({ x: 50, y: y - 30, width: ANCHO - 100, height: 30, color: verdeClaro });
+    paginaHoras.drawText(textoTendencia, { x: 60, y: y - 20, size: 8.5, font: fontBold, color: verdeOscuro, maxWidth: ANCHO - 120, lineHeight: 11 });
+    y -= 50;
+  }
+
+  paginaHoras.drawText("Distribución de toques por hora del día", { x: 50, y, size: 11, font: fontBold, color: oscuro });
+  y -= 14;
+
+  if (horas.totalMes === 0) {
+    paginaHoras.drawText("Todavía no hay suficientes datos este mes para este análisis.", { x: 50, y: y - 20, size: 9, font, color: gris });
+  } else {
+    const graficoTop = y - 10;
+    const graficoAltura = 180;
+    const maxHora = Math.max(1, horas.maxToques);
+    const anchoBarra = (ANCHO - 100) / 24;
+    horas.porHora.forEach((v, h) => {
+      const alturaBarra = (v / maxHora) * graficoAltura;
+      const bx = 50 + h * anchoBarra;
+      const esPico = h === horas.picoHora && v > 0;
+      paginaHoras.drawRectangle({
+        x: bx + 1, y: graficoTop - graficoAltura, width: anchoBarra - 2, height: alturaBarra || 0.5,
+        color: esPico ? oro : verde,
+      });
+      // Etiqueta de hora cada 3 horas para no saturar
+      if (h % 3 === 0) {
+        paginaHoras.drawText(String(h), { x: bx + 1, y: graficoTop - graficoAltura - 12, size: 6.5, font, color: gris });
+      }
+    });
+    paginaHoras.drawLine({
+      start: { x: 50, y: graficoTop - graficoAltura }, end: { x: ANCHO - 50, y: graficoTop - graficoAltura },
+      thickness: 0.5, color: gris,
+    });
+  }
+  piePagina(paginaHoras);
+
+  // ---------- Página 4: Detalle de interacciones ----------
   const detalle = pdfDoc.addPage([ANCHO, ALTO]);
   encabezadoSeccion(detalle, "Detalle de interacciones");
 
@@ -2162,11 +2323,8 @@ app.get("/export/:slug.pdf", async (req, res) => {
   }
   piePagina(detalle);
 
-  const pdfBytes = await pdfDoc.save();
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="informe-tapin-${slug}.pdf"`);
-  res.send(Buffer.from(pdfBytes));
-});
+  return pdfDoc.save();
+}
 
 // Informe de entrega en Word (.docx) — editable, para que tú o el cliente lo
 // personalicen, lo peguen en una propuesta, o lo usen como acta formal.
@@ -2440,6 +2598,7 @@ app.get("/notificar/:slug", async (req, res) => {
   const r = calcularResumen(eventos);
   const recomendaciones = generarRecomendaciones(eventos, r, negocio);
   const promedio = promedioSector(negocio.categoria, slug, datos);
+  const horas = analizarHoras(eventos, negocio);
 
   let comparativo = "";
   if (promedio !== null) {
@@ -2452,10 +2611,44 @@ app.get("/notificar/:slug", async (req, res) => {
     }
   }
 
+  const horaTexto = (h) => `${h}:00 - ${(h + 1) % 24}:00`;
+  let picosHtml = "";
+  if (horas.totalMes > 0) {
+    let tendenciaTexto;
+    if (horas.tendenciaPico > 0) {
+      tendenciaTexto = `subiendo (+${horas.tendenciaPico} toques esta semana vs. la anterior en esa hora)`;
+    } else if (horas.tendenciaPico < 0) {
+      tendenciaTexto = `bajando (${horas.tendenciaPico} toques esta semana vs. la anterior en esa hora)`;
+    } else {
+      tendenciaTexto = `estable comparado con la semana anterior`;
+    }
+    picosHtml = `
+      <h3 style="font-size:0.95rem;margin:20px 0 8px;">Picos y caídas por hora</h3>
+      <div style="display:flex;gap:10px;margin-bottom:10px;">
+        <div style="background:${MARCA.crema};border-radius:10px;padding:12px;flex:1;">
+          <div style="font-size:0.7rem;color:#888;">Hora pico</div>
+          <div style="font-size:1.1rem;font-weight:700;color:${MARCA.verde};">${horaTexto(horas.picoHora)}</div>
+          <div style="font-size:0.72rem;color:#888;">${horas.maxToques} toques</div>
+        </div>
+        <div style="background:${MARCA.crema};border-radius:10px;padding:12px;flex:1;">
+          <div style="font-size:0.7rem;color:#888;">Hora más floja</div>
+          <div style="font-size:1.1rem;font-weight:700;color:${MARCA.rojo};">${horas.horaCaida != null ? horaTexto(horas.horaCaida) : "—"}</div>
+          <div style="font-size:0.72rem;color:#888;">${horas.minToques} toques</div>
+        </div>
+      </div>
+      <p style="font-size:0.85rem;color:#555;">Tu hora pico está <b>${tendenciaTexto}</b>.</p>
+    `;
+  }
+
   const filasBarra = barraSemana(r.dias7);
   const recosHtml = recomendaciones
     .map((texto) => `<div style="background:#F1F7F4;border-left:3px solid ${MARCA.verde};border-radius:8px;padding:12px 14px;font-size:0.88rem;margin-bottom:8px;color:#1F3D2E;">💡 ${texto}</div>`)
     .join("");
+
+  // Generamos el informe completo en PDF (mismo que /export/:slug.pdf, con
+  // picos/caídas incluidos) y lo adjuntamos al correo — así el reporte mensual
+  // ya no es solo texto plano, es el documento completo listo para guardar o imprimir.
+  const pdfBytes = await generarInformePDF(negocio, slug);
 
   const resultado = await enviarEmail(
     negocio.email,
@@ -2479,11 +2672,14 @@ app.get("/notificar/:slug", async (req, res) => {
           </div>
         </div>
         ${comparativo ? `<p style="font-size:0.9rem;background:${MARCA.verdeClaro};padding:12px 14px;border-radius:8px;color:${MARCA.verdeOscuro};">📈 ${comparativo}</p>` : ""}
+        ${picosHtml}
         <h3 style="font-size:0.95rem;margin:20px 0 8px;">Recomendaciones</h3>
         ${recosHtml}
-        <p style="font-size:0.78rem;color:#999;margin-top:24px;">Ver panel completo: ${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${negocio.claveAcceso || ""}</p>
+        <p style="font-size:0.82rem;color:#555;margin-top:20px;">📎 Adjunto va el informe completo en PDF, con el detalle de la gráfica por hora y todas tus interacciones recientes.</p>
+        <p style="font-size:0.78rem;color:#999;margin-top:12px;">Ver panel completo: ${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${negocio.claveAcceso || ""}</p>
       </div>
-    `
+    `,
+    [{ filename: `informe-tapin-${slug}.pdf`, content: Buffer.from(pdfBytes) }]
   );
 
   if (resultado.ok) {
@@ -2532,6 +2728,113 @@ function reputacionNegocio(slug, datos) {
 // Página pública para clientes: mapa de calor con todos los negocios Tapin
 // que tengan ubicación configurada, mostrando su reputación al tocarlos.
 // Visítalo así: https://tu-dominio.com/descubre
+// Página pública "Conoce Tapin" — explica cómo funciona la tarjeta y qué
+// incluye cada plan, para cualquiera que quiera entender el producto antes
+// de comprarlo (o para mandarle el link a un cliente potencial).
+app.get("/conoce", (req, res) => {
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Conoce Tapin</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
+               margin:0;color:${MARCA.texto};}
+          .hero{background:${MARCA.verdeOscuro};color:#fff;padding:64px 24px 56px;text-align:center;}
+          .hero h1{font-size:2rem;margin:14px 0 10px;}
+          .hero p{color:#CFE3D8;font-size:1rem;max-width:480px;margin:0 auto;}
+          .contenido{max-width:720px;margin:0 auto;padding:48px 24px 80px;}
+          .paso{display:flex;gap:18px;margin-bottom:28px;align-items:flex-start;}
+          .paso-num{width:36px;height:36px;border-radius:50%;background:${MARCA.verde};color:#fff;
+                    display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;}
+          .paso h3{margin:0 0 4px;font-size:1.05rem;}
+          .paso p{margin:0;color:${MARCA.textoSuave};font-size:0.9rem;line-height:1.5;}
+          .seccion-titulo{font-size:1.3rem;font-weight:700;margin:56px 0 22px;text-align:center;}
+          .planes{display:flex;gap:20px;flex-wrap:wrap;}
+          .plan{flex:1;min-width:260px;background:#fff;border-radius:18px;padding:28px;border:1px solid ${MARCA.borde};}
+          .plan.pro{border:2px solid ${MARCA.oro};position:relative;}
+          .plan-badge{position:absolute;top:-12px;right:20px;background:${MARCA.oro};color:#fff;font-size:0.68rem;
+                      font-weight:800;padding:4px 12px;border-radius:100px;}
+          .plan-nombre{font-size:0.85rem;font-weight:700;color:${MARCA.textoSuave};text-transform:uppercase;letter-spacing:0.03em;}
+          .plan-precio{font-size:1.8rem;font-weight:800;margin:6px 0 4px;}
+          .plan-precio span{font-size:0.85rem;font-weight:500;color:${MARCA.textoSuave};}
+          .plan ul{list-style:none;padding:0;margin:18px 0 0;}
+          .plan li{padding:8px 0;border-top:1px solid ${MARCA.borde};font-size:0.88rem;display:flex;gap:8px;}
+          .plan li:first-child{border-top:none;}
+          .check{color:${MARCA.verde};font-weight:800;flex-shrink:0;}
+          .cta{display:block;text-align:center;background:${MARCA.oro};color:#fff;text-decoration:none;
+               padding:16px;border-radius:12px;font-weight:700;margin-top:60px;}
+          .nota{background:${MARCA.verdeClaro};border-radius:12px;padding:18px 20px;margin-top:40px;font-size:0.86rem;color:${MARCA.verdeOscuro};}
+        </style>
+      </head>
+      <body>
+        <div class="hero">
+          <div>${logoSvg("#FFFFFF", 34)}</div>
+          <h1>Así funciona Tapin</h1>
+          <p>Una tarjeta NFC que convierte cada visita en una reseña de Google — o en información privada que solo tú ves.</p>
+        </div>
+
+        <div class="contenido">
+          <div class="paso">
+            <div class="paso-num">1</div>
+            <div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta (o escaneando el QR), se abre una página simple donde el cliente califica su experiencia.</p></div>
+          </div>
+          <div class="paso">
+            <div class="paso-num">2</div>
+            <div><h3>Si calificó bien, va directo a Google</h3><p>Lo mandamos automáticamente a dejar la reseña pública en tu perfil de Google — sin pasos extra, sin fricción.</p></div>
+          </div>
+          <div class="paso">
+            <div class="paso-num">3</div>
+            <div><h3>Si calificó mal, queda como retroalimentación privada</h3><p>En vez de publicarse, ese comentario llega directo a ti — nunca se vuelve una reseña negativa pública. Es información que te sirve para mejorar, no un golpe a tu reputación.</p></div>
+          </div>
+          <div class="paso">
+            <div class="paso-num">4</div>
+            <div><h3>Todo queda registrado</h3><p>Cada toque queda guardado con fecha, hora y dispositivo — tu propio historial de actividad, disponible en tu panel cuando quieras verlo.</p></div>
+          </div>
+
+          <div class="seccion-titulo">Qué incluye cada plan</div>
+          <div class="planes">
+            <div class="plan">
+              <div class="plan-nombre">Pago único</div>
+              <div class="plan-precio">$120.000 <span>COP</span></div>
+              <ul>
+                <li><span class="check">✓</span> Tarjeta NFC física + envío incluido</li>
+                <li><span class="check">✓</span> Redirección automática a tus reseñas de Google</li>
+                <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
+                <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
+                <li><span class="check">✓</span> Panel con historial y estadísticas</li>
+                <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
+                <li><span class="check">✓</span> Acta de entrega formal</li>
+              </ul>
+            </div>
+            <div class="plan pro">
+              <div class="plan-badge">RECOMENDADO</div>
+              <div class="plan-nombre">Mensualidad Pro</div>
+              <div class="plan-precio">$50.000 <span>COP / mes</span></div>
+              <ul>
+                <li><span class="check">✓</span> Todo lo del pago único, más:</li>
+                <li><span class="check">✓</span> Alerta instantánea por correo ante retroalimentación negativa</li>
+                <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
+                <li><span class="check">✓</span> Generador de contenido para redes sociales</li>
+                <li><span class="check">✓</span> Comparación contra el promedio de tu categoría</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="nota">
+            <b>Sobre la retroalimentación:</b> cuando un cliente no tiene una buena experiencia, esa información nunca se convierte en una reseña pública negativa. Se queda contigo, en privado, como una oportunidad para mejorar o para contactar directamente a ese cliente — no como un golpe a tu reputación en línea.
+          </div>
+
+          <a class="cta" href="/pedido">Pedir mi tarjeta Tapin →</a>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+
 app.get("/descubre", (req, res) => {
   const todos = todosLosNegocios();
   const datos = leerDatos();
@@ -3216,6 +3519,10 @@ app.get("/", (req, res) => {
             <p class="tagline">Descubre negocios locales.<br>Confía en lo que encuentras.</p>
 
             <div class="botones">
+              <a class="boton-hero" href="/conoce">
+                <div class="boton-hero-titulo">Conoce Tapin</div>
+                <div class="boton-hero-desc">Cómo funciona la tarjeta y qué incluye cada plan</div>
+              </a>
               <a class="boton-hero" href="/descubre">
                 <div class="boton-hero-titulo">Descubrir negocios</div>
                 <div class="boton-hero-desc">Mira el mapa de negocios que usan Tapin y su reputación</div>
