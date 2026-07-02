@@ -344,10 +344,12 @@ function obtenerNegocio(slug) {
   return null;
 }
 
-// Funciones exclusivas de Plan Pro: alerta instantánea de retroalimentación
-// negativa, generador de contenido para redes, y comparación contra el
-// promedio del sector. El reporte mensual con picos/caídas por hora ahora
-// viene incluido en el pago único (ya no es exclusivo de Pro).
+// Funciones exclusivas de Plan Pro: retroalimentación privada + alerta instantánea
+// ante retroalimentación negativa, registro detallado toque por toque, reporte
+// mensual (correo + PDF con picos/caídas por hora), exportación de reportes
+// (CSV/PDF/Word), generador de contenido para redes, y comparación sectorial.
+// El plan básico (pago único) solo incluye: tarjeta física + envío, redirección
+// automática a Google, panel con historial y estadísticas resumidas, y acta de entrega.
 // Si el negocio no tiene plan "pro", estas simplemente no se disparan — sin
 // importar si el código las soporta técnicamente.
 function esPro(negocio) {
@@ -1673,6 +1675,14 @@ app.get("/historial/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  // El registro detallado toque por toque (fecha, hora, dispositivo) es
+  // exclusivo de Plan Pro — el panel básico solo muestra totales/resumen.
+  if (!esPro(negocio)) {
+    return res.status(402).send(
+      `El registro detallado de cada toque es exclusivo del Plan Pro. ` +
+      `Súbele el plan a "${negocio.nombre}" desde /editar/${slug}?key=${req.query.key} para activarlo.`
+    );
+  }
 
   const datos = leerDatos();
   const eventos = (datos[slug] && datos[slug].eventos) || [];
@@ -2093,6 +2103,13 @@ app.get("/export/:slug.pdf", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  // La exportación de reportes (CSV/PDF/Word) es exclusiva de Plan Pro.
+  if (!esPro(negocio)) {
+    return res.status(402).send(
+      `La exportación de reportes es exclusiva del Plan Pro. ` +
+      `Súbele el plan a "${negocio.nombre}" desde /editar/${slug}?key=${req.query.key} para activarla.`
+    );
+  }
 
   const pdfBytes = await generarInformePDF(negocio, slug);
   res.setHeader("Content-Type", "application/pdf");
@@ -2338,6 +2355,12 @@ app.get("/export/:slug.docx", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!esPro(negocio)) {
+    return res.status(402).send(
+      `La exportación de reportes es exclusiva del Plan Pro. ` +
+      `Súbele el plan a "${negocio.nombre}" desde /editar/${slug}?key=${req.query.key} para activarla.`
+    );
+  }
 
   const {
     Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
@@ -2559,6 +2582,12 @@ app.get("/export/:slug.csv", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!esPro(negocio)) {
+    return res.status(402).send(
+      `La exportación de reportes es exclusiva del Plan Pro. ` +
+      `Súbele el plan a "${negocio.nombre}" desde /editar/${slug}?key=${req.query.key} para activarla.`
+    );
+  }
 
   const datos = leerDatos();
   const eventos = (datos[slug] && datos[slug].eventos) || [];
@@ -2585,10 +2614,14 @@ app.get("/notificar/:slug", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  // El reporte mensual (con picos y caídas por hora) ya viene incluido en el
-  // pago único — ya no es exclusivo de Plan Pro. Lo único que sigue siendo
-  // Pro-exclusivo es: la alerta instantánea de retroalimentación negativa,
-  // el generador de contenido para redes, y la comparación sectorial.
+  // El reporte mensual (con picos y caídas por hora) vuelve a ser exclusivo
+  // de Plan Pro, junto con el resto de exportaciones.
+  if (!esPro(negocio)) {
+    return res.status(402).send(
+      `Esta función (reporte mensual por correo) es exclusiva del Plan Pro. ` +
+      `Súbele el plan a "${negocio.nombre}" desde /editar/${slug}?key=${req.query.key} para activarla.`
+    );
+  }
   if (!negocio.email) {
     return res.status(400).send("Este negocio no tiene 'email' configurado. Agrégalo en /editar.");
   }
@@ -2748,21 +2781,25 @@ app.get("/conoce", (req, res) => {
           .hero h1{font-size:2rem;margin:14px 0 10px;}
           .hero p{color:#CFE3D8;font-size:1rem;max-width:480px;margin:0 auto;}
 
-          .tarjeta-wrap{margin:44px auto 8px;height:200px;display:flex;align-items:center;justify-content:center;perspective:800px;}
-          .tarjeta-nfc{width:280px;height:176px;border-radius:18px;position:relative;
-                       background:linear-gradient(135deg, #1A4A36 0%, ${MARCA.verdeOscuro} 55%, #0A2A1D 100%);
-                       box-shadow:0 30px 60px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06) inset;
-                       animation:flotar 4.5s ease-in-out infinite;}
-          .tarjeta-nfc::after{content:"";position:absolute;inset:0;border-radius:18px;opacity:0.5;
-                               background:radial-gradient(circle at 25% 15%, rgba(255,255,255,0.14) 0%, transparent 55%);}
-          .tarjeta-logo{position:absolute;top:24px;left:26px;font-size:1.25rem;font-weight:800;letter-spacing:-0.02em;color:#fff;}
-          .tarjeta-chip{position:absolute;top:64px;left:26px;width:38px;height:28px;border-radius:6px;
-                        background:linear-gradient(135deg, ${MARCA.oro} 0%, #E4C77A 100%);}
-          .tarjeta-nfc-icono{position:absolute;top:24px;right:26px;width:26px;height:26px;opacity:0.85;}
-          .tarjeta-numero{position:absolute;bottom:44px;left:26px;color:rgba(255,255,255,0.8);
-                          font-size:0.82rem;letter-spacing:0.12em;font-family:monospace;}
-          .tarjeta-marca{position:absolute;bottom:20px;left:26px;color:rgba(255,255,255,0.55);
-                         font-size:0.62rem;letter-spacing:0.05em;text-transform:uppercase;}
+          .tarjeta-wrap{margin:44px auto 8px;height:220px;display:flex;align-items:center;justify-content:center;perspective:800px;}
+          .tarjeta-nfc{width:210px;height:210px;border-radius:22px;position:relative;
+                       background:#FFFFFF;
+                       box-shadow:0 30px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
+                       animation:flotar 4.5s ease-in-out infinite;
+                       display:flex;flex-direction:column;align-items:center;justify-content:center;
+                       padding:20px;}
+          .tarjeta-logo{position:absolute;top:18px;left:22px;font-size:1.05rem;font-weight:800;letter-spacing:-0.02em;color:${MARCA.texto};}
+          .tarjeta-nfc-icono{position:absolute;top:18px;right:20px;width:22px;height:22px;opacity:0.7;}
+          .tarjeta-google{font-size:1.6rem;font-weight:700;letter-spacing:-0.01em;margin-top:6px;}
+          .tarjeta-google span:nth-child(1){color:#4285F4;}
+          .tarjeta-google span:nth-child(2){color:#EA4335;}
+          .tarjeta-google span:nth-child(3){color:#FBBC05;}
+          .tarjeta-google span:nth-child(4){color:#4285F4;}
+          .tarjeta-google span:nth-child(5){color:#34A853;}
+          .tarjeta-google span:nth-child(6){color:#EA4335;}
+          .tarjeta-estrellas{color:${MARCA.oro};font-size:1.05rem;letter-spacing:2px;margin:6px 0 8px;}
+          .tarjeta-texto{font-size:0.68rem;color:${MARCA.textoSuave};text-align:center;line-height:1.3;margin-bottom:10px;}
+          .tarjeta-mano{width:26px;height:26px;opacity:0.75;}
 
           @keyframes flotar {
             0%   { transform: translateY(0) rotate(-4deg); }
@@ -2806,14 +2843,20 @@ app.get("/conoce", (req, res) => {
           <div class="tarjeta-wrap">
             <div class="tarjeta-nfc">
               <div class="tarjeta-logo">Tapin</div>
-              <div class="tarjeta-chip"></div>
               <svg class="tarjeta-nfc-icono" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M6 9C7.5 10.2 8.4 11.9 8.4 13.8C8.4 15.7 7.5 17.4 6 18.6" stroke="#C9A24B" stroke-width="1.6" stroke-linecap="round"/>
-                <path d="M9.5 6.5C11.8 8.4 13.2 11 13.2 14C13.2 17 11.8 19.6 9.5 21.5" stroke="#C9A24B" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
-                <path d="M13 3.5C16.3 6.2 18.4 10.4 18.4 15C18.4 19.6 16.3 23.8 13 26.5" stroke="#C9A24B" stroke-width="1.6" stroke-linecap="round" opacity="0.4" transform="translate(0,-4)"/>
+                <path d="M6 9C7.5 10.2 8.4 11.9 8.4 13.8C8.4 15.7 7.5 17.4 6 18.6" stroke="${MARCA.textoSuave}" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M9.5 6.5C11.8 8.4 13.2 11 13.2 14C13.2 17 11.8 19.6 9.5 21.5" stroke="${MARCA.textoSuave}" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
               </svg>
-              <div class="tarjeta-numero">TAP · IN · NFC</div>
-              <div class="tarjeta-marca">Toca para calificar</div>
+              <div class="tarjeta-google"><span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span></div>
+              <div class="tarjeta-estrellas">★★★★★</div>
+              <div class="tarjeta-texto">Déjanos una reseña<br>en Google</div>
+              <svg class="tarjeta-mano" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 12V6.5C9 5.67 9.67 5 10.5 5C11.33 5 12 5.67 12 6.5V11" stroke="${MARCA.texto}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M12 11V5.5C12 4.67 12.67 4 13.5 4C14.33 4 15 4.67 15 5.5V11" stroke="${MARCA.texto}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M15 11V6.5C15 5.67 15.67 5 16.5 5C17.33 5 18 5.67 18 6.5V13C18 16.87 14.87 20 11 20C9 20 7.5 19 6.3 17.3L4 13.5C3.6 12.8 3.9 11.9 4.7 11.6C5.3 11.4 6 11.6 6.4 12.1L8 14" stroke="${MARCA.texto}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M20 5C21 6 21.5 7.3 21.5 8.5" stroke="${MARCA.oro}" stroke-width="1.4" stroke-linecap="round"/>
+                <path d="M22 3C23.5 4.5 24.3 6.4 24.3 8.5" stroke="${MARCA.oro}" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>
+              </svg>
             </div>
           </div>
         </div>
@@ -2844,10 +2887,7 @@ app.get("/conoce", (req, res) => {
               <ul>
                 <li><span class="check">✓</span> Tarjeta NFC física + envío incluido</li>
                 <li><span class="check">✓</span> Redirección automática a tus reseñas de Google</li>
-                <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
                 <li><span class="check">✓</span> Panel con historial y estadísticas</li>
-                <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
-                <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
                 <li><span class="check">✓</span> Acta de entrega formal</li>
               </ul>
             </div>
@@ -2859,6 +2899,9 @@ app.get("/conoce", (req, res) => {
                 <li><span class="check">✓</span> Todo lo del pago único, más:</li>
                 <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
                 <li><span class="check">✓</span> Alerta instantánea por correo ante retroalimentación negativa</li>
+                <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
+                <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
+                <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
                 <li><span class="check">✓</span> Generador de contenido para redes sociales</li>
                 <li><span class="check">✓</span> Comparación contra el promedio de tu categoría</li>
               </ul>
