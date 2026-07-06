@@ -4202,6 +4202,225 @@ app.get("/pago-confirmado", async (req, res) => {
   `);
 });
 
+// ---------- Cobro automático de la mensualidad Pro (pagos recurrentes) ----------
+// Wompi maneja suscripciones así: el dueño del negocio registra su tarjeta UNA
+// sola vez (se tokeniza, nunca guardamos el número real), Wompi nos da un
+// "payment_source_id" reutilizable, y luego cada mes el SERVIDOR le cobra a esa
+// fuente de pago directamente vía API — sin que el dueño tenga que volver a
+// ingresar nada. Necesitas UNA variable de entorno nueva en Render:
+//   WOMPI_PRIVATE_KEY → tu "Llave privada" (prv_test_... o prv_prod_...),
+//   distinta de la pública y de los secretos de integridad/eventos. Se usa
+//   SOLO aquí en el servidor — nunca se envía al navegador.
+
+function baseWompi() {
+  return (process.env.WOMPI_PUBLIC_KEY || "").startsWith("pub_prod_")
+    ? "https://production.wompi.co/v1"
+    : "https://sandbox.wompi.co/v1";
+}
+function sumarUnMes(fechaISO) {
+  const f = fechaISO ? new Date(fechaISO) : new Date();
+  f.setMonth(f.getMonth() + 1);
+  return f.toISOString();
+}
+// Guarda cambios sobre un negocio siguiendo el mismo patrón que /editar/:slug:
+// si el negocio venía fijo en NEGOCIOS (no en codigos.json), crea el override
+// ahí para poder persistir el dato sin tocar server.js ni redesplegar.
+function guardarCambiosNegocio(slug, negocio, cambios) {
+  const codigos = leerCodigos();
+  if (!codigos[slug]) codigos[slug] = { activado: true, creado: new Date().toISOString() };
+  codigos[slug].activado = true;
+  codigos[slug].negocio = { ...negocio, ...cambios };
+  guardarCodigos(codigos);
+}
+
+// Página donde el dueño de un negocio Pro registra su tarjeta una sola vez,
+// usando el Widget de Wompi en modo "tokenize" (no cobra nada en este paso).
+app.get("/suscripcion/:slug", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  if (!esPro(negocio)) {
+    return res.status(402).send("Esta página es solo para negocios en Plan Pro.");
+  }
+  if (!process.env.WOMPI_PUBLIC_KEY) {
+    return res.status(500).send("Los pagos todavía no están configurados (falta WOMPI_PUBLIC_KEY en Render).");
+  }
+
+  const sus = negocio.suscripcion;
+  const activa = !!(sus && sus.activa && sus.paymentSourceId);
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Suscripción Pro — ${negocio.nombre}</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
+               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:420px;width:100%;text-align:center;
+               box-shadow:0 10px 40px rgba(0,0,0,0.08);}
+          h1{font-size:1.1rem;color:${MARCA.texto};margin:14px 0 6px;}
+          p{color:${MARCA.textoSuave};font-size:0.85rem;}
+          .estado{padding:12px 16px;border-radius:10px;font-weight:700;margin:16px 0;font-size:0.85rem;
+                  background:${activa ? MARCA.verdeClaro : "#fff4e0"};color:${activa ? MARCA.verdeOscuro : "#8a5a00"};}
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
+          <h1>Suscripción Plan Pro — ${negocio.nombre}</h1>
+          ${activa
+            ? `<div class="estado">✅ Tarjeta registrada. Se cobra automáticamente $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP cada mes.</div>
+               <p>Próximo cobro: ${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "pendiente"}</p>
+               <p>¿Cambiaste de tarjeta? Registra una nueva abajo y reemplazará la anterior.</p>`
+            : `<p>Registra tu tarjeta una sola vez. <b>No se te cobra nada en este paso</b> — solo queda guardada para el cobro automático de $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes.</p>`
+          }
+          <form method="POST" action="/suscripcion/${slug}/registrar?key=${req.query.key}">
+            <script
+              src="https://checkout.wompi.co/widget.js"
+              data-render="button"
+              data-widget-operation="tokenize"
+              data-public-key="${process.env.WOMPI_PUBLIC_KEY}">
+            </script>
+          </form>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Recibe el token de la tarjeta (nunca el número en sí) y crea una "fuente de
+// pago" (payment source) en Wompi: un identificador reutilizable para cobrar
+// esa tarjeta después, sin volver a pedirle los datos al dueño del negocio.
+app.post("/suscripcion/:slug/registrar", async (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  if (!process.env.WOMPI_PRIVATE_KEY) {
+    return res.status(500).send("Falta configurar WOMPI_PRIVATE_KEY en Render (tu Llave privada de Wompi, no la pública).");
+  }
+  const wompiToken = req.body["wompi-token"];
+  if (!wompiToken) {
+    return res.status(400).send("No llegó el token de la tarjeta desde Wompi. Intenta de nuevo.");
+  }
+
+  try {
+    const base = baseWompi();
+    // 1. Pedimos los tokens de aceptación de términos y tratamiento de datos
+    //    (Wompi los exige para crear una fuente de pago).
+    const infoComercio = await fetch(`${base}/merchants/${process.env.WOMPI_PUBLIC_KEY}`).then((r) => r.json());
+    const acceptanceToken = infoComercio?.data?.presigned_acceptance?.acceptance_token;
+    const authToken = infoComercio?.data?.presigned_personal_data_auth?.acceptance_token;
+
+    // 2. Creamos la fuente de pago con el token de la tarjeta.
+    const resp = await fetch(`${base}/payment_sources`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.WOMPI_PRIVATE_KEY}` },
+      body: JSON.stringify({
+        type: "CARD",
+        token: wompiToken,
+        customer_email: negocio.email,
+        acceptance_token: acceptanceToken,
+        accept_personal_auth: authToken,
+      }),
+    });
+    const data = await resp.json();
+    const paymentSourceId = data?.data?.id;
+    if (!paymentSourceId) {
+      console.error("[suscripción] Wompi no devolvió payment_source:", JSON.stringify(data));
+      return res.status(502).send("Wompi no pudo guardar la tarjeta. Intenta de nuevo o revisa que la tarjeta sea válida.");
+    }
+
+    guardarCambiosNegocio(slug, negocio, {
+      suscripcion: { paymentSourceId, activa: true, proximoCobro: sumarUnMes(), ultimoCobro: null, ultimoError: null },
+    });
+
+    res.redirect(`/suscripcion/${slug}?key=${req.query.key}`);
+  } catch (err) {
+    console.error("[suscripción] Error registrando tarjeta:", err.message);
+    res.status(500).send("Ocurrió un error guardando la tarjeta. Intenta de nuevo.");
+  }
+});
+
+// Cobra automáticamente la mensualidad a TODOS los negocios Pro cuya fecha de
+// próximo cobro ya llegó. Visítala con un cron diario o mensual (igual que
+// /notificar/:slug) — solo cobra a quien realmente le toque ese día:
+// https://tu-dominio.com/cobrar-suscripciones?key=TU_CLAVE
+app.get("/cobrar-suscripciones", async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
+  if (!process.env.WOMPI_PRIVATE_KEY) {
+    return res.status(500).send("Falta configurar WOMPI_PRIVATE_KEY en Render.");
+  }
+
+  const negocios = todosLosNegocios();
+  const base = baseWompi();
+  const hoy = new Date();
+  const resultado = [];
+
+  for (const slug in negocios) {
+    const negocio = negocios[slug];
+    if (!esPro(negocio)) continue;
+    const sus = negocio.suscripcion;
+    if (!sus || !sus.activa || !sus.paymentSourceId) continue;
+    if (sus.proximoCobro && new Date(sus.proximoCobro) > hoy) continue; // todavía no toca
+
+    const referencia = `tapin-sub-${slug}-${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+    const montoCentavos = PRECIO_PRO_COP * 100;
+    const firma = firmaIntegridadWompi(referencia, montoCentavos, "COP");
+
+    try {
+      const resp = await fetch(`${base}/transactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.WOMPI_PRIVATE_KEY}` },
+        body: JSON.stringify({
+          amount_in_cents: montoCentavos,
+          currency: "COP",
+          customer_email: negocio.email,
+          payment_method: { type: "CARD", installments: 1 },
+          payment_source_id: sus.paymentSourceId,
+          reference: referencia,
+          signature: firma,
+        }),
+      });
+      const data = await resp.json();
+      const estado = data?.data?.status || "ERROR";
+
+      if (estado === "APPROVED" || estado === "PENDING") {
+        guardarCambiosNegocio(slug, negocio, {
+          suscripcion: { ...sus, ultimoCobro: new Date().toISOString(), proximoCobro: sumarUnMes(sus.proximoCobro), ultimoError: null },
+        });
+        resultado.push({ slug, estado });
+      } else {
+        // No reintentamos solos ni desactivamos el plan automáticamente —
+        // solo avisamos, para que decidas manualmente si le das un plazo o no.
+        guardarCambiosNegocio(slug, negocio, {
+          suscripcion: { ...sus, ultimoCobro: new Date().toISOString(), ultimoError: estado },
+        });
+        resultado.push({ slug, estado: `FALLÓ (${estado})` });
+        await enviarEmail(
+          negocio.email,
+          "No pudimos procesar tu suscripción Pro de Tapin",
+          `<p>Intentamos cobrar tu mensualidad del Plan Pro y la tarjeta registrada fue rechazada (estado: ${estado}).</p>
+           <p>Por favor registra una tarjeta válida aquí: ${req.protocol}://${req.get("host")}/suscripcion/${slug}?key=${negocio.claveAcceso}</p>`
+        );
+      }
+    } catch (err) {
+      console.error(`[cobrar-suscripciones] Error con ${slug}:`, err.message);
+      resultado.push({ slug, estado: "ERROR_SERVIDOR" });
+    }
+  }
+
+  res.json({ ok: true, procesados: resultado.length, detalle: resultado });
+});
+
 app.listen(PORT, () => {
   console.log(`Tapin backend corriendo en el puerto ${PORT}`);
 });
