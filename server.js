@@ -3904,6 +3904,7 @@ app.get("/admin/entrar", (req, res) => {
 // y el envío). El Plan Pro (mensual) necesita una integración distinta — ver nota
 // al final del archivo README sobre pagos recurrentes.
 const PRECIO_BASICO_COP = 119900;
+const PRECIO_PRO_COP = 59900;
 
 // Formulario público donde alguien pide su tarjeta Tapin.
 app.get("/pedido", (req, res) => {
@@ -3927,6 +3928,11 @@ app.get("/pedido", (req, res) => {
                 margin-bottom:14px;font-family:inherit;}
           .precio{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};padding:14px 16px;border-radius:10px;
                    font-weight:700;text-align:center;margin-bottom:18px;}
+          .pro-opcion{display:flex;align-items:flex-start;gap:10px;background:${MARCA.crema};border:1px solid ${MARCA.borde};
+                   border-radius:10px;padding:12px 14px;margin-bottom:18px;}
+          .pro-opcion input{width:auto;margin:3px 0 0;}
+          .pro-opcion .txt{font-size:0.82rem;color:${MARCA.texto};}
+          .pro-opcion .txt b{display:block;font-size:0.85rem;margin-bottom:2px;}
           button{width:100%;background:${MARCA.verde};color:#fff;border:none;padding:14px;border-radius:10px;
                  font-weight:700;font-size:0.95rem;cursor:pointer;}
         </style>
@@ -3953,6 +3959,14 @@ app.get("/pedido", (req, res) => {
             <label>Ciudad</label>
             <input type="text" name="ciudad" required>
 
+            <label class="pro-opcion" style="cursor:pointer;">
+              <input type="checkbox" name="incluirPro" value="si">
+              <span class="txt">
+                <b>Incluir primer mes de Plan Pro (+$${PRECIO_PRO_COP.toLocaleString("es-CO")} COP)</b>
+                Rescate de reseñas negativas en tiempo real, reportes mensuales y más. Se cobra junto con tu tarjeta en este mismo pago.
+              </span>
+            </label>
+
             <button type="submit">Continuar al pago</button>
           </form>
         </div>
@@ -3962,16 +3976,20 @@ app.get("/pedido", (req, res) => {
 });
 
 app.post("/pedido", (req, res) => {
-  const { nombreNegocio, email, telefono, direccion, ciudad } = req.body;
+  const { nombreNegocio, email, telefono, direccion, ciudad, incluirPro } = req.body;
   if (!nombreNegocio || !email || !telefono || !direccion || !ciudad) {
     return res.status(400).send("Faltan datos del pedido.");
   }
+
+  const proIncluido = incluirPro === "si";
+  const monto = PRECIO_BASICO_COP + (proIncluido ? PRECIO_PRO_COP : 0);
 
   const pedidos = leerPedidos();
   const id = generarToken();
   pedidos[id] = {
     nombreNegocio, email, telefono, direccion, ciudad,
-    monto: PRECIO_BASICO_COP,
+    proIncluido,
+    monto,
     estado: "pendiente", // pendiente | aprobado | rechazado
     creado: new Date().toISOString(),
   };
@@ -4025,6 +4043,8 @@ app.get("/pagar/:id", (req, res) => {
           <div class="resumen">
             <div><b>Negocio:</b> ${pedido.nombreNegocio}</div>
             <div><b>Envío a:</b> ${pedido.direccion}, ${pedido.ciudad}</div>
+            <div style="margin-top:8px;"><b>Plan Básico:</b> $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP</div>
+            ${pedido.proIncluido ? `<div><b>Primer mes Plan Pro:</b> $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP</div>` : ""}
           </div>
           <div class="monto">$${pedido.monto.toLocaleString("es-CO")} COP</div>
 
@@ -4139,7 +4159,9 @@ app.get("/pago-confirmado", async (req, res) => {
   if (pedido) {
     if (estado === "APPROVED") {
       pedido.estado = "aprobado";
-      mensaje = "¡Pago aprobado! Tu tarjeta Tapin va en camino.";
+      mensaje = pedido.proIncluido
+        ? "¡Pago aprobado! Tu tarjeta Tapin va en camino, con tu primer mes de Plan Pro ya incluido."
+        : "¡Pago aprobado! Tu tarjeta Tapin va en camino.";
     } else if (estado === "DECLINED" || estado === "ERROR") {
       pedido.estado = "rechazado";
       mensaje = "El pago no pudo procesarse. Puedes intentar de nuevo.";
