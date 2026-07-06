@@ -10,6 +10,7 @@ const nodemailer = require("nodemailer");
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json()); // necesario para recibir el webhook de Wompi (manda JSON)
 const PORT = process.env.PORT || 3000;
 
 // ---------- IMPORTANTE: almacenamiento persistente ----------
@@ -99,8 +100,18 @@ function zonaDe(negocio) {
 // Path vectorial real del logo (extraído del archivo de marca), reutilizado en todo el panel.
 const LOGO_PATH = "M524 -695V-602H339V0H225V-602H39V-695Z M861 -560Q926 -560 974.5 -534.5Q1023 -509 1052 -471V-551H1167V0H1052V-82Q1023 -43 973.0 -17.0Q923 9 859 9Q788 9 729.0 -27.5Q670 -64 635.5 -129.5Q601 -195 601 -278Q601 -361 635.5 -425.0Q670 -489 729.5 -524.5Q789 -560 861 -560ZM885 -461Q841 -461 803.0 -439.5Q765 -418 741.5 -376.5Q718 -335 718 -278Q718 -221 741.5 -178.0Q765 -135 803.5 -112.5Q842 -90 885 -90Q929 -90 967.0 -112.0Q1005 -134 1028.5 -176.5Q1052 -219 1052 -276Q1052 -333 1028.5 -375.0Q1005 -417 967.0 -439.0Q929 -461 885 -461Z M1623 -560Q1695 -560 1754.5 -524.5Q1814 -489 1848.0 -425.0Q1882 -361 1882 -278Q1882 -195 1848.0 -129.5Q1814 -64 1754.5 -27.5Q1695 9 1623 9Q1560 9 1511.0 -16.5Q1462 -42 1431 -80V262H1317V-551H1431V-470Q1460 -508 1510.0 -534.0Q1560 -560 1623 -560ZM1598 -461Q1555 -461 1516.5 -439.0Q1478 -417 1454.5 -375.0Q1431 -333 1431 -276Q1431 -219 1454.5 -176.5Q1478 -134 1516.5 -112.0Q1555 -90 1598 -90Q1642 -90 1680.5 -112.5Q1719 -135 1742.5 -178.0Q1766 -221 1766 -278Q1766 -335 1742.5 -376.5Q1719 -418 1680.5 -439.5Q1642 -461 1598 -461Z M1980 -697Q1980 -728 2001.0 -749.0Q2022 -770 2053 -770Q2083 -770 2104.0 -749.0Q2125 -728 2125 -697Q2125 -666 2104.0 -645.0Q2083 -624 2053 -624Q2022 -624 2001.0 -645.0Q1980 -666 1980 -697ZM2109 -551V0H1995V-551Z M2763 -325V0H2650V-308Q2650 -382 2613.0 -421.5Q2576 -461 2512 -461Q2448 -461 2410.5 -421.5Q2373 -382 2373 -308V0H2259V-551H2373V-488Q2401 -522 2444.5 -541.0Q2488 -560 2537 -560Q2602 -560 2653.5 -533.0Q2705 -506 2734.0 -453.0Q2763 -400 2763 -325Z";
 
+// Logo real de Tapin (el diseño original, no un trazo aproximado). Se guarda
+// en dos versiones -verde (fondos claros) y blanca (fondos oscuros)- ambas
+// incrustadas en base64 para no depender de un archivo estático aparte.
+const LOGO_VERDE_B64 = "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";
+const LOGO_BLANCO_B64 = "iVBORw0KGgoAAAANSUhEUgAAANcAAAB4CAYAAABhN2eOAAADDklEQVR4nO3c3ZaaMACF0djV939letO50FEgkEMS3Puuqx0Tbb7hR+CxLEsB2vvTewJwV+KCEHFBiLggRFwQIi4IEReEiAtCxAUh4oIQcUGIuCBEXBAiLggRF4SIC0LEBSHighBxQYi4IERcECIuCBEXhIgLQsQFIeKCEHFBiLggRFwQIi4IEReEiAtCxAUh4oIQcUGIuCBEXBAiLggRF4SIC0LEBSHighBxQYi4IORv7wmELR3HfnQc+0qvn/G3vO9Ntlyc8e6XV89faEMRF4SIC0LEBSF3j6vXwbWDem5/trCU+oX+7oBcLO/9fC7Ly58p999y1fp0pssZsHWPIqxfxAUh37BbWONRrtlK9fzidYYvfWeY4yZxXWMr2PRiWhv/zNifXvfda2yNs2eOU0UmrrwjW8JWi6nn2FvzWEr9nsJUkTnmyjq7i3nm53uOnR5jihNM4spYSrsFUPs6Pce+0shzK6WIaxZ7F1JiwY28iEeem2OugD3/4XsO+N/9/dqxxtFxW4zdypHPZVjiamttIWwtzterHVrqOfYea/PbmttV4VezW9jOmbD2/tsjV5Ckxz5r7/yGDGiNuMbUcyFNt4hHJa5nPXbJatXMcfRQauc3+vt5Iq5xjbj1mvbkQg/iml/NJUhcSFxtWOD8Iq4su1FfTFxtfNpC2XJ9MXFl2XJ9MXHdV88r6iniusKdbqsYdTd3xM9KXA2lby686nWGXKgzEtc1jtxtO9rYo261hiWutrYufK19lkYrW2O3vMGS/9xy0t7WcyF6LuKjY9tqHWDLlXGnxXin93IpcbFGWCeIK+fsI57PLuzeP//1xPUssaCOvGareRwJfMbnvg8538eyOEnUQcsn7NZekX+LR0XPwNnCPka8EZLG7BZCiLggRFwQIi4IEReEiAtCxAUh4oIQXyLPz5fCg7LlghBxQYi4IERcECIuCBEXhIgLQsQFIeKCEHFBiLggRFwQIi4IEReEiAtCxAUh4oIQcUGIuCBEXBAiLggRF4SIC0LEBSHighBxQYi4IERcEPIPhwFj8ZjGcZ8AAAAASUVORK5CYII=";
+
 function logoSvg(color, height) {
-  return `<svg viewBox="-40 -780 2913 880" style="height:${height}px;display:block;"><path d="${LOGO_PATH}" fill="${color}"/></svg>`;
+  const esClaro = /^#?(fff|ffffff|FFFFFF|FFF)$/.test(String(color).replace("#", ""));
+  const data = esClaro ? LOGO_BLANCO_B64 : LOGO_VERDE_B64;
+  // Proporción real del logo (215x120) para no deformarlo al escalar por altura.
+  const ancho = Math.round(height * (215 / 120));
+  return `<img src="data:image/png;base64,${data}" alt="Tapin" style="height:${height}px;width:${ancho}px;display:block;object-fit:contain;" />`;
 }
 
 // Paleta de marca (extraída del logo oficial de Tapin)
@@ -1165,8 +1176,8 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
 
               <label>Plan</label>
               <select name="plan">
-                <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($120.000 — sin alertas ni reportes)</option>
-                <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($50.000/mes — alertas, reporte mensual, contenido)</option>
+                <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($119.900 — envío incluido)</option>
+                <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($59.900/mes — alertas, reporte mensual, contenido)</option>
               </select>
 
               <label>Dirección (aparece en el mapa público de /descubre)</label>
@@ -1321,10 +1332,10 @@ app.get("/activar/:codigo", (req, res) => {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Activar tarjeta — Tapin</title>
+        <title>Configurar tarjeta — Tapin</title>
         <style>
           ${ESTILO_BASE}
-          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;
+          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:480px;
                      box-shadow:0 8px 24px rgba(11,61,44,0.06);}
           label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin:14px 0 6px;}
           label:first-of-type{margin-top:0;}
@@ -1332,17 +1343,33 @@ app.get("/activar/:codigo", (req, res) => {
           button{margin-top:22px;width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;
                  padding:13px;font-size:0.95rem;font-weight:700;cursor:pointer;}
           button:hover{background:${MARCA.verde};}
+
+          .direccion-wrap{position:relative;}
+          .sugerencias{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid ${MARCA.borde};
+                       border-top:none;border-radius:0 0 9px 9px;max-height:220px;overflow-y:auto;z-index:20;
+                       box-shadow:0 8px 20px rgba(0,0,0,0.08);display:none;}
+          .sugerencias.activo{display:block;}
+          .sugerencia-item{padding:10px 13px;font-size:0.85rem;cursor:pointer;border-bottom:1px solid ${MARCA.crema};}
+          .sugerencia-item:last-child{border-bottom:none;}
+          .sugerencia-item:hover, .sugerencia-item.resaltada{background:${MARCA.verdeClaro};}
+          .direccion-estado{font-size:0.74rem;color:${MARCA.textoSuave};margin-top:4px;min-height:14px;}
+          .direccion-ok{color:${MARCA.verde};font-weight:600;}
+
+          .categorias{display:flex;flex-wrap:wrap;gap:8px;}
+          .cat-chip{border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 16px;font-size:0.84rem;
+                    font-weight:600;color:${MARCA.textoSuave};cursor:pointer;background:#fff;transition:all 0.12s;}
+          .cat-chip.activo{background:${MARCA.verde};border-color:${MARCA.verde};color:#fff;}
         </style>
       </head>
       <body>
         <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div></div>
         <div class="content">
           <div class="eyebrow">Código ${codigo}</div>
-          <h1 class="titulo-pagina">Activar esta tarjeta</h1>
+          <h1 class="titulo-pagina">Configura tu tarjeta Tapin</h1>
           <div class="subtitulo">Completa los datos del negocio para dejar la tarjeta lista para usar.</div>
 
           <div class="form-card">
-            <form method="POST" action="/activar/${codigo}">
+            <form method="POST" action="/activar/${codigo}" id="form-activar">
               <label>Nombre del negocio</label>
               <input type="text" name="nombre" required placeholder="Ej: Restaurante La 21">
 
@@ -1352,33 +1379,133 @@ app.get("/activar/:codigo", (req, res) => {
               <label>Email del negocio (alertas y reportes llegan aquí)</label>
               <input type="email" name="email" required placeholder="dueno@negocio.com">
 
-              <label>Plan</label>
-              <select name="plan">
-                <option value="basico">Básico ($120.000 — sin alertas ni reportes)</option>
-                <option value="pro">Pro ($50.000/mes — alertas, reporte mensual, contenido)</option>
-              </select>
+              <label>Dirección del negocio</label>
+              <div class="direccion-wrap">
+                <input type="text" id="input-direccion" name="direccion" autocomplete="off"
+                       placeholder="Escribe al menos 3 letras — ej: Cra 7 Chía">
+                <div class="sugerencias" id="lista-sugerencias"></div>
+              </div>
+              <div class="direccion-estado" id="direccion-estado"></div>
+              <input type="hidden" name="lat" id="input-lat">
+              <input type="hidden" name="lng" id="input-lng">
+              <input type="hidden" name="ciudad" id="input-ciudad">
 
               <label>Categoría</label>
-              <select name="categoria">
-                <option value="restaurante">Restaurante</option>
-                <option value="peluqueria">Peluquería / Barbería</option>
-                <option value="tienda">Tienda</option>
-                <option value="clinica">Clínica / Consultorio</option>
-                <option value="otro">Otro</option>
+              <div class="categorias" id="categorias">
+                <div class="cat-chip activo" data-valor="restaurante">Restaurante</div>
+                <div class="cat-chip" data-valor="peluqueria">Peluquería / Barbería</div>
+                <div class="cat-chip" data-valor="tienda">Tienda</div>
+                <div class="cat-chip" data-valor="clinica">Clínica / Consultorio</div>
+                <div class="cat-chip" data-valor="otro">Otro</div>
+              </div>
+              <input type="hidden" name="categoria" id="input-categoria" value="restaurante">
+
+              <label>Plan</label>
+              <select name="plan">
+                <option value="basico">Básico ($119.900 — envío incluido)</option>
+                <option value="pro">Pro ($59.900/mes — alertas, reporte mensual, contenido)</option>
               </select>
 
               <label>País (define la hora local de los reportes)</label>
-              <select name="pais">
-                <option value="colombia">Colombia</option>
-                <option value="panama">Panamá</option>
-                <option value="paraguay">Paraguay</option>
-                <option value="miami">Estados Unidos (Miami)</option>
+              <select name="pais" id="input-pais">
+                <option value="colombia" data-codigo="co">Colombia</option>
+                <option value="panama" data-codigo="pa">Panamá</option>
+                <option value="paraguay" data-codigo="py">Paraguay</option>
+                <option value="miami" data-codigo="us">Estados Unidos (Miami)</option>
               </select>
 
               <button type="submit">Activar tarjeta</button>
             </form>
           </div>
         </div>
+
+        <script>
+          // ---------- Selección de categoría por chips ----------
+          document.querySelectorAll('.cat-chip').forEach((chip) => {
+            chip.addEventListener('click', () => {
+              document.querySelectorAll('.cat-chip').forEach((c) => c.classList.remove('activo'));
+              chip.classList.add('activo');
+              document.getElementById('input-categoria').value = chip.dataset.valor;
+            });
+          });
+
+          // ---------- Buscador de direcciones con autocompletado (OpenStreetMap Nominatim, gratis) ----------
+          const inputDireccion = document.getElementById('input-direccion');
+          const listaSugerencias = document.getElementById('lista-sugerencias');
+          const estadoDireccion = document.getElementById('direccion-estado');
+          const inputPais = document.getElementById('input-pais');
+          let temporizador = null;
+          let ultimaConsulta = '';
+
+          function paisCodigo() {
+            const opcion = inputPais.options[inputPais.selectedIndex];
+            return opcion ? opcion.dataset.codigo : 'co';
+          }
+
+          async function buscarDirecciones(texto) {
+            try {
+              const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6' +
+                          '&countrycodes=' + paisCodigo() + '&q=' + encodeURIComponent(texto);
+              const resp = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+              const resultados = await resp.json();
+              mostrarSugerencias(resultados);
+            } catch (err) {
+              estadoDireccion.textContent = 'No se pudo buscar en este momento. Puedes escribir la dirección manualmente.';
+            }
+          }
+
+          function mostrarSugerencias(resultados) {
+            listaSugerencias.innerHTML = '';
+            if (!resultados || resultados.length === 0) {
+              listaSugerencias.classList.remove('activo');
+              return;
+            }
+            resultados.forEach((r) => {
+              const item = document.createElement('div');
+              item.className = 'sugerencia-item';
+              item.textContent = r.display_name;
+              item.addEventListener('click', () => seleccionarDireccion(r));
+              listaSugerencias.appendChild(item);
+            });
+            listaSugerencias.classList.add('activo');
+          }
+
+          function seleccionarDireccion(r) {
+            inputDireccion.value = r.display_name;
+            document.getElementById('input-lat').value = r.lat;
+            document.getElementById('input-lng').value = r.lon;
+            const dir = r.address || {};
+            const ciudad = dir.city || dir.town || dir.village || dir.municipality || '';
+            document.getElementById('input-ciudad').value = ciudad;
+            listaSugerencias.classList.remove('activo');
+            estadoDireccion.innerHTML = '<span class="direccion-ok">✓ Ubicación encontrada — aparecerá en el mapa público de Tapin.</span>';
+          }
+
+          inputDireccion.addEventListener('input', () => {
+            const texto = inputDireccion.value.trim();
+            clearTimeout(temporizador);
+            estadoDireccion.textContent = '';
+            document.getElementById('input-lat').value = '';
+            document.getElementById('input-lng').value = '';
+            if (texto.length < 3) {
+              listaSugerencias.classList.remove('activo');
+              return;
+            }
+            // Pequeña espera antes de buscar, para no mandar una consulta por cada tecla.
+            temporizador = setTimeout(() => {
+              if (texto !== ultimaConsulta) {
+                ultimaConsulta = texto;
+                buscarDirecciones(texto);
+              }
+            }, 400);
+          });
+
+          document.addEventListener('click', (e) => {
+            if (!e.target.closest('.direccion-wrap')) {
+              listaSugerencias.classList.remove('activo');
+            }
+          });
+        </script>
       </body>
     </html>
   `);
@@ -1393,7 +1520,7 @@ app.post("/activar/:codigo", (req, res) => {
   if (!entrada) return res.status(404).send("Código no válido.");
   if (entrada.activado) return res.status(400).send("Esta tarjeta ya fue activada antes.");
 
-  const { nombre, googleUrl, categoria, pais, email, plan } = req.body;
+  const { nombre, googleUrl, categoria, pais, email, plan, direccion, lat, lng, ciudad } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
@@ -1408,6 +1535,10 @@ app.post("/activar/:codigo", (req, res) => {
     claveAcceso: `${codigo.toLowerCase()}-panel`,
     email: email || "",
     plan: plan === "pro" ? "pro" : "basico",
+    direccion: direccion || "",
+    lat: lat ? parseFloat(lat) : null,
+    lng: lng ? parseFloat(lng) : null,
+    ciudad: ciudad || "",
   };
 
   guardarCodigos(codigos);
@@ -2842,7 +2973,7 @@ app.get("/conoce", (req, res) => {
 
           <div class="tarjeta-wrap">
             <div class="tarjeta-nfc">
-              <div class="tarjeta-logo">Tapin</div>
+              <div class="tarjeta-logo">${logoSvg(MARCA.texto, 16)}</div>
               <svg class="tarjeta-nfc-icono" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M6 9C7.5 10.2 8.4 11.9 8.4 13.8C8.4 15.7 7.5 17.4 6 18.6" stroke="${MARCA.textoSuave}" stroke-width="1.6" stroke-linecap="round"/>
                 <path d="M9.5 6.5C11.8 8.4 13.2 11 13.2 14C13.2 17 11.8 19.6 9.5 21.5" stroke="${MARCA.textoSuave}" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
@@ -2861,11 +2992,59 @@ app.get("/conoce", (req, res) => {
           </div>
         </div>
 
-        <div class="contenido" style="text-align:center;padding-top:20px;">
-          <div class="seccion-titulo" style="margin-top:0;">Próximamente</div>
-          <p style="color:${MARCA.textoSuave};font-size:0.95rem;max-width:420px;margin:0 auto;">
-            Estamos afinando esta página. Muy pronto vas a poder ver aquí exactamente cómo funciona Tapin y qué incluye cada plan.
-          </p>
+        <div class="contenido">
+          <div class="paso">
+            <div class="paso-num">1</div>
+            <div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta (o escaneando el QR), se abre una página simple donde el cliente califica su experiencia.</p></div>
+          </div>
+          <div class="paso">
+            <div class="paso-num">2</div>
+            <div><h3>Si calificó bien, va directo a Google</h3><p>Lo mandamos automáticamente a dejar la reseña pública en tu perfil de Google — sin pasos extra, sin fricción.</p></div>
+          </div>
+          <div class="paso">
+            <div class="paso-num">3</div>
+            <div><h3>Si calificó mal, queda como retroalimentación privada</h3><p>En vez de publicarse, ese comentario llega directo a ti — nunca se vuelve una reseña negativa pública. Es información que te sirve para mejorar, no un golpe a tu reputación.</p></div>
+          </div>
+          <div class="paso">
+            <div class="paso-num">4</div>
+            <div><h3>Todo queda registrado</h3><p>Cada toque queda guardado con fecha, hora y dispositivo — tu propio historial de actividad, disponible en tu panel cuando quieras verlo.</p></div>
+          </div>
+
+          <div class="seccion-titulo">Qué incluye cada plan</div>
+          <div class="planes">
+            <div class="plan">
+              <div class="plan-nombre">Pago único</div>
+              <div class="plan-precio">$119.900 <span>COP</span></div>
+              <p style="font-size:0.78rem;color:${MARCA.verde};font-weight:700;margin:-6px 0 14px;">Envío incluido</p>
+              <ul>
+                <li><span class="check">✓</span> Tarjeta NFC física + envío incluido</li>
+                <li><span class="check">✓</span> Redirección automática a tus reseñas de Google</li>
+                <li><span class="check">✓</span> Panel con historial y estadísticas</li>
+                <li><span class="check">✓</span> Acta de entrega formal</li>
+              </ul>
+            </div>
+            <div class="plan pro">
+              <div class="plan-badge">RECOMENDADO</div>
+              <div class="plan-nombre">Mensualidad Pro</div>
+              <div class="plan-precio">$59.900 <span>COP / mes</span></div>
+              <ul>
+                <li><span class="check">✓</span> Todo lo del pago único, más:</li>
+                <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
+                <li><span class="check">✓</span> Alerta instantánea por correo ante retroalimentación negativa</li>
+                <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
+                <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
+                <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
+                <li><span class="check">✓</span> Generador de contenido para redes sociales</li>
+                <li><span class="check">✓</span> Comparación contra el promedio de tu categoría</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="nota">
+            <b>Sobre la retroalimentación:</b> cuando un cliente no tiene una buena experiencia, esa información nunca se convierte en una reseña pública negativa. Se queda contigo, en privado, como una oportunidad para mejorar o para contactar directamente a ese cliente — no como un golpe a tu reputación en línea.
+          </div>
+
+          <a class="cta" href="/pedido">Pedir mi tarjeta Tapin →</a>
         </div>
       </body>
     </html>
@@ -3553,7 +3732,7 @@ app.get("/", (req, res) => {
           <div class="hero-izq">
             <div class="forma-organica"></div>
             <div class="forma-organica-2"></div>
-            <div class="logo-hero">Tapin</div>
+            <div class="logo-hero">${logoSvg("#FFFFFF", 68)}</div>
             <p class="tagline">Descubre negocios locales.<br>Confía en lo que encuentras.</p>
 
             <div class="botones">
@@ -3721,10 +3900,10 @@ app.get("/admin/entrar", (req, res) => {
 });
 
 // ---------- Flujo de compra: pedido → pago con Wompi → confirmación ----------
-// Esto es para el Plan Básico ($120.000 COP, pago único, incluye la tarjeta física
+// Esto es para el Plan Básico ($119.900 COP, pago único, incluye la tarjeta física y el envío
 // y el envío). El Plan Pro (mensual) necesita una integración distinta — ver nota
 // al final del archivo README sobre pagos recurrentes.
-const PRECIO_BASICO_COP = 120000;
+const PRECIO_BASICO_COP = 119900;
 
 // Formulario público donde alguien pide su tarjeta Tapin.
 app.get("/pedido", (req, res) => {
@@ -3872,6 +4051,67 @@ app.get("/pagar/:id", (req, res) => {
 // Wompi redirige aquí después del pago, con ?id=TRANSACTION_ID en la URL.
 // Consultamos el estado real de la transacción contra la API de Wompi (nunca
 // confiamos solo en lo que diga la URL, porque se podría manipular).
+// Verifica que un aviso de webhook realmente venga de Wompi (y no de cualquiera
+// que le pegue a la URL). Compara un checksum SHA256 calculado con el "Secreto
+// de Eventos" (distinto del Secreto de Integridad) que Wompi te da en su panel.
+// Basado en el algoritmo documentado por Wompi — si algo no cuadra, revisa su
+// documentación oficial de eventos antes de confiar ciegamente en producción.
+function verificarChecksumWompi(payload) {
+  if (!process.env.WOMPI_EVENTS_SECRET) return false;
+  if (!payload || !payload.signature || !payload.signature.properties) return false;
+
+  try {
+    const valores = payload.signature.properties.map((ruta) => {
+      // Cada "ruta" es algo como "transaction.id" o "transaction.status" —
+      // navegamos el objeto payload.data siguiendo esos nombres.
+      return ruta.split(".").reduce((obj, key) => (obj ? obj[key] : undefined), payload.data);
+    });
+    const cadena = valores.join("") + payload.timestamp + process.env.WOMPI_EVENTS_SECRET;
+    const checksumCalculado = crypto.createHash("sha256").update(cadena).digest("hex").toUpperCase();
+    return checksumCalculado === String(payload.signature.checksum).toUpperCase();
+  } catch (err) {
+    console.error("Error verificando checksum de Wompi:", err.message);
+    return false;
+  }
+}
+
+// Wompi le pega a esta URL automáticamente cada vez que cambia el estado de una
+// transacción — así el pedido se marca como pagado aunque el cliente cierre el
+// navegador antes de volver a /pago-confirmado.
+// Configúrala en Wompi: Desarrollo → "URL de Eventos" → pega esta URL completa:
+// https://tu-dominio.com/webhook/wompi
+app.post("/webhook/wompi", (req, res) => {
+  const payload = req.body;
+
+  if (!verificarChecksumWompi(payload)) {
+    console.error("[webhook Wompi] checksum inválido o secreto no configurado — aviso ignorado.");
+    return res.status(400).json({ ok: false, motivo: "Checksum inválido." });
+  }
+
+  const transaccion = payload?.data?.transaction;
+  if (!transaccion) return res.status(400).json({ ok: false, motivo: "Sin datos de transacción." });
+
+  // La referencia que generamos al crear el pedido tiene el formato "tapin-ID".
+  const referencia = transaccion.reference || "";
+  const pedidoId = referencia.startsWith("tapin-") ? referencia.slice("tapin-".length) : null;
+
+  if (pedidoId) {
+    const pedidos = leerPedidos();
+    if (pedidos[pedidoId]) {
+      if (transaccion.status === "APPROVED") {
+        pedidos[pedidoId].estado = "aprobado";
+      } else if (transaccion.status === "DECLINED" || transaccion.status === "ERROR") {
+        pedidos[pedidoId].estado = "rechazado";
+      }
+      guardarPedidos(pedidos);
+      console.log(`[webhook Wompi] pedido ${pedidoId} actualizado a "${pedidos[pedidoId].estado}"`);
+    }
+  }
+
+  // Wompi solo necesita un 200 OK para saber que el aviso llegó bien.
+  res.status(200).json({ ok: true });
+});
+
 app.get("/pago-confirmado", async (req, res) => {
   const pedidoId = req.query.pedido;
   const transaccionId = req.query.id;
