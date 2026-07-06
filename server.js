@@ -3959,6 +3959,9 @@ app.get("/pedido", (req, res) => {
             <label>Ciudad</label>
             <input type="text" name="ciudad" required>
 
+            <label>Departamento</label>
+            <input type="text" name="departamento" required placeholder="Ej: Cundinamarca">
+
             <label class="pro-opcion" style="cursor:pointer;">
               <input type="checkbox" name="incluirPro" value="si">
               <span class="txt">
@@ -3976,8 +3979,8 @@ app.get("/pedido", (req, res) => {
 });
 
 app.post("/pedido", (req, res) => {
-  const { nombreNegocio, email, telefono, direccion, ciudad, incluirPro } = req.body;
-  if (!nombreNegocio || !email || !telefono || !direccion || !ciudad) {
+  const { nombreNegocio, email, telefono, direccion, ciudad, departamento, incluirPro } = req.body;
+  if (!nombreNegocio || !email || !telefono || !direccion || !ciudad || !departamento) {
     return res.status(400).send("Faltan datos del pedido.");
   }
 
@@ -3987,7 +3990,7 @@ app.post("/pedido", (req, res) => {
   const pedidos = leerPedidos();
   const id = generarToken();
   pedidos[id] = {
-    nombreNegocio, email, telefono, direccion, ciudad,
+    nombreNegocio, email, telefono, direccion, ciudad, departamento,
     proIncluido,
     monto,
     estado: "pendiente", // pendiente | aprobado | rechazado
@@ -4044,7 +4047,7 @@ app.get("/pagar/:id", (req, res) => {
           <h1>Confirma tu pago</h1>
           <div class="resumen">
             <div><b>Negocio:</b> ${pedido.nombreNegocio}</div>
-            <div><b>Envío a:</b> ${pedido.direccion}, ${pedido.ciudad}</div>
+            <div><b>Envío a:</b> ${pedido.direccion}, ${pedido.ciudad}, ${pedido.departamento}</div>
             <div style="margin-top:8px;"><b>Plan Básico:</b> $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP</div>
             ${pedido.proIncluido ? `<div><b>Primer mes Plan Pro:</b> $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP</div>` : ""}
           </div>
@@ -4059,6 +4062,7 @@ app.get("/pagar/:id", (req, res) => {
             <input type="hidden" name="redirect-url" value="${redirectUrl}" />
             <input type="hidden" name="shipping-address:address-line-1" value="${pedido.direccion}" />
             <input type="hidden" name="shipping-address:city" value="${pedido.ciudad}" />
+            <input type="hidden" name="shipping-address:region" value="${pedido.departamento}" />
             <input type="hidden" name="shipping-address:phone-number" value="${pedido.telefono}" />
             <input type="hidden" name="shipping-address:country" value="CO" />
             <button type="submit">Pagar con Wompi</button>
