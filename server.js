@@ -4028,20 +4028,22 @@ app.get("/pagar/:id", (req, res) => {
           </div>
           <div class="monto">$${pedido.monto.toLocaleString("es-CO")} COP</div>
 
-          <script
-            src="https://checkout.wompi.co/widget.js"
-            data-render="button"
-            data-public-key="${process.env.WOMPI_PUBLIC_KEY}"
-            data-currency="${moneda}"
-            data-amount-in-cents="${montoCentavos}"
-            data-reference="${referencia}"
-            data-signature:integrity="${firma}"
-            data-redirect-url="${redirectUrl}"
-            data-shipping-address:address-line-1="${pedido.direccion}"
-            data-shipping-address:city="${pedido.ciudad}"
-            data-shipping-address:phone-number="${pedido.telefono}"
-            data-shipping-address:country="CO">
-          </script>
+          <form>
+            <script
+              src="https://checkout.wompi.co/widget.js"
+              data-render="button"
+              data-public-key="${process.env.WOMPI_PUBLIC_KEY}"
+              data-currency="${moneda}"
+              data-amount-in-cents="${montoCentavos}"
+              data-reference="${referencia}"
+              data-signature:integrity="${firma}"
+              data-redirect-url="${redirectUrl}"
+              data-shipping-address:address-line-1="${pedido.direccion}"
+              data-shipping-address:city="${pedido.ciudad}"
+              data-shipping-address:phone-number="${pedido.telefono}"
+              data-shipping-address:country="CO">
+            </script>
+          </form>
         </div>
       </body>
     </html>
