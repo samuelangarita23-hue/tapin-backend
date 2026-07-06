@@ -4034,6 +4034,8 @@ app.get("/pagar/:id", (req, res) => {
           .resumen{background:${MARCA.crema};border-radius:10px;padding:16px;margin:18px 0;text-align:left;font-size:0.85rem;color:${MARCA.textoSuave};}
           .resumen b{color:${MARCA.texto};}
           .monto{font-size:1.6rem;font-weight:800;color:${MARCA.verde};margin:12px 0;}
+          button{width:100%;background:${MARCA.verde};color:#fff;border:none;padding:14px;border-radius:10px;
+                 font-weight:700;font-size:0.95rem;cursor:pointer;margin-top:6px;}
         </style>
       </head>
       <body>
@@ -4048,21 +4050,18 @@ app.get("/pagar/:id", (req, res) => {
           </div>
           <div class="monto">$${pedido.monto.toLocaleString("es-CO")} COP</div>
 
-          <form>
-            <script
-              src="https://checkout.wompi.co/widget.js"
-              data-render="button"
-              data-public-key="${process.env.WOMPI_PUBLIC_KEY}"
-              data-currency="${moneda}"
-              data-amount-in-cents="${montoCentavos}"
-              data-reference="${referencia}"
-              data-signature:integrity="${firma}"
-              data-redirect-url="${redirectUrl}"
-              data-shipping-address:address-line-1="${pedido.direccion}"
-              data-shipping-address:city="${pedido.ciudad}"
-              data-shipping-address:phone-number="${pedido.telefono}"
-              data-shipping-address:country="CO">
-            </script>
+          <form action="https://checkout.wompi.co/p/" method="GET">
+            <input type="hidden" name="public-key" value="${process.env.WOMPI_PUBLIC_KEY}" />
+            <input type="hidden" name="currency" value="${moneda}" />
+            <input type="hidden" name="amount-in-cents" value="${montoCentavos}" />
+            <input type="hidden" name="reference" value="${referencia}" />
+            <input type="hidden" name="signature:integrity" value="${firma}" />
+            <input type="hidden" name="redirect-url" value="${redirectUrl}" />
+            <input type="hidden" name="shipping-address:address-line-1" value="${pedido.direccion}" />
+            <input type="hidden" name="shipping-address:city" value="${pedido.ciudad}" />
+            <input type="hidden" name="shipping-address:phone-number" value="${pedido.telefono}" />
+            <input type="hidden" name="shipping-address:country" value="CO" />
+            <button type="submit">Pagar con Wompi</button>
           </form>
         </div>
       </body>
