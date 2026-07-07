@@ -2168,7 +2168,7 @@ app.get("/mi-panel/:slug", (req, res) => {
     .join("");
 
   const recomendacionesHtml = recomendaciones
-    .map((texto) => `<div class="reco">💡 ${texto}</div>`)
+    .map((texto) => `<div class="reco">${texto}</div>`)
     .join("");
 
   const promSector = esPro(negocio) ? promedioSector(negocio.categoria, slug, datos) : null;
@@ -2241,7 +2241,7 @@ app.get("/mi-panel/:slug", (req, res) => {
                            letter-spacing:0.02em;text-transform:uppercase;
                            background:${esPro(negocio) ? MARCA.verdeClaro : "#F3F1EC"};
                            color:${esPro(negocio) ? MARCA.verdeOscuro : MARCA.textoSuave};">
-                ${esPro(negocio) ? "⭐ Plan Pro" : "Plan Básico"}
+                ${esPro(negocio) ? "Plan Pro" : "Plan Básico"}
               </span>
             </div>
           </div>
@@ -2339,7 +2339,7 @@ app.get("/mi-panel/:slug", (req, res) => {
               </div>
               <div class="horas-nota">
                 ${r.semana >= promSector
-                  ? `Vas <b>${r.semana - promSector >= 0 ? "por encima" : "igual"}</b> del promedio de tu sector esta semana. 🎉`
+                  ? `Vas <b>${r.semana - promSector >= 0 ? "por encima" : "igual"}</b> del promedio de tu sector esta semana.`
                   : `Estás <b>${promSector - r.semana}</b> toques por debajo del promedio de tu sector esta semana.`}
               </div>
             </div>
@@ -2354,18 +2354,18 @@ app.get("/mi-panel/:slug", (req, res) => {
             </div>
             <div style="display:flex;flex-direction:column;gap:10px;">
               <div class="reco" style="border-left-color:${MARCA.verde};">
-                ✅ <b>Alertas instantáneas activas</b> — te llega un correo a <b>${negocio.email || "tu correo"}</b> apenas alguien deja una queja privada.
+                <b>Alertas instantáneas activas</b> — te llega un correo a <b>${negocio.email || "tu correo"}</b> apenas alguien deja una queja privada.
               </div>
               <a href="/quejas/${slug}?key=${req.query.key}" class="chart-card" style="display:block;text-decoration:none;color:${MARCA.texto};">
-                <b>📝 Retroalimentación privada</b>
+                <b>Retroalimentación privada</b>
                 <div style="font-size:0.8rem;color:${MARCA.textoSuave};margin-top:4px;">Quejas recibidas y su estado de seguimiento</div>
               </a>
               <a href="/contenido/${slug}?key=${req.query.key}" class="chart-card" style="display:block;text-decoration:none;color:${MARCA.texto};">
-                <b>✨ Generador de contenido</b>
+                <b>Generador de contenido</b>
                 <div style="font-size:0.8rem;color:${MARCA.textoSuave};margin-top:4px;">Tarjetas listas para publicar con tus mejores reseñas</div>
               </a>
               <a href="/export/${slug}.pdf?key=${req.query.key}" class="chart-card" style="display:block;text-decoration:none;color:${MARCA.texto};">
-                <b>📄 Exportar reporte</b>
+                <b>Exportar reporte</b>
                 <div style="font-size:0.8rem;color:${MARCA.textoSuave};margin-top:4px;">Descarga en PDF — también disponible en Word y CSV cambiando la extensión</div>
               </a>
             </div>
@@ -2392,7 +2392,7 @@ app.get("/mi-panel/:slug", (req, res) => {
               <div class="horas-nota">Tus horas pico — bloqueado en el plan Básico.</div>
             </div>
             <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
-              🔒 Con <b>Plan Pro</b> ($${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes) obtienes:
+              Con <b>Plan Pro</b> ($${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes) obtienes:
               <ul style="margin:8px 0 0;padding-left:18px;">
                 <li>Gráfica de horas pico (cuándo te tocan más)</li>
                 <li>Desglose de reputación: positivas vs. quejas privadas</li>
@@ -2436,7 +2436,7 @@ app.get("/reporte/:slug", (req, res) => {
   const r = calcularResumen(eventos);
   const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
   const recomendaciones = generarRecomendaciones(eventos, r, negocio);
-  const recomendacionesHtml = recomendaciones.map((texto) => `<div class="reco">💡 ${texto}</div>`).join("");
+  const recomendacionesHtml = recomendaciones.map((texto) => `<div class="reco">${texto}</div>`).join("");
 
   const recientes = eventos
     .slice(-20)
@@ -3080,7 +3080,7 @@ app.get("/notificar/:slug", async (req, res) => {
 
   const filasBarra = barraSemana(r.dias7);
   const recosHtml = recomendaciones
-    .map((texto) => `<div style="background:#F1F7F4;border-left:3px solid ${MARCA.verde};border-radius:8px;padding:12px 14px;font-size:0.88rem;margin-bottom:8px;color:#1F3D2E;">💡 ${texto}</div>`)
+    .map((texto) => `<div style="background:#F1F7F4;border-left:3px solid ${MARCA.verde};border-radius:8px;padding:12px 14px;font-size:0.88rem;margin-bottom:8px;color:#1F3D2E;">${texto}</div>`)
     .join("");
 
   // Generamos el informe completo en PDF (mismo que /export/:slug.pdf, con
@@ -3892,13 +3892,13 @@ app.get("/test-email", async (req, res) => {
 
   const resultado = await enviarEmail(
     destino,
-    "✅ Correo de prueba — Tapin",
+    "Correo de prueba — Tapin",
     `<p>Si ves esto, el envío de correos está funcionando correctamente.</p>
      <p style="color:#888;font-size:0.85rem;">Enviado desde /test-email el ${new Date().toLocaleString("es-CO")}</p>`
   );
 
   if (resultado.ok) {
-    res.send(`✅ Correo enviado exitosamente a ${destino}. Revisa la bandeja de entrada (y spam).`);
+    res.send(`Correo enviado a ${destino}. Revisa la bandeja de entrada (y spam).`);
   } else {
     res.status(500).send(`❌ Falló el envío. Motivo exacto: ${resultado.motivo}`);
   }
@@ -3958,9 +3958,10 @@ app.get("/", (req, res) => {
           .feature-desc{font-size:0.72rem;color:#B9CCC2;}
 
           .enlaces-generales{display:flex;gap:10px;max-width:460px;position:relative;z-index:1;flex-wrap:wrap;}
-          .enlace-general{color:rgba(255,255,255,0.75);font-size:0.8rem;text-decoration:none;
-                           border:1px solid rgba(255,255,255,0.25);border-radius:100px;padding:7px 14px;}
-          .enlace-general:hover{color:#fff;border-color:rgba(255,255,255,0.5);}
+          .enlace-general{color:#fff;font-size:0.85rem;font-weight:700;text-decoration:none;
+                           background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.4);
+                           border-radius:10px;padding:11px 18px;}
+          .enlace-general:hover{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.6);}
 
           .acceso-titulo-seccion{font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
                                   color:rgba(255,255,255,0.5);margin:34px 0 12px;position:relative;z-index:1;}
@@ -4074,22 +4075,33 @@ app.get("/", (req, res) => {
             <div class="acceso-split">
               <a class="acceso-card cliente" href="/cliente">
                 <div class="acceso-eyebrow">Para consumidores</div>
-                <div class="acceso-icono">🙂</div>
+                <div class="acceso-icono">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="8" r="4" stroke="${MARCA.verde}" stroke-width="1.8"/>
+                    <path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6" stroke="${MARCA.verde}" stroke-width="1.8" stroke-linecap="round"/>
+                  </svg>
+                </div>
                 <div class="acceso-titulo">Soy cliente</div>
                 <div class="acceso-desc">Busco negocios y dejo reseñas</div>
                 <ul class="acceso-lista">
-                  <li>★ Favoritos</li>
-                  <li>⏱ Historial de reseñas</li>
+                  <li>Favoritos</li>
+                  <li>Historial de reseñas</li>
                 </ul>
               </a>
               <a class="acceso-card negocio" href="/mis-negocios">
                 <div class="acceso-eyebrow">Para dueños de negocio</div>
-                <div class="acceso-icono">🏪</div>
+                <div class="acceso-icono">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 10L5 4h14l1 6" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
+                    <path d="M4 10v9a1 1 0 001 1h14a1 1 0 001-1v-9" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
+                    <path d="M9 20v-5a1 1 0 011-1h4a1 1 0 011 1v5" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
+                  </svg>
+                </div>
                 <div class="acceso-titulo">Tengo un negocio</div>
                 <div class="acceso-desc">Tengo tarjeta Tapin (o quiero una)</div>
                 <ul class="acceso-lista">
-                  <li>↗ Estadísticas en vivo</li>
-                  <li>⭐ Reputación y reseñas</li>
+                  <li>Estadísticas en vivo</li>
+                  <li>Reputación y reseñas</li>
                 </ul>
               </a>
             </div>
@@ -4101,7 +4113,7 @@ app.get("/", (req, res) => {
 
           <div class="hero-der">
             <div id="mapa-fondo"></div>
-            <div class="mock-buscar"><span>Buscar negocios o lugares</span><span>🔍</span></div>
+            <div class="mock-buscar"><span>Buscar negocios o lugares</span><span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="7" stroke="#9aa39d" stroke-width="2"/><path d="M20 20l-4-4" stroke="#9aa39d" stroke-width="2" stroke-linecap="round"/></svg></span></div>
 
             <div class="tarjeta-flotante">
               <div class="tarjeta-nfc">
@@ -4711,7 +4723,7 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
         <div class="box">
           <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
           ${yaEsPro
-            ? `<h1>✅ ¡Listo! ${negocio.nombre} ya está en Plan Pro.</h1>
+            ? `<h1>¡Listo! ${negocio.nombre} ya está en Plan Pro.</h1>
                <p>Ahora registra tu tarjeta para que el cobro de los próximos meses sea automático.</p>
                <a class="boton" href="/suscripcion/${slug}?key=${req.query.key}">Registrar tarjeta para el cobro mensual</a>`
             : estado === "PENDING"
@@ -4797,7 +4809,7 @@ app.get("/suscripcion/:slug", (req, res) => {
           <div class="logo">${logoSvg(MARCA.verdeOscuro, 34)}</div>
           <h1>Suscripción Plan Pro — ${negocio.nombre}</h1>
           ${activa
-            ? `<div class="estado">✅ Tarjeta registrada. Se cobra automáticamente $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP cada mes.</div>
+            ? `<div class="estado">Tarjeta registrada. Se cobra automáticamente $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP cada mes.</div>
                <p>Próximo cobro: ${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "pendiente"}</p>
                <p>¿Cambiaste de tarjeta? Registra una nueva abajo y reemplazará la anterior.</p>`
             : `<p>Registra tu tarjeta una sola vez. <b>No se te cobra nada en este paso</b> — solo queda guardada para el cobro automático de $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes.</p>`
