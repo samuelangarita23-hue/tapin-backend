@@ -3714,6 +3714,34 @@ app.get("/", (req, res) => {
           .mock-resena-fecha{color:${MARCA.textoSuave};}
           .mock-resena-texto{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:1px;}
 
+          .tarjeta-flotante{position:absolute;bottom:6%;left:4%;z-index:4;transform:scale(0.68);transform-origin:bottom left;}
+          .tarjeta-nfc{width:210px;height:210px;border-radius:22px;position:relative;
+                       background:#FFFFFF;
+                       box-shadow:0 30px 60px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.04);
+                       animation:flotar 4.5s ease-in-out infinite;
+                       display:flex;flex-direction:column;align-items:center;justify-content:center;
+                       padding:20px;}
+          .tarjeta-logo{position:absolute;top:18px;left:22px;font-size:1.05rem;font-weight:800;letter-spacing:-0.02em;color:${MARCA.texto};}
+          .tarjeta-nfc-icono{position:absolute;top:18px;right:20px;width:22px;height:22px;opacity:0.7;}
+          .tarjeta-google{font-size:1.6rem;font-weight:700;letter-spacing:-0.01em;margin-top:6px;}
+          .tarjeta-google span:nth-child(1){color:#4285F4;}
+          .tarjeta-google span:nth-child(2){color:#EA4335;}
+          .tarjeta-google span:nth-child(3){color:#FBBC05;}
+          .tarjeta-google span:nth-child(4){color:#4285F4;}
+          .tarjeta-google span:nth-child(5){color:#34A853;}
+          .tarjeta-google span:nth-child(6){color:#EA4335;}
+          .tarjeta-estrellas{color:${MARCA.oro};font-size:1.05rem;letter-spacing:2px;margin:6px 0 8px;}
+          .tarjeta-texto{font-size:0.68rem;color:${MARCA.textoSuave};text-align:center;line-height:1.3;margin-bottom:10px;}
+          .tarjeta-mano{width:26px;height:26px;opacity:0.75;}
+          @keyframes flotar {
+            0%   { transform: translateY(0) rotate(-4deg); }
+            50%  { transform: translateY(-16px) rotate(2deg); }
+            100% { transform: translateY(0) rotate(-4deg); }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .tarjeta-nfc{ animation:none; }
+          }
+
           @media (max-width: 980px){
             .hero{flex-direction:column;}
             .hero-der{min-height:480px;}
@@ -3724,6 +3752,7 @@ app.get("/", (req, res) => {
             .hero-izq{padding:44px 26px;}
             .franja-features{flex-direction:column;gap:16px;}
             .mock-card{width:88%;right:6%;bottom:5%;}
+            .tarjeta-flotante{transform:scale(0.5);bottom:auto;top:5%;}
           }
         </style>
       </head>
@@ -3786,6 +3815,26 @@ app.get("/", (req, res) => {
           <div class="hero-der">
             <div id="mapa-fondo"></div>
             <div class="mock-buscar"><span>Buscar negocios o lugares</span><span>🔍</span></div>
+
+            <div class="tarjeta-flotante">
+              <div class="tarjeta-nfc">
+                <div class="tarjeta-logo">${logoSvg(MARCA.texto, 16)}</div>
+                <svg class="tarjeta-nfc-icono" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 9C7.5 10.2 8.4 11.9 8.4 13.8C8.4 15.7 7.5 17.4 6 18.6" stroke="${MARCA.textoSuave}" stroke-width="1.6" stroke-linecap="round"/>
+                  <path d="M9.5 6.5C11.8 8.4 13.2 11 13.2 14C13.2 17 11.8 19.6 9.5 21.5" stroke="${MARCA.textoSuave}" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
+                </svg>
+                <div class="tarjeta-google"><span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span></div>
+                <div class="tarjeta-estrellas">★★★★★</div>
+                <div class="tarjeta-texto">Déjanos una reseña<br>en Google</div>
+                <svg class="tarjeta-mano" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 12V6.5C9 5.67 9.67 5 10.5 5C11.33 5 12 5.67 12 6.5V11" stroke="${MARCA.texto}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M12 11V5.5C12 4.67 12.67 4 13.5 4C14.33 4 15 4.67 15 5.5V11" stroke="${MARCA.texto}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M15 11V6.5C15 5.67 15.67 5 16.5 5C17.33 5 18 5.67 18 6.5V13C18 16.87 14.87 20 11 20C9 20 7.5 19 6.3 17.3L4 13.5C3.6 12.8 3.9 11.9 4.7 11.6C5.3 11.4 6 11.6 6.4 12.1L8 14" stroke="${MARCA.texto}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M20 5C21 6 21.5 7.3 21.5 8.5" stroke="${MARCA.oro}" stroke-width="1.4" stroke-linecap="round"/>
+                  <path d="M22 3C23.5 4.5 24.3 6.4 24.3 8.5" stroke="${MARCA.oro}" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>
+                </svg>
+              </div>
+            </div>
 
             <div class="mock-card">
               <div class="mock-foto"></div>
