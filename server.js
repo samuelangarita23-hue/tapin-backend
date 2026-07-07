@@ -3639,6 +3639,8 @@ app.get("/", (req, res) => {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Tapin</title>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
           *{box-sizing:border-box;}
           html, body{height:100%;}
@@ -3685,18 +3687,43 @@ app.get("/", (req, res) => {
 
           .hero-der{flex:1;background:#EEF3EC;position:relative;display:flex;align-items:center;justify-content:center;
                     padding:40px;overflow:hidden;}
-          .ilustracion-hero{position:relative;width:100%;height:100%;border-radius:24px;overflow:hidden;
-                             box-shadow:0 20px 60px rgba(0,0,0,0.18);}
-          .ilustracion-hero svg{display:block;width:100%;height:100%;object-fit:cover;}
+          #mapa-fondo{position:absolute;top:8%;left:10%;width:80%;height:84%;border-radius:24px;
+                      box-shadow:0 20px 60px rgba(0,0,0,0.18);filter:saturate(0.7) brightness(1.02);}
+          .mock-buscar{position:absolute;top:10%;left:13%;width:74%;background:#fff;border-radius:100px;
+                       padding:14px 20px;font-size:0.85rem;color:#9aa39d;box-shadow:0 6px 18px rgba(0,0,0,0.1);
+                       display:flex;justify-content:space-between;align-items:center;z-index:2;}
+          .mock-card{position:absolute;bottom:8%;right:6%;width:340px;background:#fff;border-radius:18px;
+                     box-shadow:0 20px 50px rgba(0,0,0,0.22);overflow:hidden;z-index:3;}
+          .mock-foto{height:110px;background:linear-gradient(135deg, ${MARCA.verde} 0%, ${MARCA.verdeOscuro} 100%);
+                     position:relative;}
+          .mock-foto::after{content:"";position:absolute;inset:0;
+                             background:repeating-linear-gradient(45deg, rgba(255,255,255,0.06) 0 2px, transparent 2px 14px);}
+          .mock-info{padding:16px 18px 12px;}
+          .mock-nombre{font-weight:700;font-size:1rem;color:${MARCA.texto};}
+          .mock-cat{font-size:0.78rem;color:${MARCA.textoSuave};margin:2px 0 6px;}
+          .mock-estrellas{color:${MARCA.oro};font-size:0.85rem;}
+          .mock-num{color:${MARCA.textoSuave};font-size:0.78rem;margin-left:4px;}
+          .mock-resenas{padding:12px 18px 18px;border-top:1px solid ${MARCA.borde};}
+          .mock-resenas-titulo{font-size:0.78rem;font-weight:700;color:${MARCA.texto};margin-bottom:10px;}
+          .mock-resena{display:flex;gap:10px;margin-bottom:10px;}
+          .mock-avatar{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;
+                       justify-content:center;color:#fff;font-size:0.7rem;font-weight:700;}
+          .mock-resena-cuerpo{flex:1;}
+          .mock-resena-linea1{display:flex;justify-content:space-between;font-size:0.76rem;}
+          .mock-resena-nombre{font-weight:700;color:${MARCA.texto};}
+          .mock-resena-fecha{color:${MARCA.textoSuave};}
+          .mock-resena-texto{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:1px;}
 
           @media (max-width: 980px){
             .hero{flex-direction:column;}
             .hero-der{min-height:480px;}
+            .mock-card{width:82%;right:9%;}
             .logo-hero{font-size:3rem;}
           }
           @media (max-width: 560px){
             .hero-izq{padding:44px 26px;}
             .franja-features{flex-direction:column;gap:16px;}
+            .mock-card{width:88%;right:6%;bottom:5%;}
           }
         </style>
       </head>
@@ -3757,65 +3784,53 @@ app.get("/", (req, res) => {
           </div>
 
           <div class="hero-der">
-            <div class="ilustracion-hero">
-<svg viewBox="0 0 480 640" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="fondoGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#EEF3EC"/>
-      <stop offset="100%" stop-color="#E3ECE4"/>
-    </linearGradient>
-    <linearGradient id="cardGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0F5132"/>
-      <stop offset="100%" stop-color="#0B3D2C"/>
-    </linearGradient>
-  </defs>
+            <div id="mapa-fondo"></div>
+            <div class="mock-buscar"><span>Buscar negocios o lugares</span><span>🔍</span></div>
 
-  <rect x="0" y="0" width="480" height="640" fill="url(#fondoGrad)"/>
-
-  <circle cx="60" cy="560" r="180" fill="#C9A24B" opacity="0.08"/>
-  <circle cx="430" cy="80" r="150" fill="#0F5132" opacity="0.06"/>
-
-  <g transform="translate(60,330) rotate(-9)">
-    <rect x="0" y="0" width="250" height="158" rx="18" fill="url(#cardGrad)"/>
-    <rect x="0" y="0" width="250" height="158" rx="18" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1"/>
-    <text x="24" y="46" font-family="Arial, sans-serif" font-size="26" font-weight="800" fill="#FFFFFF">Tapin</text>
-    <text x="24" y="66" font-family="Arial, sans-serif" font-size="10" fill="#CFE3D6">Tarjeta NFC</text>
-    <g transform="translate(196,110)" stroke="#F4E1A1" stroke-width="2.4" fill="none" stroke-linecap="round">
-      <path d="M -6 10 A 12 12 0 0 1 14 10"/>
-      <path d="M -12 16 A 20 20 0 0 1 20 16"/>
-      <path d="M -18 22 A 28 28 0 0 1 26 22"/>
-    </g>
-    <circle cx="204" cy="122" r="4" fill="#F4E1A1"/>
-  </g>
-
-  <g transform="translate(178,40) rotate(6)">
-    <rect x="-8" y="-8" width="220" height="400" rx="34" fill="#0B0F0C"/>
-    <rect x="4" y="4" width="196" height="376" rx="26" fill="#FAFAF8"/>
-    <text x="102" y="60" font-family="Arial, sans-serif" font-size="20" font-weight="800" fill="#0B3D2C" text-anchor="middle">Tapin</text>
-    <text x="102" y="150" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#16201C" text-anchor="middle">¿Cómo te fue</text>
-    <text x="102" y="170" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#16201C" text-anchor="middle">con nosotros hoy?</text>
-
-    <g>
-      <circle cx="40" cy="240" r="30" fill="#F8F4EC"/>
-      <text x="40" y="251" font-family="Arial, sans-serif" font-size="26" text-anchor="middle">&#128542;</text>
-      <circle cx="102" cy="240" r="30" fill="#F8F4EC"/>
-      <text x="102" y="251" font-family="Arial, sans-serif" font-size="26" text-anchor="middle">&#128528;</text>
-      <circle cx="164" cy="240" r="34" fill="#0F5132"/>
-      <text x="164" y="252" font-family="Arial, sans-serif" font-size="30" text-anchor="middle">&#128522;</text>
-    </g>
-
-    <rect x="30" y="310" width="144" height="10" rx="5" fill="#E7F0EA"/>
-    <rect x="30" y="330" width="100" height="10" rx="5" fill="#E7F0EA"/>
-  </g>
-
-  <g transform="translate(150,300)" stroke="#0F5132" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55">
-    <path d="M 0 30 A 40 40 0 0 1 60 0"/>
-    <path d="M 10 46 A 60 60 0 0 1 84 -10"/>
-  </g>
-</svg>
+            <div class="mock-card">
+              <div class="mock-foto"></div>
+              <div class="mock-info">
+                <div class="mock-nombre">Café Central</div>
+                <div class="mock-cat">Cafetería · Centro</div>
+                <div><span class="mock-estrellas">★★★★★</span><span class="mock-num">4.8 (312)</span></div>
+              </div>
+              <div class="mock-resenas">
+                <div class="mock-resenas-titulo">Lo que dicen los clientes</div>
+                <div class="mock-resena">
+                  <div class="mock-avatar" style="background:${MARCA.verde};">SL</div>
+                  <div class="mock-resena-cuerpo">
+                    <div class="mock-resena-linea1"><span class="mock-resena-nombre">Sofía L.</span><span class="mock-resena-fecha">hace 2 días</span></div>
+                    <div class="mock-resena-texto">Excelente café y ambiente muy acogedor.</div>
+                  </div>
+                </div>
+                <div class="mock-resena">
+                  <div class="mock-avatar" style="background:${MARCA.oro};">JT</div>
+                  <div class="mock-resena-cuerpo">
+                    <div class="mock-resena-linea1"><span class="mock-resena-nombre">Juan T.</span><span class="mock-resena-fecha">hace 1 semana</span></div>
+                    <div class="mock-resena-texto">Atención muy amable, me encantó el lugar.</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+        <script>
+          // Mapa puramente decorativo: sin zoom, sin arrastre, sin controles.
+          const mapaFondo = L.map('mapa-fondo', {
+            center: [4.7110, -74.0721],
+            zoom: 13,
+            zoomControl: false,
+            dragging: false,
+            scrollWheelZoom: false,
+            doubleClickZoom: false,
+            boxZoom: false,
+            keyboard: false,
+            touchZoom: false,
+            attributionControl: false,
+          });
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaFondo);
+        </script>
       </body>
     </html>
   `);
