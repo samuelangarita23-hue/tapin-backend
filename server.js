@@ -2208,6 +2208,14 @@ app.get("/mi-panel/:slug", (req, res) => {
             <div class="eyebrow" style="justify-content:center;">Panel del negocio</div>
             <h1 class="titulo-pagina">${negocio.nombre}</h1>
             <div class="subtitulo">Actualizado al ${new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) })}</div>
+            <div style="margin-top:10px;">
+              <span style="display:inline-block;padding:5px 14px;border-radius:100px;font-size:0.72rem;font-weight:700;
+                           letter-spacing:0.02em;text-transform:uppercase;
+                           background:${esPro(negocio) ? MARCA.verdeClaro : "#F3F1EC"};
+                           color:${esPro(negocio) ? MARCA.verdeOscuro : MARCA.textoSuave};">
+                ${esPro(negocio) ? "⭐ Plan Pro" : "Plan Básico"}
+              </span>
+            </div>
           </div>
 
           <div class="seccion">
@@ -2223,6 +2231,7 @@ app.get("/mi-panel/:slug", (req, res) => {
             <div class="ultimo-toque">Último toque: <b>${ultimoTexto}</b></div>
           </div>
 
+          ${esPro(negocio) ? `
           <div class="seccion">
             <div class="seccion-header">
               <div class="eyebrow">Últimos 30 días</div>
@@ -2280,6 +2289,34 @@ app.get("/mi-panel/:slug", (req, res) => {
             </div>
             ${recomendacionesHtml}
           </div>
+          ` : `
+          <div class="seccion">
+            <div class="seccion-header">
+              <div class="eyebrow">Plan Básico</div>
+              <h2>Mejora a Pro y desbloquea todo esto</h2>
+              <p>Tu plan actual muestra lo esencial. Con Pro tienes mucho más detalle para tomar decisiones.</p>
+            </div>
+            <div class="chart-card" style="opacity:0.55;filter:grayscale(0.4);pointer-events:none;">
+              <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
+              <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+              <div class="horas-nota">Tus horas pico — bloqueado en el plan Básico.</div>
+            </div>
+            <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
+              🔒 Con <b>Plan Pro</b> ($${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes) obtienes:
+              <ul style="margin:8px 0 0;padding-left:18px;">
+                <li>Gráfica de horas pico (cuándo te tocan más)</li>
+                <li>Desglose de reputación: positivas vs. quejas privadas</li>
+                <li>Tabla de actividad reciente con cada toque</li>
+                <li>Recomendaciones automáticas para tu negocio</li>
+                <li>Alertas instantáneas de quejas, exportes e historial detallado</li>
+                <li>Generador de contenido para redes y comparación con tu sector</li>
+              </ul>
+            </div>
+            <div style="text-align:center;margin-top:16px;font-size:0.85rem;color:${MARCA.textoSuave};">
+              Escríbele a quien te dio tu tarjeta Tapin para activar el Plan Pro en tu negocio.
+            </div>
+          </div>
+          `}
 
         </div>
       </body>
