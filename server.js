@@ -414,6 +414,16 @@ function esPro(negocio) {
   return !!negocio && negocio.plan === "pro";
 }
 
+// Autoriza al admin (ADMIN_KEY) O al dueño del negocio con su propia clave,
+// siempre que el negocio sea Pro — usado en las funciones que antes eran
+// "solo admin" (quejas, contenido, exportes) para que el negocio también
+// pueda entrar directamente con su clave de panel.
+function autorizadoProNegocio(req, negocio) {
+  if (req.query.key === ADMIN_KEY) return true;
+  if (!negocio || !negocio.claveAcceso) return false;
+  return req.query.key === negocio.claveAcceso && esPro(negocio);
+}
+
 // Detecta tipo de dispositivo de forma simple a partir del user-agent
 function detectarDispositivo(userAgent = "") {
   const ua = userAgent.toLowerCase();
@@ -605,6 +615,20 @@ function guardarQueja(slug, comentario, negocio, telefono = "") {
     estado: "pendiente", // pendiente | contactado | resuelto
   });
   guardarDatos(datos);
+
+  // Alerta instantánea (solo Pro): el dueño se entera de la queja apenas
+  // llega, no hasta el reporte mensual. No bloquea la respuesta al cliente
+  // si el correo falla — es un "fire and forget" a propósito.
+  if (esPro(negocio) && negocio.email) {
+    enviarEmail(
+      negocio.email,
+      `⚠️ Nueva queja privada en ${negocio.nombre}`,
+      `<p>Un cliente dejó una calificación negativa y este comentario privado:</p>
+       <p style="background:#F8F4EC;padding:14px;border-radius:8px;">"${comentario}"</p>
+       ${telefono ? `<p>Teléfono de contacto: <b>${telefono}</b></p>` : ""}
+       <p>Puedes verla y marcarla como contactada/resuelta en tu panel Pro.</p>`
+    ).catch((err) => console.error("[alerta queja] Error enviando correo:", err.message));
+  }
 }
 
 // Genera recomendaciones automáticas simples (reglas si-entonces) a partir de los
@@ -1916,12 +1940,12 @@ app.get("/historial/:slug", (req, res) => {
 // Quejas privadas (calificaciones negativas) de un negocio — nunca se publican en Google.
 // Visítalo así: https://tu-dominio.com/quejas/mi-negocio?key=TU_CLAVE
 app.get("/quejas/:slug", (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
-    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
-  }
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!autorizadoProNegocio(req, negocio)) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
 
   const datos = leerDatos();
   const quejas = (datos[slug] && datos[slug].quejas) || [];
@@ -1985,10 +2009,12 @@ app.get("/quejas/:slug", (req, res) => {
 // Cambia el estado de una queja (pendiente -> contactado -> resuelto), para llevar
 // el seguimiento de recuperación de clientes insatisfechos.
 app.get("/quejas/:slug/estado", (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado.");
   }
-  const { slug } = req.params;
   const i = parseInt(req.query.i, 10);
   const nuevoEstado = req.query.estado;
   if (!["contactado", "resuelto", "pendiente"].includes(nuevoEstado)) {
@@ -2020,12 +2046,12 @@ function tarjetaTestimonioSvg(frase, nombreNegocio, valor) {
 // Galería de testimonios positivos listos para convertir en contenido de redes.
 // Visítalo así: https://tu-dominio.com/contenido/mi-negocio?key=TU_CLAVE
 app.get("/contenido/:slug", (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
-    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
-  }
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!autorizadoProNegocio(req, negocio)) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
 
   if (!esPro(negocio)) {
     return res.status(402).send(
@@ -2087,12 +2113,12 @@ app.get("/contenido/:slug", (req, res) => {
 
 // Descarga el SVG individual de una tarjeta de testimonio.
 app.get("/contenido/:slug/tarjeta.svg", (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
-    return res.status(401).send("No autorizado.");
-  }
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!autorizadoProNegocio(req, negocio)) {
+    return res.status(401).send("No autorizado.");
+  }
   if (!esPro(negocio)) {
     return res.status(402).send("Esta función es exclusiva del Plan Pro.");
   }
@@ -2144,6 +2170,8 @@ app.get("/mi-panel/:slug", (req, res) => {
   const recomendacionesHtml = recomendaciones
     .map((texto) => `<div class="reco">💡 ${texto}</div>`)
     .join("");
+
+  const promSector = esPro(negocio) ? promedioSector(negocio.categoria, slug, datos) : null;
 
   res.send(`
     <html>
@@ -2281,6 +2309,68 @@ app.get("/mi-panel/:slug", (req, res) => {
             </div>
           </div>
 
+          ${promSector !== null ? `
+          <div class="seccion">
+            <div class="seccion-header">
+              <div class="eyebrow">Comparativo</div>
+              <h2>Tú vs. tu sector</h2>
+              <p>Toques de esta semana, comparado con negocios de tu misma categoría.</p>
+            </div>
+            <div class="chart-card">
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <div>
+                  <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;">
+                    <span>Tú</span><b>${r.semana}</b>
+                  </div>
+                  <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                    <div style="height:100%;border-radius:100px;background:${MARCA.verde};
+                                width:${Math.min(100, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
+                  </div>
+                </div>
+                <div>
+                  <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;color:${MARCA.textoSuave};">
+                    <span>Promedio del sector</span><b>${promSector}</b>
+                  </div>
+                  <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                    <div style="height:100%;border-radius:100px;background:${MARCA.oro};
+                                width:${Math.min(100, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="horas-nota">
+                ${r.semana >= promSector
+                  ? `Vas <b>${r.semana - promSector >= 0 ? "por encima" : "igual"}</b> del promedio de tu sector esta semana. 🎉`
+                  : `Estás <b>${promSector - r.semana}</b> toques por debajo del promedio de tu sector esta semana.`}
+              </div>
+            </div>
+          </div>
+          ` : ""}
+
+          <div class="seccion">
+            <div class="seccion-header">
+              <div class="eyebrow">Herramientas Pro</div>
+              <h2>Más de tu plan</h2>
+              <p>Accesos directos a todo lo que incluye tu suscripción.</p>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div class="reco" style="border-left-color:${MARCA.verde};">
+                ✅ <b>Alertas instantáneas activas</b> — te llega un correo a <b>${negocio.email || "tu correo"}</b> apenas alguien deja una queja privada.
+              </div>
+              <a href="/quejas/${slug}?key=${req.query.key}" class="chart-card" style="display:block;text-decoration:none;color:${MARCA.texto};">
+                <b>📝 Retroalimentación privada</b>
+                <div style="font-size:0.8rem;color:${MARCA.textoSuave};margin-top:4px;">Quejas recibidas y su estado de seguimiento</div>
+              </a>
+              <a href="/contenido/${slug}?key=${req.query.key}" class="chart-card" style="display:block;text-decoration:none;color:${MARCA.texto};">
+                <b>✨ Generador de contenido</b>
+                <div style="font-size:0.8rem;color:${MARCA.textoSuave};margin-top:4px;">Tarjetas listas para publicar con tus mejores reseñas</div>
+              </a>
+              <a href="/export/${slug}.pdf?key=${req.query.key}" class="chart-card" style="display:block;text-decoration:none;color:${MARCA.texto};">
+                <b>📄 Exportar reporte</b>
+                <div style="font-size:0.8rem;color:${MARCA.textoSuave};margin-top:4px;">Descarga en PDF — también disponible en Word y CSV cambiando la extensión</div>
+              </a>
+            </div>
+          </div>
+
           <div class="seccion">
             <div class="seccion-header">
               <div class="eyebrow">Para ti</div>
@@ -2312,8 +2402,15 @@ app.get("/mi-panel/:slug", (req, res) => {
                 <li>Generador de contenido para redes y comparación con tu sector</li>
               </ul>
             </div>
-            <div style="text-align:center;margin-top:16px;font-size:0.85rem;color:${MARCA.textoSuave};">
-              Escríbele a quien te dio tu tarjeta Tapin para activar el Plan Pro en tu negocio.
+            <div style="text-align:center;margin-top:18px;">
+              <a href="/mejorar-a-pro/${slug}?key=${req.query.key}"
+                 style="display:inline-block;background:${MARCA.verde};color:#fff;text-decoration:none;
+                        padding:13px 26px;border-radius:10px;font-weight:700;font-size:0.9rem;">
+                Pagar y activar Plan Pro
+              </a>
+              <div style="margin-top:10px;font-size:0.78rem;color:${MARCA.textoSuave};">
+                $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes · se activa al instante
+              </div>
             </div>
           </div>
           `}
@@ -2404,12 +2501,12 @@ app.get("/reporte/:slug", (req, res) => {
 // para entregar formalmente al cliente, no un volante de una sola hoja.
 // Visítalo así: https://tu-dominio.com/export/mi-negocio.pdf?key=TU_CLAVE
 app.get("/export/:slug.pdf", async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
-    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
-  }
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!autorizadoProNegocio(req, negocio)) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
   // La exportación de reportes (CSV/PDF/Word) es exclusiva de Plan Pro.
   if (!esPro(negocio)) {
     return res.status(402).send(
@@ -2656,12 +2753,12 @@ async function generarInformePDF(negocio, slug) {
 // personalicen, lo peguen en una propuesta, o lo usen como acta formal.
 // Visítalo así: https://tu-dominio.com/export/mi-negocio.docx?key=TU_CLAVE
 app.get("/export/:slug.docx", async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
-    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
-  }
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!autorizadoProNegocio(req, negocio)) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
   if (!esPro(negocio)) {
     return res.status(402).send(
       `La exportación de reportes es exclusiva del Plan Pro. ` +
@@ -2882,13 +2979,12 @@ app.get("/entrega/:slug.pdf", async (req, res) => {
 // Ideal para entregarle el reporte a tu cliente (Excel/Google Sheets lo abre directo).
 // Visítalo así: https://tu-dominio.com/export/mi-negocio.csv?key=TU_CLAVE
 app.get("/export/:slug.csv", (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
-    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
-  }
-
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!autorizadoProNegocio(req, negocio)) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
   if (!esPro(negocio)) {
     return res.status(402).send(
       `La exportación de reportes es exclusiva del Plan Pro. ` +
@@ -3861,6 +3957,35 @@ app.get("/", (req, res) => {
           .feature-titulo{font-size:0.85rem;font-weight:700;}
           .feature-desc{font-size:0.72rem;color:#B9CCC2;}
 
+          .enlaces-generales{display:flex;gap:10px;max-width:460px;position:relative;z-index:1;flex-wrap:wrap;}
+          .enlace-general{color:rgba(255,255,255,0.75);font-size:0.8rem;text-decoration:none;
+                           border:1px solid rgba(255,255,255,0.25);border-radius:100px;padding:7px 14px;}
+          .enlace-general:hover{color:#fff;border-color:rgba(255,255,255,0.5);}
+
+          .acceso-titulo-seccion{font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
+                                  color:rgba(255,255,255,0.5);margin:34px 0 12px;position:relative;z-index:1;}
+          .acceso-split{display:flex;gap:16px;max-width:560px;position:relative;z-index:1;}
+          .acceso-card{flex:1;display:block;text-decoration:none;border-radius:16px;padding:22px 20px;
+                       transition:transform 0.15s;box-shadow:0 10px 30px rgba(0,0,0,0.22);}
+          .acceso-card:active{transform:scale(0.98);}
+          .acceso-card.cliente{background:rgba(255,255,255,0.97);}
+          .acceso-card.negocio{background:${MARCA.oro};}
+          .acceso-eyebrow{font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;
+                           margin-bottom:10px;}
+          .acceso-card.cliente .acceso-eyebrow{color:${MARCA.verde};}
+          .acceso-card.negocio .acceso-eyebrow{color:rgba(255,255,255,0.85);}
+          .acceso-icono{font-size:1.6rem;margin-bottom:6px;}
+          .acceso-titulo{font-size:1.05rem;font-weight:800;color:${MARCA.texto};}
+          .acceso-card.negocio .acceso-titulo{color:#fff;}
+          .acceso-desc{font-size:0.78rem;color:${MARCA.textoSuave};margin:3px 0 14px;}
+          .acceso-card.negocio .acceso-desc{color:rgba(255,255,255,0.85);}
+          .acceso-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
+          .acceso-lista li{font-size:0.76rem;color:${MARCA.texto};display:flex;align-items:center;gap:6px;}
+          .acceso-card.negocio .acceso-lista li{color:#fff;}
+          @media (max-width: 480px){
+            .acceso-split{flex-direction:column;}
+          }
+
           .hero-der{flex:1;background:#EEF3EC;position:relative;display:flex;align-items:center;justify-content:center;
                     padding:40px;overflow:hidden;}
           #mapa-fondo{position:absolute;top:8%;left:10%;width:80%;height:84%;border-radius:24px;
@@ -3940,50 +4065,36 @@ app.get("/", (req, res) => {
             <div class="logo-hero">${logoSvg("#FFFFFF", 58)}</div>
             <p class="tagline">Descubre negocios locales.<br>Confía en lo que encuentras.</p>
 
-            <div class="botones">
-              <a class="boton-hero" href="/conoce">
-                <div class="boton-hero-titulo">Conoce Tapin</div>
-                <div class="boton-hero-desc">Cómo funciona la tarjeta y qué incluye cada plan</div>
+            <div class="enlaces-generales">
+              <a class="enlace-general" href="/conoce">Conoce Tapin</a>
+              <a class="enlace-general" href="/descubre">Descubrir negocios</a>
+            </div>
+
+            <div class="acceso-titulo-seccion">Entra a tu cuenta</div>
+            <div class="acceso-split">
+              <a class="acceso-card cliente" href="/cliente">
+                <div class="acceso-eyebrow">Para consumidores</div>
+                <div class="acceso-icono">🙂</div>
+                <div class="acceso-titulo">Soy cliente</div>
+                <div class="acceso-desc">Busco negocios y dejo reseñas</div>
+                <ul class="acceso-lista">
+                  <li>★ Favoritos</li>
+                  <li>⏱ Historial de reseñas</li>
+                </ul>
               </a>
-              <a class="boton-hero" href="/descubre">
-                <div class="boton-hero-titulo">Descubrir negocios</div>
-                <div class="boton-hero-desc">Mira el mapa de negocios que usan Tapin y su reputación</div>
-              </a>
-              <a class="boton-hero" href="/cliente">
-                <div class="boton-hero-titulo">Soy cliente</div>
-                <div class="boton-hero-desc">Crea tu cuenta — guarda favoritos y tu historial de reseñas</div>
-              </a>
-              <a class="boton-hero oro" href="/mis-negocios">
-                <div class="boton-hero-titulo">Soy un negocio</div>
-                <div class="boton-hero-desc">Entra a tu panel — tus locales, tus estadísticas</div>
+              <a class="acceso-card negocio" href="/mis-negocios">
+                <div class="acceso-eyebrow">Para dueños de negocio</div>
+                <div class="acceso-icono">🏪</div>
+                <div class="acceso-titulo">Tengo un negocio</div>
+                <div class="acceso-desc">Tengo tarjeta Tapin (o quiero una)</div>
+                <ul class="acceso-lista">
+                  <li>↗ Estadísticas en vivo</li>
+                  <li>⭐ Reputación y reseñas</li>
+                </ul>
               </a>
             </div>
 
-            <a class="admin-link" href="/pedido" style="margin-top:18px;">¿Todavía no tienes tarjeta? Pídela aquí →</a>
-
-            <div class="franja-features">
-              <div class="feature">
-                <div class="feature-icono">★</div>
-                <div>
-                  <div class="feature-titulo">Favoritos</div>
-                  <div class="feature-desc">Guarda los lugares que te gustan</div>
-                </div>
-              </div>
-              <div class="feature">
-                <div class="feature-icono">⏱</div>
-                <div>
-                  <div class="feature-titulo">Historial de reseñas</div>
-                  <div class="feature-desc">Todas tus calificaciones en un solo lugar</div>
-                </div>
-              </div>
-              <div class="feature">
-                <div class="feature-icono">↗</div>
-                <div>
-                  <div class="feature-titulo">Estadísticas del negocio</div>
-                  <div class="feature-desc">Sigue tu reputación y crecimiento</div>
-                </div>
-              </div>
-            </div>
+            <a class="admin-link" href="/pedido" style="margin-top:28px;">¿Todavía no tienes tarjeta? Pídela aquí →</a>
 
             <a class="admin-link" href="/admin">Entrar como administrador</a>
           </div>
@@ -4470,7 +4581,150 @@ app.get("/pago-confirmado", async (req, res) => {
   `);
 });
 
-// ---------- Cobro automático de la mensualidad Pro (pagos recurrentes) ----------
+// ---------- Mejorar a Pro pagando directamente desde el panel ----------
+// Un negocio en Plan Básico puede pagar su primer mes de Pro sin que Samuel
+// tenga que activarlo a mano. Usa el mismo Web Checkout que /pagar/:id.
+app.get("/mejorar-a-pro/:slug", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  if (esPro(negocio)) {
+    return res.redirect(`/mi-panel/${slug}?key=${req.query.key}`);
+  }
+  if (!process.env.WOMPI_PUBLIC_KEY) {
+    return res.status(500).send("Los pagos todavía no están configurados. Contacta a Tapin.");
+  }
+
+  const moneda = "COP";
+  const montoCentavos = PRECIO_PRO_COP * 100;
+  const referencia = `tapin-upgrade-${slug}-${Date.now()}`;
+  const firma = firmaIntegridadWompi(referencia, montoCentavos, moneda);
+  const redirectUrl = `${req.protocol}://${req.get("host")}/mejorar-a-pro/${slug}/confirmar?key=${req.query.key}`;
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Mejorar a Pro — ${negocio.nombre}</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
+               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:420px;width:100%;text-align:center;
+               box-shadow:0 10px 40px rgba(0,0,0,0.08);}
+          h1{font-size:1.1rem;color:${MARCA.texto};margin:14px 0 10px;}
+          p{color:${MARCA.textoSuave};font-size:0.85rem;}
+          ul{text-align:left;font-size:0.85rem;color:${MARCA.texto};margin:16px 0;padding-left:20px;line-height:1.7;}
+          .monto{font-size:1.6rem;font-weight:800;color:${MARCA.verde};margin:14px 0;}
+          button{width:100%;background:${MARCA.verde};color:#fff;border:none;padding:14px;border-radius:10px;
+                 font-weight:700;font-size:0.95rem;cursor:pointer;margin-top:6px;}
+          .volver{display:inline-block;margin-top:16px;font-size:0.8rem;color:${MARCA.textoSuave};}
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
+          <h1>Mejora ${negocio.nombre} a Plan Pro</h1>
+          <p>Pagas el primer mes ahora y queda activo de inmediato. Los meses siguientes se cobran automáticamente a la tarjeta que registres después de este pago.</p>
+          <ul>
+            <li>Gráfica de horas pico</li>
+            <li>Reputación: positivas vs. quejas privadas</li>
+            <li>Actividad reciente al detalle</li>
+            <li>Recomendaciones automáticas</li>
+            <li>Alertas instantáneas y exportes</li>
+          </ul>
+          <div class="monto">$${PRECIO_PRO_COP.toLocaleString("es-CO")} COP<span style="font-size:0.9rem;font-weight:600;color:${MARCA.textoSuave};">/mes</span></div>
+
+          <form action="https://checkout.wompi.co/p/" method="GET">
+            <input type="hidden" name="public-key" value="${process.env.WOMPI_PUBLIC_KEY}" />
+            <input type="hidden" name="currency" value="${moneda}" />
+            <input type="hidden" name="amount-in-cents" value="${montoCentavos}" />
+            <input type="hidden" name="reference" value="${referencia}" />
+            <input type="hidden" name="signature:integrity" value="${firma}" />
+            <input type="hidden" name="redirect-url" value="${redirectUrl}" />
+            <input type="hidden" name="customer-data:email" value="${negocio.email || ""}" />
+            <button type="submit">Pagar y activar Pro</button>
+          </form>
+          <a class="volver" href="/mi-panel/${slug}?key=${req.query.key}">&larr; Volver a mi panel</a>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Confirma el pago de la mejora a Pro: consulta el estado real en Wompi (nunca
+// confía en el query string por sí solo), y si fue aprobado, activa el plan
+// Pro del negocio y lo manda a registrar su tarjeta para el cobro mensual.
+app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+
+  const transaccionId = req.query.id;
+  let estado = "desconocido";
+
+  if (transaccionId && process.env.WOMPI_PUBLIC_KEY) {
+    try {
+      const base = baseWompi();
+      const resp = await fetch(`${base}/transactions/${transaccionId}`);
+      const data = await resp.json();
+      estado = data?.data?.status || "desconocido";
+      const referenciaOk = (data?.data?.reference || "").startsWith(`tapin-upgrade-${slug}-`);
+      const montoOk = data?.data?.amount_in_cents === PRECIO_PRO_COP * 100;
+      if (estado === "APPROVED" && referenciaOk && montoOk) {
+        guardarCambiosNegocio(slug, negocio, { plan: "pro" });
+      }
+    } catch (err) {
+      console.error("[mejorar-a-pro] Error consultando transacción:", err.message);
+    }
+  }
+
+  const negocioActualizado = obtenerNegocio(slug);
+  const yaEsPro = esPro(negocioActualizado);
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Confirmación — ${negocio.nombre}</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
+               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:400px;width:100%;text-align:center;
+               box-shadow:0 10px 40px rgba(0,0,0,0.08);}
+          h1{font-size:1.15rem;color:${MARCA.texto};margin:16px 0 8px;}
+          p{color:${MARCA.textoSuave};font-size:0.88rem;}
+          a.boton{display:inline-block;margin-top:16px;background:${MARCA.verde};color:#fff;text-decoration:none;
+                  padding:12px 20px;border-radius:10px;font-weight:700;font-size:0.88rem;}
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
+          ${yaEsPro
+            ? `<h1>✅ ¡Listo! ${negocio.nombre} ya está en Plan Pro.</h1>
+               <p>Ahora registra tu tarjeta para que el cobro de los próximos meses sea automático.</p>
+               <a class="boton" href="/suscripcion/${slug}?key=${req.query.key}">Registrar tarjeta para el cobro mensual</a>`
+            : estado === "PENDING"
+              ? `<h1>Tu pago está siendo procesado</h1><p>En unos minutos se activa el Plan Pro. Te avisamos por correo.</p>`
+              : `<h1>No pudimos confirmar el pago</h1><p>Si ya pagaste, espera un momento y recarga esta página. Si el pago falló, puedes intentarlo de nuevo.</p>
+                 <a class="boton" href="/mejorar-a-pro/${slug}?key=${req.query.key}">Intentar de nuevo</a>`}
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+
 // Wompi maneja suscripciones así: el dueño del negocio registra su tarjeta UNA
 // sola vez (se tokeniza, nunca guardamos el número real), Wompi nos da un
 // "payment_source_id" reutilizable, y luego cada mes el SERVIDOR le cobra a esa
