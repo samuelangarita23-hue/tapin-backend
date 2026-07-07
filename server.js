@@ -939,7 +939,7 @@ app.get("/editar", (req, res) => {
       </head>
       <body>
         <div class="topbar">
-          <div>${logoSvg("#FFFFFF", 22)}</div>
+          <div>${logoSvg("#FFFFFF", 30)}</div>
           <a class="back" href="/stats?key=${key}">&larr; Volver al panel</a>
         </div>
         <div class="content">
@@ -1086,7 +1086,7 @@ app.get("/editar/:slug/quitar", (req, res) => {
         .btn-cancelar{display:block;text-align:center;margin-top:14px;color:${MARCA.textoSuave};font-size:0.85rem;}
       </style></head>
       <body>
-        <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div></div>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
         <div class="content">
           <div class="eyebrow">Atención</div>
           <h1 class="titulo-pagina">¿Quitar esta tarjeta?</h1>
@@ -1168,7 +1168,7 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
       </head>
       <body>
         <div class="topbar">
-          <div>${logoSvg("#FFFFFF", 22)}</div>
+          <div>${logoSvg("#FFFFFF", 30)}</div>
           <a class="back" href="/editar?key=${key}">&larr; Volver</a>
         </div>
         <div class="content">
@@ -1275,7 +1275,7 @@ app.get("/codigos", (req, res) => {
       </head>
       <body>
         <div class="topbar">
-          <div>${logoSvg("#FFFFFF", 22)}</div>
+          <div>${logoSvg("#FFFFFF", 30)}</div>
           <a class="back" href="/stats?key=${key}">&larr; Volver al panel</a>
         </div>
         <div class="content">
@@ -1375,7 +1375,7 @@ app.get("/activar/:codigo", (req, res) => {
         </style>
       </head>
       <body>
-        <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div></div>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
         <div class="content">
           <div class="eyebrow">Código ${codigo}</div>
           <h1 class="titulo-pagina">Configura tu tarjeta Tapin</h1>
@@ -1564,7 +1564,7 @@ app.post("/activar/:codigo", (req, res) => {
         .ok-card code{background:${MARCA.verdeClaro};padding:3px 8px;border-radius:6px;}
       </style></head>
       <body>
-        <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div></div>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
         <div class="content">
           <div class="eyebrow">Listo</div>
           <h1 class="titulo-pagina">¡Tarjeta activada!</h1>
@@ -1764,7 +1764,7 @@ app.get("/stats", (req, res) => {
       </head>
       <body>
         <div class="topbar">
-          <div style="display:flex;align-items:center;gap:0;">${logoSvg("#FFFFFF", 22)}</div>
+          <div style="display:flex;align-items:center;gap:0;">${logoSvg("#FFFFFF", 30)}</div>
           <div>
             <a href="/descubre" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;margin-right:18px;" target="_blank">Mapa público</a>
             <a href="/editar?key=${key}" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;margin-right:18px;">Editar negocios</a>
@@ -1917,7 +1917,7 @@ app.get("/quejas/:slug", (req, res) => {
       a{color:${MARCA.verde};font-weight:600;font-size:0.82rem;text-decoration:none;}
     </style></head>
     <body>
-      <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
+      <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
       <div class="content">
         <div class="eyebrow">Rescate de clientes</div>
         <h1 class="titulo-pagina">Retroalimentación privada — ${negocio.nombre}</h1>
@@ -2024,7 +2024,7 @@ app.get("/contenido/:slug", (req, res) => {
         </style>
       </head>
       <body>
-        <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
         <div class="content">
           <div class="eyebrow">Marketing automático</div>
           <h1 class="titulo-pagina">Contenido para redes — ${negocio.nombre}</h1>
@@ -2153,7 +2153,7 @@ app.get("/mi-panel/:slug", (req, res) => {
       </head>
       <body>
         <div class="topbar" style="justify-content:center;">
-          <div>${logoSvg("#FFFFFF", 24)}</div>
+          <div>${logoSvg("#FFFFFF", 30)}</div>
         </div>
         <div class="content">
 
@@ -3204,7 +3204,7 @@ app.get("/descubre", (req, res) => {
         </style>
       </head>
       <body>
-        <div class="topbar"><a class="back" href="/">&larr; Inicio</a><div>${logoSvg("#FFFFFF", 22)}</div><div style="width:60px;"></div></div>
+        <div class="topbar"><a class="back" href="/">&larr; Inicio</a><div>${logoSvg("#FFFFFF", 30)}</div><div style="width:60px;"></div></div>
         <div id="mapa"></div>
         <div class="leyenda">
           <div class="leyenda-titulo">Mapa de negocios Tapin</div>
@@ -3291,7 +3291,7 @@ app.get("/mis-negocios", (req, res) => {
       </head>
       <body>
         <div class="box">
-          <div class="logo">${logoSvg(MARCA.verdeOscuro, 30)}</div>
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 38)}</div>
           <h1>Panel de tu negocio</h1>
           <p>Escribe el correo con el que registraste tu(s) tarjeta(s) Tapin. Te mandamos un link de acceso, sin contraseña que recordar.</p>
           <form method="POST" action="/mis-negocios/solicitar">
@@ -3422,7 +3422,7 @@ app.get("/mis-negocios/:token", (req, res) => {
         </style>
       </head>
       <body>
-        <div class="topbar"><div>${logoSvg("#FFFFFF", 22)}</div><a class="back" href="/">Inicio</a></div>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/">Inicio</a></div>
         <div class="content">
           <div class="eyebrow">Panel de dueño</div>
           <h1 class="titulo-pagina">Tus negocios</h1>
@@ -3473,7 +3473,7 @@ app.get("/cliente", (req, res) => {
       </head>
       <body>
         <div class="box">
-          <div class="logo">${logoSvg(MARCA.verdeOscuro, 28)}</div>
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 36)}</div>
           <div class="tabs">
             <div class="tab activo" id="tab-login" onclick="mostrar('login')">Iniciar sesión</div>
             <div class="tab" id="tab-registro" onclick="mostrar('registro')">Crear cuenta</div>
@@ -3642,7 +3642,7 @@ app.get("/cuenta", (req, res) => {
       </head>
       <body>
         <div class="topbar">
-          <div>${logoSvg("#FFFFFF", 22)}</div>
+          <div>${logoSvg("#FFFFFF", 30)}</div>
           <a class="back" href="/cliente/salir">Cerrar sesión</a>
         </div>
         <div class="content">
@@ -4008,7 +4008,7 @@ app.get("/admin", (req, res) => {
       </head>
       <body>
         <div class="box">
-          <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 34)}</div>
           <h1>Acceso de administrador</h1>
           ${error ? `<div class="error">Clave incorrecta.</div>` : ""}
           <form method="GET" action="/admin/entrar">
@@ -4456,7 +4456,7 @@ app.get("/suscripcion/:slug", (req, res) => {
       </head>
       <body>
         <div class="box">
-          <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 34)}</div>
           <h1>Suscripción Plan Pro — ${negocio.nombre}</h1>
           ${activa
             ? `<div class="estado">✅ Tarjeta registrada. Se cobra automáticamente $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP cada mes.</div>
