@@ -491,6 +491,19 @@ function barraSemana(dias7) {
     .join("");
 }
 
+// Gráfica de 24 barras (una por hora) para mostrar los picos de actividad del
+// día. Se usa en el panel del negocio junto a analizarHoras().
+function barraHoras(porHora, picoHora) {
+  const max = Math.max(1, ...porHora);
+  return porHora
+    .map((v, h) => {
+      const alturaPx = 4 + Math.round((v / max) * 64);
+      const color = h === picoHora && v > 0 ? MARCA.oro : MARCA.verde;
+      return `<div style="flex:1;height:${alturaPx}px;background:${color};border-radius:2px 2px 0 0;" title="${h}:00 — ${v} toques"></div>`;
+    })
+    .join("");
+}
+
 function registrarToque(slug, req, negocio) {
   const datos = leerDatos();
   if (!datos[slug]) {
@@ -2067,6 +2080,19 @@ app.get("/mi-panel/:slug", (req, res) => {
   const r = calcularResumen(eventos);
   const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
   const recomendaciones = generarRecomendaciones(eventos, r, negocio);
+  const horas = analizarHoras(eventos, negocio);
+
+  const testimonios = (datos[slug] && datos[slug].testimonios) || [];
+  const quejas = (datos[slug] && datos[slug].quejas) || [];
+  const totalCalificado = testimonios.length + quejas.length;
+  const pctPositivas = totalCalificado ? Math.round((testimonios.length / totalCalificado) * 100) : 0;
+  const pctNegativas = totalCalificado ? 100 - pctPositivas : 0;
+
+  const actividadReciente = eventos
+    .slice(-8)
+    .reverse()
+    .map((e) => `<tr><td>${e.fechaLegible}</td><td>${e.dispositivo}</td></tr>`)
+    .join("");
 
   const recomendacionesHtml = recomendaciones
     .map((texto) => `<div class="reco">💡 ${texto}</div>`)
@@ -2106,6 +2132,23 @@ app.get("/mi-panel/:slug", (req, res) => {
 
           .reco{background:${MARCA.verdeClaro};border-left:3px solid ${MARCA.verde};border-radius:8px;padding:14px 16px;
                 font-size:0.86rem;margin-bottom:10px;color:${MARCA.verdeOscuro};}
+
+          .horas-chart{display:flex;align-items:flex-end;gap:2px;height:70px;}
+          .horas-labels{display:flex;justify-content:space-between;font-size:0.62rem;color:${MARCA.textoSuave};margin-top:6px;}
+          .horas-nota{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};margin-top:14px;}
+          .horas-nota b{color:${MARCA.texto};}
+
+          .sentimiento-barra{display:flex;height:16px;border-radius:100px;overflow:hidden;background:${MARCA.borde};}
+          .sentimiento-leyenda{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:12px;font-size:0.8rem;color:${MARCA.textoSuave};}
+          .sentimiento-leyenda span{display:flex;align-items:center;gap:6px;}
+          .sentimiento-leyenda i{width:9px;height:9px;border-radius:50%;display:inline-block;}
+          .sentimiento-vacio{text-align:center;font-size:0.82rem;color:${MARCA.textoSuave};padding:8px 0;}
+
+          .tabla-actividad{width:100%;border-collapse:collapse;font-size:0.82rem;}
+          .tabla-actividad th{text-align:left;color:${MARCA.textoSuave};font-weight:600;font-size:0.7rem;
+                               text-transform:uppercase;letter-spacing:0.03em;padding:0 0 8px;border-bottom:1px solid ${MARCA.borde};}
+          .tabla-actividad td{padding:9px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.texto};}
+          .tabla-actividad tr:last-child td{border-bottom:none;}
         </style>
       </head>
       <body>
@@ -2131,6 +2174,55 @@ app.get("/mi-panel/:slug", (req, res) => {
               <div class="sparkline sparkline-grande">${barraSemana(r.dias7)}</div>
             </div>
             <div class="ultimo-toque">Último toque: <b>${ultimoTexto}</b></div>
+          </div>
+
+          <div class="seccion">
+            <div class="seccion-header">
+              <div class="eyebrow">Últimos 30 días</div>
+              <h2>Tus horas pico</h2>
+              <p>Cuándo te tocan más — para saber cuándo reforzar personal o pedir reseñas.</p>
+            </div>
+            <div class="chart-card">
+              <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
+              <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+              ${horas.totalMes > 0
+                ? `<div class="horas-nota">Tu hora pico es <b>${horas.picoHora}:00</b>, con <b>${horas.maxToques}</b> toques en el último mes.</div>`
+                : `<div class="horas-nota">Todavía no hay suficientes toques este mes para detectar un patrón.</div>`}
+            </div>
+          </div>
+
+          <div class="seccion">
+            <div class="seccion-header">
+              <div class="eyebrow">Reputación</div>
+              <h2>Cómo te calificaron</h2>
+              <p>De los clientes que sí calificaron con la tarjeta.</p>
+            </div>
+            <div class="chart-card">
+              ${totalCalificado > 0
+                ? `<div class="sentimiento-barra">
+                     <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
+                     <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
+                   </div>
+                   <div class="sentimiento-leyenda">
+                     <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
+                     <span><i style="background:${MARCA.rojo};"></i>Con queja privada: ${quejas.length} (${pctNegativas}%)</span>
+                   </div>`
+                : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
+            </div>
+          </div>
+
+          <div class="seccion">
+            <div class="seccion-header">
+              <div class="eyebrow">Detalle</div>
+              <h2>Actividad reciente</h2>
+              <p>Los últimos toques registrados en tu tarjeta.</p>
+            </div>
+            <div class="chart-card">
+              <table class="tabla-actividad">
+                <tr><th>Fecha y hora</th><th>Dispositivo</th></tr>
+                ${actividadReciente || `<tr><td colspan="2" style="text-align:center;color:${MARCA.textoSuave};">Sin toques todavía</td></tr>`}
+              </table>
+            </div>
           </div>
 
           <div class="seccion">
