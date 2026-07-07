@@ -3900,7 +3900,7 @@ app.get("/", (req, res) => {
           <div class="hero-izq">
             <div class="forma-organica"></div>
             <div class="forma-organica-2"></div>
-            <div class="logo-hero">${logoSvg("#FFFFFF", 92)}</div>
+            <div class="logo-hero">${logoSvg("#FFFFFF", 58)}</div>
             <p class="tagline">Descubre negocios locales.<br>Confía en lo que encuentras.</p>
 
             <div class="botones">
