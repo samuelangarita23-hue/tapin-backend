@@ -3637,7 +3637,7 @@ app.get("/conoce", (req, res) => {
                 <li><span class="check">✓</span> Alerta instantánea por correo ante retroalimentación negativa</li>
                 <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
                 <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
-                <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
+                <li><span class="check">✓</span> Reportes en CSV, PDF y Word — te los enviamos por correo cuando los necesites</li>
                 <li><span class="check">✓</span> Generador de contenido para redes sociales</li>
                 <li><span class="check">✓</span> Comparación contra el promedio de tu categoría</li>
               </ul>
