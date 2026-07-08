@@ -2192,22 +2192,28 @@ app.get("/mi-panel/:slug", (req, res) => {
 
           .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}
           @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
+          @media (max-width:480px){
+            .fila-herramientas{flex-direction:column;}
+            .btn-herramienta{min-width:0;}
+            .resumen-num{font-size:1.3rem;}
+            .content{padding:24px 18px 50px;}
+          }
 
           .card-titulo{font-size:0.78rem;font-weight:700;color:${MARCA.texto};margin-bottom:12px;
                        display:flex;align-items:center;justify-content:space-between;}
           .card-titulo span.suave{font-weight:400;color:${MARCA.textoSuave};font-size:0.72rem;}
 
-          .resumen-grid{display:flex;gap:12px;flex-wrap:wrap;}
-          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px 14px;text-align:center;
-                       box-shadow:0 1px 2px rgba(11,61,44,0.04);flex:1;min-width:100px;}
-          .resumen-num{font-size:1.6rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
-          .resumen-lbl{font-size:0.68rem;color:${MARCA.textoSuave};margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
+          .resumen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:14px 8px;text-align:center;
+                       box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .resumen-num{font-size:1.5rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
+          .resumen-lbl{font-size:0.64rem;color:${MARCA.textoSuave};margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.02em;}
 
           .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px 18px;margin-top:12px;
                       box-shadow:0 1px 2px rgba(11,61,44,0.04);height:100%;box-sizing:border-box;}
           .chart-card-titulo{font-size:0.78rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:12px;text-align:center;}
           .sparkline{display:flex;align-items:flex-end;gap:5px;}
-          .sparkline-grande{height:90px;}
+          .sparkline-grande{height:70px;}
 
           .ultimo-toque{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};margin-top:10px;}
           .ultimo-toque b{color:${MARCA.texto};}
@@ -2276,31 +2282,21 @@ app.get("/mi-panel/:slug", (req, res) => {
               <div class="sparkline sparkline-grande">${barraSemana(r.dias7)}</div>
             </div>
             <div class="ultimo-toque">Último toque: <b>${ultimoTexto}</b></div>
-
-            ${esPro(negocio) ? `
-            <a href="/export/${slug}.pdf?key=${req.query.key}" class="btn-reporte-pdf">
-              <div>
-                <b>Descargar reporte PDF</b>
-                <span>Este mismo análisis también te llega por correo automáticamente cada mes</span>
-              </div>
-              <div class="flecha">↓</div>
-            </a>
-            ` : ""}
           </div>
 
           ${esPro(negocio) ? `
-          <div class="seccion grid-2">
-            <div>
-              <div class="card-titulo">Tus horas pico <span class="suave">últimos 30 días</span></div>
-              <div class="chart-card" style="margin-top:0;">
-                <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
-                <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
-                ${horas.totalMes > 0
-                  ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques} toques)</div>`
-                  : `<div class="horas-nota">Todavía no hay suficientes toques este mes.</div>`}
-              </div>
+          <div class="seccion">
+            <div class="card-titulo">Tus horas pico <span class="suave">últimos 30 días</span></div>
+            <div class="chart-card" style="margin-top:0;">
+              <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
+              <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+              ${horas.totalMes > 0
+                ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques} toques)</div>`
+                : `<div class="horas-nota">Todavía no hay suficientes toques este mes.</div>`}
             </div>
+          </div>
 
+          <div class="seccion grid-2">
             <div>
               <div class="card-titulo">Cómo te calificaron</div>
               <div class="chart-card" style="margin-top:0;">
@@ -2314,18 +2310,6 @@ app.get("/mi-panel/:slug", (req, res) => {
                        <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
                      </div>`
                   : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
-              </div>
-            </div>
-          </div>
-
-          <div class="seccion grid-2">
-            <div>
-              <div class="card-titulo">Actividad reciente</div>
-              <div class="chart-card" style="margin-top:0;">
-                <table class="tabla-actividad">
-                  <tr><th>Fecha</th><th>Dispositivo</th></tr>
-                  ${actividadReciente || `<tr><td colspan="2" style="text-align:center;color:${MARCA.textoSuave};">Sin toques todavía</td></tr>`}
-                </table>
               </div>
             </div>
 
@@ -2361,6 +2345,16 @@ app.get("/mi-panel/:slug", (req, res) => {
               </div>
             </div>
             ` : `<div></div>`}
+          </div>
+
+          <div class="seccion">
+            <div class="card-titulo">Actividad reciente</div>
+            <div class="chart-card" style="margin-top:0;">
+              <table class="tabla-actividad">
+                <tr><th>Fecha</th><th>Dispositivo</th></tr>
+                ${actividadReciente || `<tr><td colspan="2" style="text-align:center;color:${MARCA.textoSuave};">Sin toques todavía</td></tr>`}
+              </table>
+            </div>
           </div>
 
           <div class="seccion">
