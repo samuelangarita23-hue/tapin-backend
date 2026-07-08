@@ -1493,6 +1493,10 @@ app.get("/activar/:codigo", (req, res) => {
               <label>Email del negocio (alertas y reportes llegan aquí)</label>
               <input type="email" name="email" required placeholder="dueno@negocio.com">
 
+              <label>Crea la clave de acceso a tu panel</label>
+              <input type="text" name="claveAcceso" required minlength="6"
+                     placeholder="Mínimo 6 caracteres — la vas a necesitar para entrar a tu panel">
+
               <label>Dirección del negocio</label>
               <div class="direccion-wrap">
                 <input type="text" id="input-direccion" name="direccion" autocomplete="off"
@@ -1634,9 +1638,13 @@ app.post("/activar/:codigo", (req, res) => {
   if (!entrada) return res.status(404).send("Código no válido.");
   if (entrada.activado) return res.status(400).send("Esta tarjeta ya fue activada antes.");
 
-  const { nombre, googleUrl, categoria, pais, email, plan, direccion, lat, lng, ciudad } = req.body;
+  const { nombre, googleUrl, categoria, pais, email, plan, direccion, lat, lng, ciudad, claveAcceso } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
+  }
+  const claveLimpia = (claveAcceso || "").trim();
+  if (claveLimpia.length < 6) {
+    return res.status(400).send("La clave de acceso debe tener al menos 6 caracteres. Regresa e inténtalo de nuevo.");
   }
 
   entrada.activado = true;
@@ -1646,7 +1654,7 @@ app.post("/activar/:codigo", (req, res) => {
     googleUrl,
     categoria: categoria || "otro",
     pais: pais || "colombia",
-    claveAcceso: `${codigo.toLowerCase()}-panel`,
+    claveAcceso: claveLimpia,
     email: email || "",
     plan: plan === "pro" ? "pro" : "basico",
     direccion: direccion || "",
@@ -2190,6 +2198,17 @@ app.get("/mi-panel/:slug", (req, res) => {
   const totalCalificado = testimonios.length + quejas.length;
   const pctPositivas = totalCalificado ? Math.round((testimonios.length / totalCalificado) * 100) : 0;
   const pctNegativas = totalCalificado ? 100 - pctPositivas : 0;
+  const quejasResueltas = quejas.filter((q) => q.estado === "resuelto").length;
+  const tasaRecuperacion = quejas.length ? Math.round((quejasResueltas / quejas.length) * 100) : null;
+
+  // Si el mismo correo tiene otras tarjetas activadas, se las mostramos aquí
+  // para que un negocio con varias sedes no tenga que ir sede por sede.
+  const todosNegocios = todosLosNegocios();
+  const otrasSedes = negocio.email
+    ? Object.keys(todosNegocios).filter(
+        (s) => s !== slug && (todosNegocios[s].email || "").trim().toLowerCase() === negocio.email.trim().toLowerCase()
+      )
+    : [];
 
   const actividadReciente = eventos
     .slice(-8)
@@ -2300,6 +2319,10 @@ app.get("/mi-panel/:slug", (req, res) => {
                 ${esPro(negocio) ? "Plan Pro" : "Plan Básico"}
               </span>
             </div>
+            <div style="margin-top:12px;display:flex;gap:14px;justify-content:center;font-size:0.78rem;">
+              <a href="/mi-panel/${slug}/editar?key=${req.query.key}" style="color:${MARCA.textoSuave};">Editar mi negocio</a>
+              <a href="/mi-panel/${slug}/clave?key=${req.query.key}" style="color:${MARCA.textoSuave};">Cambiar mi clave</a>
+            </div>
           </div>
 
           <div class="seccion">
@@ -2314,6 +2337,43 @@ app.get("/mi-panel/:slug", (req, res) => {
             </div>
             <div class="ultimo-toque">Último toque: <b>${ultimoTexto}</b></div>
           </div>
+
+          ${r.total === 0 ? `
+          <div class="seccion">
+            <div class="card-titulo">Primeros pasos</div>
+            <div class="chart-card" style="margin-top:0;">
+              <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;margin-bottom:8px;">
+                Comparte el link de tu tarjeta con tus primeros clientes: <b>${req.protocol}://${req.get("host")}/r/${slug}</b>
+              </div>
+              <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;margin-bottom:8px;">
+                Verifica que tu <a href="/mi-panel/${slug}/editar?key=${req.query.key}" style="color:#7A5A00;">enlace de reseñas de Google</a> sea el correcto antes del primer toque.
+              </div>
+              <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
+                Invita a un cliente frecuente a dejar tu primera reseña — así pruebas que todo el flujo funciona.
+              </div>
+            </div>
+          </div>
+          ` : ""}
+
+          ${otrasSedes.length > 0 ? `
+          <div class="seccion">
+            <div class="card-titulo">Tus otras sedes <span class="suave">${otrasSedes.length + 1} en total</span></div>
+            <div class="chart-card" style="margin-top:0;padding:8px;">
+              ${otrasSedes
+                .map((s) => {
+                  const otroNegocio = todosNegocios[s];
+                  const rOtro = calcularResumen((datos[s] && datos[s].eventos) || []);
+                  return `<a href="/mi-panel/${s}?key=${otroNegocio.claveAcceso || ""}"
+                             style="display:flex;justify-content:space-between;align-items:center;text-decoration:none;
+                                    color:${MARCA.texto};padding:10px 10px;border-radius:8px;">
+                            <span style="font-size:0.85rem;font-weight:600;">${otroNegocio.nombre}</span>
+                            <span style="font-size:0.76rem;color:${MARCA.textoSuave};">${rOtro.total} toques →</span>
+                          </a>`;
+                })
+                .join("")}
+            </div>
+          </div>
+          ` : ""}
 
           ${esPro(negocio) ? `
           <div class="seccion">
@@ -2339,7 +2399,8 @@ app.get("/mi-panel/:slug", (req, res) => {
                      <div class="sentimiento-leyenda">
                        <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
                        <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-                     </div>`
+                     </div>
+                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
                   : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
               </div>
             </div>
@@ -2418,6 +2479,19 @@ app.get("/mi-panel/:slug", (req, res) => {
               <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
               <div class="horas-nota">Tus horas pico — bloqueado en el plan Básico.</div>
             </div>
+            <div class="chart-card" style="opacity:0.55;filter:grayscale(0.4);pointer-events:none;margin-top:10px;">
+              ${totalCalificado > 0
+                ? `<div class="sentimiento-barra">
+                     <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
+                     <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
+                   </div>
+                   <div class="sentimiento-leyenda">
+                     <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
+                     <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
+                   </div>`
+                : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
+              <div class="horas-nota">Cómo te calificaron — bloqueado en el plan Básico.</div>
+            </div>
             <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
               Con <b>Plan Pro</b> ($${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes) obtienes:
               <ul style="margin:8px 0 0;padding-left:18px;">
@@ -2442,6 +2516,177 @@ app.get("/mi-panel/:slug", (req, res) => {
           </div>
           `}
 
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// ---------- Autogestión del negocio (sin necesitar al admin) ----------
+
+// El negocio edita sus propios datos básicos (no el plan ni el código —
+// eso lo sigue controlando Tapin desde /editar).
+app.get("/mi-panel/:slug/editar", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Editar negocio — ${negocio.nombre}</title>
+        <style>
+          ${ESTILO_BASE}
+          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:480px;
+                     box-shadow:0 8px 24px rgba(11,61,44,0.06);}
+          label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin:14px 0 6px;}
+          label:first-of-type{margin-top:0;}
+          input,select{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;font-family:inherit;box-sizing:border-box;}
+          button{margin-top:22px;width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;
+                 padding:13px;font-size:0.95rem;font-weight:700;cursor:pointer;}
+          .volver{display:inline-block;margin-top:14px;font-size:0.82rem;color:${MARCA.textoSuave};}
+        </style>
+      </head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
+        <div class="content">
+          <div class="eyebrow">Tu negocio</div>
+          <h1 class="titulo-pagina">Editar información</h1>
+          <div class="form-card">
+            <form method="POST" action="/mi-panel/${slug}/editar?key=${req.query.key}">
+              <label>Nombre del negocio</label>
+              <input type="text" name="nombre" required value="${negocio.nombre || ""}">
+
+              <label>Enlace de reseñas de Google</label>
+              <input type="url" name="googleUrl" required value="${negocio.googleUrl || ""}">
+
+              <label>Email (alertas y reportes)</label>
+              <input type="email" name="email" required value="${negocio.email || ""}">
+
+              <label>Dirección</label>
+              <input type="text" name="direccion" value="${negocio.direccion || ""}">
+
+              <label>Ciudad</label>
+              <input type="text" name="ciudad" value="${negocio.ciudad || ""}">
+
+              <label>Categoría</label>
+              <select name="categoria">
+                ${["restaurante", "peluqueria", "tienda", "clinica", "otro"]
+                  .map((c) => `<option value="${c}" ${negocio.categoria === c ? "selected" : ""}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`)
+                  .join("")}
+              </select>
+
+              <button type="submit">Guardar cambios</button>
+            </form>
+          </div>
+          <a class="volver" href="/mi-panel/${slug}?key=${req.query.key}">&larr; Volver a mi panel</a>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.post("/mi-panel/:slug/editar", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  const { nombre, googleUrl, email, direccion, ciudad, categoria } = req.body;
+  if (!nombre || !googleUrl || !email) {
+    return res.status(400).send("Nombre, enlace de Google y correo son obligatorios.");
+  }
+  guardarCambiosNegocio(slug, negocio, { nombre, googleUrl, email, direccion, ciudad, categoria });
+  res.redirect(`/mi-panel/${slug}?key=${req.query.key}`);
+});
+
+// El negocio cambia su propia clave de acceso (por si la olvidan, la
+// comparten de más, o simplemente quieren una nueva). Pide la clave actual
+// para poder cambiarla — como cualquier cambio de contraseña normal.
+app.get("/mi-panel/:slug/clave", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Cambiar clave — ${negocio.nombre}</title>
+        <style>
+          ${ESTILO_BASE}
+          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:420px;
+                     box-shadow:0 8px 24px rgba(11,61,44,0.06);}
+          label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin:14px 0 6px;}
+          label:first-of-type{margin-top:0;}
+          input{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;font-family:inherit;box-sizing:border-box;}
+          button{margin-top:22px;width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;
+                 padding:13px;font-size:0.95rem;font-weight:700;cursor:pointer;}
+          .volver{display:inline-block;margin-top:14px;font-size:0.82rem;color:${MARCA.textoSuave};}
+        </style>
+      </head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
+        <div class="content">
+          <div class="eyebrow">Seguridad</div>
+          <h1 class="titulo-pagina">Cambiar mi clave de acceso</h1>
+          <div class="form-card">
+            <form method="POST" action="/mi-panel/${slug}/clave?key=${req.query.key}">
+              <label>Nueva clave (mínimo 6 caracteres)</label>
+              <input type="text" name="claveNueva" required minlength="6">
+              <button type="submit">Guardar nueva clave</button>
+            </form>
+          </div>
+          <p style="font-size:0.78rem;color:${MARCA.textoSuave};max-width:420px;">
+            Ojo: en cuanto la cambies, el link que tenías guardado con la clave vieja deja de funcionar —
+            guarda el nuevo link que te va a salir aquí mismo.
+          </p>
+          <a class="volver" href="/mi-panel/${slug}?key=${req.query.key}">&larr; Volver a mi panel</a>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.post("/mi-panel/:slug/clave", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  const claveNueva = (req.body.claveNueva || "").trim();
+  if (claveNueva.length < 6) {
+    return res.status(400).send("La clave debe tener al menos 6 caracteres.");
+  }
+  guardarCambiosNegocio(slug, negocio, { claveAcceso: claveNueva });
+
+  res.send(`
+    <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>${ESTILO_BASE}
+        .ok-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;}
+        .ok-card code{background:${MARCA.verdeClaro};padding:3px 8px;border-radius:6px;word-break:break-all;}
+      </style></head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
+        <div class="content">
+          <div class="eyebrow">Listo</div>
+          <h1 class="titulo-pagina">Clave actualizada</h1>
+          <div class="ok-card">
+            <p>Guarda este link — es el nuevo acceso a tu panel:</p>
+            <p><code>${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${claveNueva}</code></p>
+          </div>
         </div>
       </body>
     </html>
