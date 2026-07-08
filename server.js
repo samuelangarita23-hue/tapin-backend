@@ -2183,47 +2183,66 @@ app.get("/mi-panel/:slug", (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          .content{max-width:600px;}
-          .seccion{margin-bottom:40px;}
-          .seccion-header{text-align:center;margin-bottom:20px;}
+          .content{max-width:660px;}
+          .seccion{margin-bottom:26px;}
+          .seccion-header{text-align:center;margin-bottom:14px;}
           .seccion-header .eyebrow{justify-content:center;}
           .seccion-header h2{font-size:1.1rem;font-weight:700;margin:0 0 4px;}
           .seccion-header p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0;}
 
+          .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}
+          @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
+
+          .card-titulo{font-size:0.78rem;font-weight:700;color:${MARCA.texto};margin-bottom:12px;
+                       display:flex;align-items:center;justify-content:space-between;}
+          .card-titulo span.suave{font-weight:400;color:${MARCA.textoSuave};font-size:0.72rem;}
+
           .resumen-grid{display:flex;gap:12px;flex-wrap:wrap;}
-          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:20px 14px;text-align:center;
-                       box-shadow:0 1px 2px rgba(11,61,44,0.04);flex:1;min-width:120px;}
-          .resumen-num{font-size:1.8rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
-          .resumen-lbl{font-size:0.7rem;color:${MARCA.textoSuave};margin-top:6px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
+          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px 14px;text-align:center;
+                       box-shadow:0 1px 2px rgba(11,61,44,0.04);flex:1;min-width:100px;}
+          .resumen-num{font-size:1.6rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
+          .resumen-lbl{font-size:0.68rem;color:${MARCA.textoSuave};margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
 
-          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:20px 22px;margin-top:14px;
-                      box-shadow:0 1px 2px rgba(11,61,44,0.04);}
-          .chart-card-titulo{font-size:0.8rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:16px;text-align:center;}
+          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px 18px;margin-top:12px;
+                      box-shadow:0 1px 2px rgba(11,61,44,0.04);height:100%;box-sizing:border-box;}
+          .chart-card-titulo{font-size:0.78rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:12px;text-align:center;}
           .sparkline{display:flex;align-items:flex-end;gap:5px;}
-          .sparkline-grande{height:100px;}
+          .sparkline-grande{height:90px;}
 
-          .ultimo-toque{text-align:center;font-size:0.85rem;color:${MARCA.textoSuave};margin-top:14px;}
+          .ultimo-toque{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};margin-top:10px;}
           .ultimo-toque b{color:${MARCA.texto};}
 
-          .reco{background:${MARCA.verdeClaro};border-left:3px solid ${MARCA.verde};border-radius:8px;padding:14px 16px;
-                font-size:0.86rem;margin-bottom:10px;color:${MARCA.verdeOscuro};}
+          .reco{background:${MARCA.verdeClaro};border-left:3px solid ${MARCA.verde};border-radius:8px;padding:12px 14px;
+                font-size:0.83rem;margin-bottom:8px;color:${MARCA.verdeOscuro};}
 
-          .horas-chart{display:flex;align-items:flex-end;gap:2px;height:70px;}
-          .horas-labels{display:flex;justify-content:space-between;font-size:0.62rem;color:${MARCA.textoSuave};margin-top:6px;}
-          .horas-nota{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};margin-top:14px;}
+          .horas-chart{display:flex;align-items:flex-end;gap:2px;height:60px;}
+          .horas-labels{display:flex;justify-content:space-between;font-size:0.6rem;color:${MARCA.textoSuave};margin-top:6px;}
+          .horas-nota{text-align:center;font-size:0.76rem;color:${MARCA.textoSuave};margin-top:10px;}
           .horas-nota b{color:${MARCA.texto};}
 
-          .sentimiento-barra{display:flex;height:16px;border-radius:100px;overflow:hidden;background:${MARCA.borde};}
-          .sentimiento-leyenda{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:12px;font-size:0.8rem;color:${MARCA.textoSuave};}
+          .sentimiento-barra{display:flex;height:14px;border-radius:100px;overflow:hidden;background:${MARCA.borde};}
+          .sentimiento-leyenda{display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:0.78rem;color:${MARCA.textoSuave};}
           .sentimiento-leyenda span{display:flex;align-items:center;gap:6px;}
-          .sentimiento-leyenda i{width:9px;height:9px;border-radius:50%;display:inline-block;}
-          .sentimiento-vacio{text-align:center;font-size:0.82rem;color:${MARCA.textoSuave};padding:8px 0;}
+          .sentimiento-leyenda i{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
+          .sentimiento-vacio{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};padding:6px 0;}
 
-          .tabla-actividad{width:100%;border-collapse:collapse;font-size:0.82rem;}
-          .tabla-actividad th{text-align:left;color:${MARCA.textoSuave};font-weight:600;font-size:0.7rem;
-                               text-transform:uppercase;letter-spacing:0.03em;padding:0 0 8px;border-bottom:1px solid ${MARCA.borde};}
-          .tabla-actividad td{padding:9px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.texto};}
+          .tabla-actividad{width:100%;border-collapse:collapse;font-size:0.78rem;}
+          .tabla-actividad th{text-align:left;color:${MARCA.textoSuave};font-weight:600;font-size:0.66rem;
+                               text-transform:uppercase;letter-spacing:0.03em;padding:0 0 6px;border-bottom:1px solid ${MARCA.borde};}
+          .tabla-actividad td{padding:7px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.texto};}
           .tabla-actividad tr:last-child td{border-bottom:none;}
+
+          .fila-herramientas{display:flex;gap:10px;flex-wrap:wrap;}
+          .btn-herramienta{flex:1;min-width:140px;background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;
+                           padding:12px 14px;text-decoration:none;color:${MARCA.texto};font-size:0.82rem;font-weight:700;
+                           text-align:center;box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .btn-herramienta:hover{border-color:${MARCA.verde};}
+          .btn-reporte-pdf{display:flex;align-items:center;justify-content:space-between;gap:12px;
+                           background:${MARCA.verdeOscuro};color:#fff;border-radius:14px;padding:16px 20px;
+                           text-decoration:none;margin-top:12px;}
+          .btn-reporte-pdf b{font-size:0.92rem;}
+          .btn-reporte-pdf span{font-size:0.76rem;color:#CFE3D6;display:block;margin-top:2px;}
+          .btn-reporte-pdf .flecha{font-size:1.3rem;flex-shrink:0;}
         </style>
       </head>
       <body>
@@ -2257,126 +2276,107 @@ app.get("/mi-panel/:slug", (req, res) => {
               <div class="sparkline sparkline-grande">${barraSemana(r.dias7)}</div>
             </div>
             <div class="ultimo-toque">Último toque: <b>${ultimoTexto}</b></div>
+
+            ${esPro(negocio) ? `
+            <a href="/export/${slug}.pdf?key=${req.query.key}" class="btn-reporte-pdf">
+              <div>
+                <b>Descargar reporte PDF</b>
+                <span>Este mismo análisis también te llega por correo automáticamente cada mes</span>
+              </div>
+              <div class="flecha">↓</div>
+            </a>
+            ` : ""}
           </div>
 
           ${esPro(negocio) ? `
-          <div class="seccion">
-            <div class="seccion-header">
-              <div class="eyebrow">Últimos 30 días</div>
-              <h2>Tus horas pico</h2>
-              <p>Cuándo te tocan más — para saber cuándo reforzar personal o pedir reseñas.</p>
+          <div class="seccion grid-2">
+            <div>
+              <div class="card-titulo">Tus horas pico <span class="suave">últimos 30 días</span></div>
+              <div class="chart-card" style="margin-top:0;">
+                <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
+                <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+                ${horas.totalMes > 0
+                  ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques} toques)</div>`
+                  : `<div class="horas-nota">Todavía no hay suficientes toques este mes.</div>`}
+              </div>
             </div>
-            <div class="chart-card">
-              <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
-              <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
-              ${horas.totalMes > 0
-                ? `<div class="horas-nota">Tu hora pico es <b>${horas.picoHora}:00</b>, con <b>${horas.maxToques}</b> toques en el último mes.</div>`
-                : `<div class="horas-nota">Todavía no hay suficientes toques este mes para detectar un patrón.</div>`}
+
+            <div>
+              <div class="card-titulo">Cómo te calificaron</div>
+              <div class="chart-card" style="margin-top:0;">
+                ${totalCalificado > 0
+                  ? `<div class="sentimiento-barra">
+                       <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
+                       <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
+                     </div>
+                     <div class="sentimiento-leyenda">
+                       <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
+                       <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
+                     </div>`
+                  : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
+              </div>
             </div>
           </div>
 
-          <div class="seccion">
-            <div class="seccion-header">
-              <div class="eyebrow">Reputación</div>
-              <h2>Cómo te calificaron</h2>
-              <p>De los clientes que sí calificaron con la tarjeta.</p>
+          <div class="seccion grid-2">
+            <div>
+              <div class="card-titulo">Actividad reciente</div>
+              <div class="chart-card" style="margin-top:0;">
+                <table class="tabla-actividad">
+                  <tr><th>Fecha</th><th>Dispositivo</th></tr>
+                  ${actividadReciente || `<tr><td colspan="2" style="text-align:center;color:${MARCA.textoSuave};">Sin toques todavía</td></tr>`}
+                </table>
+              </div>
             </div>
-            <div class="chart-card">
-              ${totalCalificado > 0
-                ? `<div class="sentimiento-barra">
-                     <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
-                     <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
-                   </div>
-                   <div class="sentimiento-leyenda">
-                     <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                     <span><i style="background:${MARCA.rojo};"></i>Con queja privada: ${quejas.length} (${pctNegativas}%)</span>
-                   </div>`
-                : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
-            </div>
-          </div>
 
-          <div class="seccion">
-            <div class="seccion-header">
-              <div class="eyebrow">Detalle</div>
-              <h2>Actividad reciente</h2>
-              <p>Los últimos toques registrados en tu tarjeta.</p>
-            </div>
-            <div class="chart-card">
-              <table class="tabla-actividad">
-                <tr><th>Fecha y hora</th><th>Dispositivo</th></tr>
-                ${actividadReciente || `<tr><td colspan="2" style="text-align:center;color:${MARCA.textoSuave};">Sin toques todavía</td></tr>`}
-              </table>
-            </div>
-          </div>
-
-          ${promSector !== null ? `
-          <div class="seccion">
-            <div class="seccion-header">
-              <div class="eyebrow">Comparativo</div>
-              <h2>Tú vs. tu sector</h2>
-              <p>Toques de esta semana, comparado con negocios de tu misma categoría.</p>
-            </div>
-            <div class="chart-card">
-              <div style="display:flex;flex-direction:column;gap:14px;">
-                <div>
-                  <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;">
-                    <span>Tú</span><b>${r.semana}</b>
+            ${promSector !== null ? `
+            <div>
+              <div class="card-titulo">Tú vs. tu sector</div>
+              <div class="chart-card" style="margin-top:0;">
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:4px;">
+                      <span>Tú</span><b>${r.semana}</b>
+                    </div>
+                    <div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                      <div style="height:100%;border-radius:100px;background:${MARCA.verde};
+                                  width:${Math.min(100, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
+                    </div>
                   </div>
-                  <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
-                    <div style="height:100%;border-radius:100px;background:${MARCA.verde};
-                                width:${Math.min(100, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:4px;color:${MARCA.textoSuave};">
+                      <span>Sector</span><b>${promSector}</b>
+                    </div>
+                    <div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                      <div style="height:100%;border-radius:100px;background:${MARCA.oro};
+                                  width:${Math.min(100, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;color:${MARCA.textoSuave};">
-                    <span>Promedio del sector</span><b>${promSector}</b>
-                  </div>
-                  <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
-                    <div style="height:100%;border-radius:100px;background:${MARCA.oro};
-                                width:${Math.min(100, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
-                  </div>
+                <div class="horas-nota">
+                  ${r.semana >= promSector
+                    ? `Vas por encima del promedio de tu sector.`
+                    : `${promSector - r.semana} toques por debajo del promedio de tu sector.`}
                 </div>
               </div>
-              <div class="horas-nota">
-                ${r.semana >= promSector
-                  ? `Vas <b>${r.semana - promSector >= 0 ? "por encima" : "igual"}</b> del promedio de tu sector esta semana.`
-                  : `Estás <b>${promSector - r.semana}</b> toques por debajo del promedio de tu sector esta semana.`}
-              </div>
             </div>
+            ` : `<div></div>`}
           </div>
-          ` : ""}
 
           <div class="seccion">
-            <div class="seccion-header">
-              <div class="eyebrow">Herramientas Pro</div>
-              <h2>Más de tu plan</h2>
-              <p>Accesos directos a todo lo que incluye tu suscripción.</p>
+            <div class="card-titulo">Más de tu plan Pro</div>
+            <div class="reco" style="border-left-color:${MARCA.verde};">
+              <b>Alertas instantáneas activas</b> — te llega un correo a <b>${negocio.email || "tu correo"}</b> apenas alguien deja una queja privada.
             </div>
-            <div style="display:flex;flex-direction:column;gap:10px;">
-              <div class="reco" style="border-left-color:${MARCA.verde};">
-                <b>Alertas instantáneas activas</b> — te llega un correo a <b>${negocio.email || "tu correo"}</b> apenas alguien deja una queja privada.
-              </div>
-              <a href="/quejas/${slug}?key=${req.query.key}" class="chart-card" style="display:block;text-decoration:none;color:${MARCA.texto};">
-                <b>Retroalimentación privada</b>
-                <div style="font-size:0.8rem;color:${MARCA.textoSuave};margin-top:4px;">Quejas recibidas y su estado de seguimiento</div>
-              </a>
-              <a href="/contenido/${slug}?key=${req.query.key}" class="chart-card" style="display:block;text-decoration:none;color:${MARCA.texto};">
-                <b>Generador de contenido</b>
-                <div style="font-size:0.8rem;color:${MARCA.textoSuave};margin-top:4px;">Tarjetas listas para publicar con tus mejores reseñas</div>
-              </a>
-              <a href="/export/${slug}.pdf?key=${req.query.key}" class="chart-card" style="display:block;text-decoration:none;color:${MARCA.texto};">
-                <b>Exportar reporte</b>
-                <div style="font-size:0.8rem;color:${MARCA.textoSuave};margin-top:4px;">Descarga en PDF — también disponible en Word y CSV cambiando la extensión</div>
-              </a>
+            <div class="fila-herramientas">
+              <a href="/quejas/${slug}?key=${req.query.key}" class="btn-herramienta">Retroalimentación privada</a>
+              <a href="/contenido/${slug}?key=${req.query.key}" class="btn-herramienta">Generador de contenido</a>
+              <a href="/export/${slug}.csv?key=${req.query.key}" class="btn-herramienta">Exportar CSV / Word</a>
             </div>
           </div>
 
           <div class="seccion">
-            <div class="seccion-header">
-              <div class="eyebrow">Para ti</div>
-              <h2>Recomendaciones</h2>
-              <p>Generadas automáticamente a partir de tu propia actividad.</p>
-            </div>
+            <div class="card-titulo">Recomendaciones para ti</div>
             ${recomendacionesHtml}
           </div>
           ` : `
@@ -4107,6 +4107,44 @@ app.get("/", (req, res) => {
             </div>
 
             <a class="admin-link" href="/pedido" style="margin-top:28px;">¿Todavía no tienes tarjeta? Pídela aquí →</a>
+
+            <div class="franja-features">
+              <div class="feature">
+                <div class="feature-icono">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6-4.6-4.1 6.1-.6L12 3z" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div>
+                  <div class="feature-titulo">Favoritos</div>
+                  <div class="feature-desc">Guarda los lugares que te gustan</div>
+                </div>
+              </div>
+              <div class="feature">
+                <div class="feature-icono">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="8.5" stroke="#fff" stroke-width="1.5"/>
+                    <path d="M12 7.5V12l3 2" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div>
+                  <div class="feature-titulo">Historial de reseñas</div>
+                  <div class="feature-desc">Todas tus calificaciones en un solo lugar</div>
+                </div>
+              </div>
+              <div class="feature">
+                <div class="feature-icono">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 16l5-5 3 3 6-7" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M14 7h4v4" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div>
+                  <div class="feature-titulo">Estadísticas del negocio</div>
+                  <div class="feature-desc">Sigue tu reputación y crecimiento</div>
+                </div>
+              </div>
+            </div>
 
             <a class="admin-link" href="/admin">Entrar como administrador</a>
           </div>
