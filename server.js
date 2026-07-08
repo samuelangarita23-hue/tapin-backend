@@ -747,7 +747,7 @@ app.get("/r/:slug", (req, res) => {
   if (!negocio) {
     const codigos = leerCodigos();
     if (codigos[slug] && !codigos[slug].activado) {
-      return res.redirect(302, `/activar/${slug}`);
+      return res.redirect(302, `/mis-negocios?codigo=${slug}`);
     }
     return res.status(404).send("Negocio no encontrado. Revisa el enlace del QR/NFC.");
   }
@@ -3476,6 +3476,23 @@ app.get("/descubre", (req, res) => {
 // ---------- Dashboard de dueños: login mágico por correo, sin contraseña ----------
 // Un dueño puede tener varios locales (varios slugs) — se agrupan por email.
 app.get("/mis-negocios", (req, res) => {
+  const codigo = (req.query.codigo || "").trim().toUpperCase();
+  const codigos = leerCodigos();
+  const esTarjetaNueva = codigo && codigos[codigo] && !codigos[codigo].activado;
+
+  const bloqueActivar = `
+    <form class="form-codigo" method="POST" action="/mis-negocios/ir-a-codigo">
+      <input type="text" name="codigo" required placeholder="Código de activación de tu tarjeta"
+             style="text-transform:uppercase;" value="${esTarjetaNueva ? codigo : ""}">
+      <button type="submit">Activar tarjeta nueva</button>
+    </form>`;
+
+  const bloqueLogin = `
+    <form method="POST" action="/mis-negocios/solicitar">
+      <input type="email" name="email" required placeholder="tu@negocio.com">
+      <button type="submit">Enviarme el acceso</button>
+    </form>`;
+
   res.send(`
     <html>
       <head>
@@ -3497,24 +3514,28 @@ app.get("/mis-negocios", (req, res) => {
           .divisor{display:flex;align-items:center;gap:10px;margin:22px 0;color:${MARCA.textoSuave};font-size:0.76rem;}
           .divisor::before,.divisor::after{content:"";flex:1;height:1px;background:${MARCA.borde};}
           .form-codigo button{background:${MARCA.oro};}
+          .banner-nueva{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};border-radius:10px;
+                        padding:10px 14px;font-size:0.8rem;font-weight:600;margin-bottom:20px;}
         </style>
       </head>
       <body>
         <div class="box">
           <div class="logo">${logoSvg(MARCA.verdeOscuro, 38)}</div>
-          <h1>Panel de tu negocio</h1>
-          <p>Escribe el correo con el que registraste tu(s) tarjeta(s) Tapin. Te mandamos un link de acceso, sin contraseña que recordar.</p>
-          <form method="POST" action="/mis-negocios/solicitar">
-            <input type="email" name="email" required placeholder="tu@negocio.com">
-            <button type="submit">Enviarme el acceso</button>
-          </form>
-
-          <div class="divisor">¿Es tu primera tarjeta?</div>
-
-          <form class="form-codigo" method="POST" action="/mis-negocios/ir-a-codigo">
-            <input type="text" name="codigo" required placeholder="Código de activación de tu tarjeta" style="text-transform:uppercase;">
-            <button type="submit">Activar tarjeta nueva</button>
-          </form>
+          ${esTarjetaNueva ? `
+            <div class="banner-nueva">Detectamos tu tarjeta Tapin nueva — actívala abajo.</div>
+            <h1>Activa tu tarjeta</h1>
+            <p>Completa los datos de tu negocio para dejarla lista para usar.</p>
+            ${bloqueActivar}
+            <div class="divisor">¿Ya tienes cuenta con otra tarjeta?</div>
+            <p style="margin:0 0 14px;">Inicia sesión con el correo que usaste antes:</p>
+            ${bloqueLogin}
+          ` : `
+            <h1>Panel de tu negocio</h1>
+            <p>Escribe el correo con el que registraste tu(s) tarjeta(s) Tapin. Te mandamos un link de acceso, sin contraseña que recordar.</p>
+            ${bloqueLogin}
+            <div class="divisor">¿Es tu primera tarjeta?</div>
+            ${bloqueActivar}
+          `}
         </div>
       </body>
     </html>
