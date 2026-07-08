@@ -1359,6 +1359,10 @@ app.get("/codigos", (req, res) => {
               <label>¿Cuántos códigos nuevos quieres generar?</label>
               <input type="number" name="cantidad" value="10" min="1" max="200">
               <button type="submit">Generar códigos</button>
+              <div style="margin-top:16px;padding-top:16px;border-top:1px solid ${MARCA.borde};">
+                <label>Correo del negocio (opcional — si lo pones, le mandamos los códigos nuevos por correo)</label>
+                <input type="email" name="email" placeholder="dueno@negocio.com" style="width:100%;box-sizing:border-box;">
+              </div>
             </form>
           </div>
 
@@ -1372,13 +1376,17 @@ app.get("/codigos", (req, res) => {
   `);
 });
 
-// Genera N códigos nuevos y los guarda.
-app.post("/codigos/generar", (req, res) => {
+// Genera N códigos nuevos y los guarda. Si viene un correo, se los manda de una
+// vez — un código en el correo si generaste 1, o todos los que hayan sido
+// necesarios si generaste varios (ej: un negocio con varias sedes).
+app.post("/codigos/generar", async (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
   const cantidad = Math.min(200, Math.max(1, parseInt(req.body.cantidad, 10) || 1));
+  const email = (req.body.email || "").trim().toLowerCase();
   const codigos = leerCodigos();
+  const nuevos = [];
 
   for (let i = 0; i < cantidad; i++) {
     let nuevo;
@@ -1386,9 +1394,31 @@ app.post("/codigos/generar", (req, res) => {
       nuevo = generarCodigo();
     } while (codigos[nuevo]); // evita colisiones, aunque son muy improbables
     codigos[nuevo] = { activado: false, creado: new Date().toISOString() };
+    nuevos.push(nuevo);
   }
 
   guardarCodigos(codigos);
+
+  if (email && nuevos.length > 0) {
+    const base = `${req.protocol}://${req.get("host")}`;
+    const filas = nuevos
+      .map((c) => `<li style="margin-bottom:8px;">
+          <b style="letter-spacing:0.05em;">${c}</b> —
+          <a href="${base}/activar/${c}">Activar esta tarjeta</a>
+        </li>`)
+      .join("");
+    await enviarEmail(
+      email,
+      nuevos.length === 1 ? "Tu código de activación Tapin" : `Tus ${nuevos.length} códigos de activación Tapin`,
+      `<div style="font-family:-apple-system,Arial,sans-serif;max-width:460px;">
+         <h2 style="color:${MARCA.verdeOscuro};">¡Ya casi! Activa tu${nuevos.length > 1 ? "s" : ""} tarjeta${nuevos.length > 1 ? "s" : ""} Tapin</h2>
+         <p>Toca el enlace de cada tarjeta para configurarla con los datos de tu negocio (una por cada local, si tienes varios).</p>
+         <ul style="padding-left:18px;">${filas}</ul>
+         <p style="font-size:0.8rem;color:#888;">Si ya activaste una tarjeta antes, usa el mismo correo al activar las demás para verlas todas juntas en <a href="${base}/mis-negocios">tu panel</a>.</p>
+       </div>`
+    ).catch((err) => console.error("[codigos] Error enviando correo:", err.message));
+  }
+
   res.redirect(`/codigos?key=${req.query.key}`);
 });
 
@@ -2363,10 +2393,12 @@ app.get("/mi-panel/:slug", (req, res) => {
             <div class="reco" style="border-left-color:${MARCA.verde};">
               <b>Alertas instantáneas activas</b> — te llega un correo a <b>${negocio.email || "tu correo"}</b> apenas alguien deja una queja privada.
             </div>
+            <div class="reco" style="border-left-color:${MARCA.verde};">
+              <b>Reporte PDF mensual</b> — a fin de mes te llega por correo el análisis completo de tu negocio, automáticamente.
+            </div>
             <div class="fila-herramientas">
               <a href="/quejas/${slug}?key=${req.query.key}" class="btn-herramienta">Retroalimentación privada</a>
               <a href="/contenido/${slug}?key=${req.query.key}" class="btn-herramienta">Generador de contenido</a>
-              <a href="/export/${slug}.csv?key=${req.query.key}" class="btn-herramienta">Exportar CSV / Word</a>
             </div>
           </div>
 
@@ -2393,7 +2425,7 @@ app.get("/mi-panel/:slug", (req, res) => {
                 <li>Desglose de reputación: positivas vs. quejas privadas</li>
                 <li>Tabla de actividad reciente con cada toque</li>
                 <li>Recomendaciones automáticas para tu negocio</li>
-                <li>Alertas instantáneas de quejas, exportes e historial detallado</li>
+                <li>Alertas instantáneas de quejas y reporte PDF mensual por correo</li>
                 <li>Generador de contenido para redes y comparación con tu sector</li>
               </ul>
             </div>
@@ -3462,6 +3494,9 @@ app.get("/mis-negocios", (req, res) => {
                 margin-bottom:14px;font-family:inherit;}
           button{width:100%;background:${MARCA.verde};color:#fff;border:none;padding:14px;border-radius:10px;
                  font-weight:700;font-size:0.95rem;cursor:pointer;}
+          .divisor{display:flex;align-items:center;gap:10px;margin:22px 0;color:${MARCA.textoSuave};font-size:0.76rem;}
+          .divisor::before,.divisor::after{content:"";flex:1;height:1px;background:${MARCA.borde};}
+          .form-codigo button{background:${MARCA.oro};}
         </style>
       </head>
       <body>
@@ -3473,10 +3508,31 @@ app.get("/mis-negocios", (req, res) => {
             <input type="email" name="email" required placeholder="tu@negocio.com">
             <button type="submit">Enviarme el acceso</button>
           </form>
+
+          <div class="divisor">¿Es tu primera tarjeta?</div>
+
+          <form class="form-codigo" method="POST" action="/mis-negocios/ir-a-codigo">
+            <input type="text" name="codigo" required placeholder="Código de activación de tu tarjeta" style="text-transform:uppercase;">
+            <button type="submit">Activar tarjeta nueva</button>
+          </form>
         </div>
       </body>
     </html>
   `);
+});
+
+// Valida el código antes de mandarlo a /activar/:codigo, para dar un mensaje
+// claro si lo escribieron mal en vez de un 404 genérico.
+app.post("/mis-negocios/ir-a-codigo", (req, res) => {
+  const codigo = (req.body.codigo || "").trim().toUpperCase();
+  const codigos = leerCodigos();
+  if (!codigo || !codigos[codigo]) {
+    return res.status(404).send(
+      `<p style="font-family:sans-serif;padding:40px;">Ese código no existe o está mal escrito. ` +
+      `<a href="/mis-negocios">Volver a intentar</a></p>`
+    );
+  }
+  res.redirect(`/activar/${codigo}`);
 });
 
 app.post("/mis-negocios/solicitar", async (req, res) => {
