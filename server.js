@@ -2362,13 +2362,42 @@ app.get("/mi-panel/:slug", (req, res) => {
                 ${esPro(negocio) ? "Plan Pro" : "Plan Básico"}
               </span>
             </div>
-            <div style="margin-top:12px;display:flex;gap:14px;justify-content:center;font-size:0.78rem;">
-              <a href="/mi-panel/${slug}/editar?key=${req.query.key}" style="color:${MARCA.textoSuave};">Editar mi negocio</a>
-              <a href="/mi-panel/${slug}/clave?key=${req.query.key}" style="color:${MARCA.textoSuave};">Cambiar mi clave</a>
+            <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;">
+              <a href="/mi-panel/${slug}/editar?key=${req.query.key}"
+                 style="font-size:0.76rem;font-weight:600;color:${MARCA.texto};background:#fff;
+                        border:1px solid ${MARCA.borde};border-radius:100px;padding:7px 14px;text-decoration:none;">
+                Editar mi negocio
+              </a>
+              <a href="/mi-panel/${slug}/clave?key=${req.query.key}"
+                 style="font-size:0.76rem;font-weight:600;color:${MARCA.texto};background:#fff;
+                        border:1px solid ${MARCA.borde};border-radius:100px;padding:7px 14px;text-decoration:none;">
+                Cambiar mi clave
+              </a>
             </div>
           </div>
 
+          ${otrasSedes.length > 0 ? `
           <div class="seccion">
+            <div class="card-titulo">Tus otras sedes <span class="suave">${otrasSedes.length + 1} en total</span></div>
+            <div class="chart-card" style="margin-top:0;padding:8px;">
+              ${otrasSedes
+                .map((s) => {
+                  const otroNegocio = todosNegocios[s];
+                  const rOtro = calcularResumen((datos[s] && datos[s].eventos) || []);
+                  return `<a href="/mi-panel/${s}?key=${otroNegocio.claveAcceso || ""}"
+                             style="display:flex;justify-content:space-between;align-items:center;text-decoration:none;
+                                    color:${MARCA.texto};padding:10px 10px;border-radius:8px;">
+                            <span style="font-size:0.85rem;font-weight:600;">${otroNegocio.nombre}</span>
+                            <span style="font-size:0.76rem;color:${MARCA.textoSuave};">${rOtro.total} toques →</span>
+                          </a>`;
+                })
+                .join("")}
+            </div>
+          </div>
+          ` : ""}
+
+          <div class="seccion">
+            <div class="card-titulo">Resumen general</div>
             <div class="resumen-grid">
               <div class="resumen-box"><div class="resumen-num">${r.total}</div><div class="resumen-lbl">Total</div></div>
               <div class="resumen-box"><div class="resumen-num">${r.hoy}</div><div class="resumen-lbl">Hoy</div></div>
@@ -2394,26 +2423,6 @@ app.get("/mi-panel/:slug", (req, res) => {
               <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
                 Invita a un cliente frecuente a dejar tu primera reseña — así pruebas que todo el flujo funciona.
               </div>
-            </div>
-          </div>
-          ` : ""}
-
-          ${otrasSedes.length > 0 ? `
-          <div class="seccion">
-            <div class="card-titulo">Tus otras sedes <span class="suave">${otrasSedes.length + 1} en total</span></div>
-            <div class="chart-card" style="margin-top:0;padding:8px;">
-              ${otrasSedes
-                .map((s) => {
-                  const otroNegocio = todosNegocios[s];
-                  const rOtro = calcularResumen((datos[s] && datos[s].eventos) || []);
-                  return `<a href="/mi-panel/${s}?key=${otroNegocio.claveAcceso || ""}"
-                             style="display:flex;justify-content:space-between;align-items:center;text-decoration:none;
-                                    color:${MARCA.texto};padding:10px 10px;border-radius:8px;">
-                            <span style="font-size:0.85rem;font-weight:600;">${otroNegocio.nombre}</span>
-                            <span style="font-size:0.76rem;color:${MARCA.textoSuave};">${rOtro.total} toques →</span>
-                          </a>`;
-                })
-                .join("")}
             </div>
           </div>
           ` : ""}
