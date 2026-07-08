@@ -876,6 +876,18 @@ app.get("/calificar/:slug", (req, res) => {
   }
 
   // Calificación negativa: mostramos un formulario privado en vez de mandarlo a Google
+  const motivosNegativos = [
+    "Atención lenta",
+    "Mala actitud",
+    "Precio alto",
+    "Local sucio",
+    "Producto no era lo esperado",
+    "Otro",
+  ];
+  const chipsNegativos = motivosNegativos
+    .map((m) => `<a href="/calificar/${slug}/rapido?motivo=${encodeURIComponent(m)}" class="chip">${m}</a>`)
+    .join("");
+
   res.send(`
     <html>
       <head>
@@ -889,8 +901,14 @@ app.get("/calificar/:slug", (req, res) => {
                box-shadow:0 10px 30px rgba(0,0,0,0.08);}
           h1{font-size:1.15rem;color:#16201C;margin:0 0 8px;}
           p{color:#777;font-size:0.9rem;margin:0 0 18px;}
+          .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px;}
+          .chip{background:#FBEFE9;color:#993C1D;border:1px solid #F0D5C8;border-radius:100px;
+                padding:10px 14px;font-size:0.85rem;font-weight:600;text-decoration:none;}
+          .chip:active{transform:scale(0.96);}
+          .divisor{display:flex;align-items:center;gap:10px;margin:4px 0 16px;color:#aaa;font-size:0.76rem;}
+          .divisor::before,.divisor::after{content:"";flex:1;height:1px;background:#eee;}
           textarea{width:100%;border:1px solid #ddd;border-radius:10px;padding:12px;font-size:0.95rem;
-                    min-height:100px;font-family:inherit;}
+                    min-height:70px;font-family:inherit;box-sizing:border-box;}
           button{margin-top:14px;width:100%;background:#1F6E4E;color:#fff;border:none;border-radius:10px;
                  padding:13px;font-size:0.95rem;font-weight:600;cursor:pointer;}
         </style>
@@ -898,15 +916,39 @@ app.get("/calificar/:slug", (req, res) => {
       <body>
         <div class="box">
           <h1>Lamentamos que tu visita no haya sido perfecta</h1>
-          <p>Cuéntanos qué pasó — esto llega directo al negocio, no se publica en ningún lado.</p>
+          <p>Cuéntanos qué pasó (toca una, es lo más rápido) — esto llega directo al negocio, no se publica en ningún lado.</p>
+          <div class="chips">${chipsNegativos}</div>
+
+          <div class="divisor">o cuéntanos con tus palabras</div>
           <form method="POST" action="/calificar/${slug}">
-            <textarea name="comentario" placeholder="Escribe aquí lo que pasó..."></textarea>
-            <input type="tel" name="telefono" placeholder="Tu teléfono (opcional, para que te llamen)" style="width:100%;margin-top:10px;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:0.92rem;font-family:inherit;">
+            <textarea name="comentario" placeholder="Escribe aquí lo que pasó... (opcional)"></textarea>
+            <input type="tel" name="telefono" placeholder="Tu teléfono (opcional, para que te llamen)" style="width:100%;margin-top:10px;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:0.92rem;font-family:inherit;box-sizing:border-box;">
             <button type="submit">Enviar</button>
           </form>
         </div>
       </body>
     </html>
+  `);
+});
+
+// Igual que /testimonio para los positivos, pero para el lado negativo: un
+// solo toque en un motivo corto guarda la queja de una vez, sin tener que
+// escribir nada. Mucho más rápido, así no se pierden clientes por pereza de teclear.
+app.get("/calificar/:slug/rapido", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  const motivo = req.query.motivo || "(sin detalle)";
+  guardarQueja(slug, motivo, negocio, "");
+
+  res.send(`
+    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>body{font-family:-apple-system,sans-serif;background:#F8F4EC;display:flex;align-items:center;
+    justify-content:center;min-height:100vh;margin:0;padding:24px;text-align:center;color:#16201C;}
+    .box{background:#fff;border-radius:18px;padding:36px 28px;max-width:380px;box-shadow:0 10px 30px rgba(0,0,0,0.08);}
+    </style></head>
+    <body><div class="box"><h2>Gracias por avisarnos</h2><p>El negocio ya recibió tu comentario y lo va a revisar.</p></div></body></html>
   `);
 });
 
