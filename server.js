@@ -2290,9 +2290,10 @@ app.get("/mi-panel/:slug", (req, res) => {
             .content{padding:24px 18px 50px;}
           }
 
-          .card-titulo{font-size:0.78rem;font-weight:700;color:${MARCA.texto};margin-bottom:12px;
-                       display:flex;align-items:center;justify-content:space-between;}
-          .card-titulo span.suave{font-weight:400;color:${MARCA.textoSuave};font-size:0.72rem;}
+          .card-titulo{font-size:0.86rem;font-weight:700;color:${MARCA.verdeOscuro};margin-bottom:12px;
+                       display:flex;align-items:center;justify-content:space-between;
+                       padding-left:10px;border-left:3px solid ${MARCA.verde};}
+          .card-titulo span.suave{font-weight:600;color:${MARCA.oro};font-size:0.72rem;}
 
           .resumen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
           .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:14px 8px;text-align:center;
@@ -2429,6 +2430,7 @@ app.get("/mi-panel/:slug", (req, res) => {
             </div>
           </div>
 
+          ${promSector !== null ? `
           <div class="seccion grid-2">
             <div>
               <div class="card-titulo">Cómo te calificaron</div>
@@ -2447,7 +2449,6 @@ app.get("/mi-panel/:slug", (req, res) => {
               </div>
             </div>
 
-            ${promSector !== null ? `
             <div>
               <div class="card-titulo">Tú vs. tu sector</div>
               <div class="chart-card" style="margin-top:0;">
@@ -2478,8 +2479,25 @@ app.get("/mi-panel/:slug", (req, res) => {
                 </div>
               </div>
             </div>
-            ` : `<div></div>`}
           </div>
+          ` : `
+          <div class="seccion">
+            <div class="card-titulo">Cómo te calificaron</div>
+            <div class="chart-card" style="margin-top:0;">
+              ${totalCalificado > 0
+                ? `<div class="sentimiento-barra">
+                     <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
+                     <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
+                   </div>
+                   <div class="sentimiento-leyenda">
+                     <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
+                     <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
+                   </div>
+                   ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
+                : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
+            </div>
+          </div>
+          `}
 
           <div class="seccion">
             <div class="card-titulo">Actividad reciente</div>
