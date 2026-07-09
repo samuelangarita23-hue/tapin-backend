@@ -414,14 +414,54 @@ function esPro(negocio) {
   return !!negocio && negocio.plan === "pro";
 }
 
+// Valida que un link realmente sea de Google Maps/Reseñas, para no dejar
+// pasar por error un link equivocado que rompería la redirección de reseñas.
+function esLinkGoogleValido(url) {
+  const dominiosValidos = ["google.com", "g.page", "goo.gl", "maps.app.goo.gl"];
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return dominiosValidos.some((d) => host === d || host.endsWith("." + d));
+  } catch {
+    return false;
+  }
+}
+
+// Lee una cookie sin depender de ningún paquete adicional (parseo manual del
+// header Cookie), y arma el valor a guardar cuando alguien se autentica con
+// éxito — así la clave no tiene que viajar en cada link del panel.
+function leerCookie(req, nombre) {
+  const cabecera = req.headers.cookie;
+  if (!cabecera) return null;
+  const partes = cabecera.split(";").map((c) => c.trim());
+  for (const parte of partes) {
+    const [k, ...v] = parte.split("=");
+    if (k === nombre) return decodeURIComponent(v.join("="));
+  }
+  return null;
+}
+function ponerCookieSesion(res, slug, clave) {
+  const valor = encodeURIComponent(clave);
+  res.setHeader(
+    "Set-Cookie",
+    `tapin_sesion_${slug}=${valor}; Max-Age=${60 * 60 * 24 * 30}; Path=/; HttpOnly; SameSite=Lax`
+  );
+}
+// Da la clave efectiva a usar: la de la URL si vino, si no la de la cookie de
+// esa sesión — así una vez que entraste una vez con el link completo, las
+// visitas siguientes no necesitan la clave visible en la URL.
+function claveEfectiva(req, slug) {
+  return req.query.key || leerCookie(req, `tapin_sesion_${slug}`) || null;
+}
+
 // Autoriza al admin (ADMIN_KEY) O al dueño del negocio con su propia clave,
 // siempre que el negocio sea Pro — usado en las funciones que antes eran
 // "solo admin" (quejas, contenido, exportes) para que el negocio también
 // pueda entrar directamente con su clave de panel.
-function autorizadoProNegocio(req, negocio) {
-  if (req.query.key === ADMIN_KEY) return true;
+function autorizadoProNegocio(req, negocio, slug) {
+  const key = slug ? claveEfectiva(req, slug) : req.query.key;
+  if (key === ADMIN_KEY) return true;
   if (!negocio || !negocio.claveAcceso) return false;
-  return req.query.key === negocio.claveAcceso && esPro(negocio);
+  return key === negocio.claveAcceso && esPro(negocio);
 }
 
 // Detecta tipo de dispositivo de forma simple a partir del user-agent
@@ -1694,11 +1734,16 @@ app.post("/activar/:codigo", (req, res) => {
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
+  if (!esLinkGoogleValido(googleUrl)) {
+    return res.status(400).send(
+      "Ese enlace no parece ser de Google Maps/Reseñas. Verifica que hayas copiado el link correcto " +
+      "(debe empezar por algo como https://g.page/... o https://maps.app.goo.gl/... o https://www.google.com/maps/...) y vuelve a intentarlo."
+    );
+  }
   const claveLimpia = (claveAcceso || "").trim();
   if (claveLimpia.length < 6) {
     return res.status(400).send("La clave de acceso debe tener al menos 6 caracteres. Regresa e inténtalo de nuevo.");
   }
-
   entrada.activado = true;
   entrada.activadoEl = new Date().toISOString();
   entrada.negocio = {
@@ -2281,9 +2326,16 @@ app.get("/mi-panel/:slug", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  // Acepta la clave por la URL (?key=...) o por la cookie de sesión que se
+  // guarda la primera vez — así los links dentro del panel siguen funcionando
+  // igual (usan req.query.key normalmente), pero una vez entraste una vez,
+  // no dependes de que la clave siga viajando en la URL.
+  const claveUsada = claveEfectiva(req, slug);
+  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
     return res.status(401).send("No autorizado. Verifica el enlace que te dio Tapin, debe incluir tu clave personal (?key=...).");
   }
+  if (req.query.key) ponerCookieSesion(res, slug, req.query.key);
+  req.query.key = claveUsada;
 
   const datos = leerDatos();
   const eventos = (datos[slug] && datos[slug].eventos) || [];
@@ -2658,9 +2710,11 @@ app.get("/mi-panel/:slug/editar", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  const claveUsada = claveEfectiva(req, slug);
+  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
     return res.status(401).send("No autorizado.");
   }
+  req.query.key = claveUsada;
 
   res.send(`
     <html>
@@ -2730,6 +2784,11 @@ app.post("/mi-panel/:slug/editar", (req, res) => {
   if (!nombre || !googleUrl || !email) {
     return res.status(400).send("Nombre, enlace de Google y correo son obligatorios.");
   }
+  if (!esLinkGoogleValido(googleUrl)) {
+    return res.status(400).send(
+      "Ese enlace no parece ser de Google Maps/Reseñas. Verifica el link e inténtalo de nuevo."
+    );
+  }
   guardarCambiosNegocio(slug, negocio, { nombre, googleUrl, email, direccion, ciudad, categoria });
   res.redirect(`/mi-panel/${slug}?key=${req.query.key}`);
 });
@@ -2741,9 +2800,11 @@ app.get("/mi-panel/:slug/clave", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  const claveUsada = claveEfectiva(req, slug);
+  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
     return res.status(401).send("No autorizado.");
   }
+  req.query.key = claveUsada;
 
   res.send(`
     <html>
@@ -2798,6 +2859,7 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
     return res.status(400).send("La clave debe tener al menos 6 caracteres.");
   }
   guardarCambiosNegocio(slug, negocio, { claveAcceso: claveNueva });
+  ponerCookieSesion(res, slug, claveNueva);
 
   res.send(`
     <html>
@@ -3959,7 +4021,7 @@ app.get("/mis-negocios", (req, res) => {
             ${bloqueLogin}
           ` : `
             <h1>Panel de tu negocio</h1>
-            <p>Escribe el correo con el que registraste tu(s) tarjeta(s) Tapin. Te mandamos un link de acceso, sin contraseña que recordar.</p>
+            <p>Escribe el correo con el que registraste tu(s) tarjeta(s) Tapin. Te mandamos un link de acceso, sin contraseña que recordar — funciona también si olvidaste tu clave del panel, ahí te la recordamos.</p>
             ${bloqueLogin}
             <div class="divisor">¿Es tu primera tarjeta?</div>
             ${bloqueActivar}
@@ -4069,14 +4131,19 @@ app.get("/mis-negocios/:token", (req, res) => {
     const negocio = todos[slug];
     const r = calcularResumen((datos[slug] && datos[slug].eventos) || []);
     return `
-      <a class="card" href="/mi-panel/${slug}?key=${negocio.claveAcceso || ""}">
-        <div class="card-top">
-          <div class="card-nombre">${negocio.nombre} ${esPro(negocio) ? `<span class="badge-pro">PRO</span>` : `<span class="badge-basico">BÁSICO</span>`}</div>
-          <div class="card-total">${r.total}<span>toques totales</span></div>
+      <div class="card">
+        <a href="/mi-panel/${slug}?key=${negocio.claveAcceso || ""}" style="text-decoration:none;color:inherit;">
+          <div class="card-top">
+            <div class="card-nombre">${negocio.nombre} ${esPro(negocio) ? `<span class="badge-pro">PRO</span>` : `<span class="badge-basico">BÁSICO</span>`}</div>
+            <div class="card-total">${r.total}<span>toques totales</span></div>
+          </div>
+          <div class="card-meta">${negocio.categoria || "—"} ${negocio.direccion ? "· " + negocio.direccion : ""}</div>
+          <div class="card-cta">Ver panel completo &rarr;</div>
+        </a>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid ${MARCA.borde};font-size:0.76rem;color:${MARCA.textoSuave};">
+          ¿Olvidaste tu clave? Es: <code style="background:${MARCA.crema};padding:2px 8px;border-radius:6px;font-weight:700;color:${MARCA.texto};">${negocio.claveAcceso || "no configurada"}</code>
         </div>
-        <div class="card-meta">${negocio.categoria || "—"} ${negocio.direccion ? "· " + negocio.direccion : ""}</div>
-        <div class="card-cta">Ver panel completo &rarr;</div>
-      </a>`;
+      </div>`;
   }).join("");
 
   res.send(`
@@ -4406,11 +4473,21 @@ app.get("/test-email", async (req, res) => {
 
 app.get("/", (req, res) => {
   res.send(`
-    <html>
+    <html lang="es">
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Tapin</title>
+        <title>Tapin — Convierte cada visita en una reseña de Google</title>
+        <meta name="description" content="Tapin es una tarjeta NFC que tus clientes tocan con el celular para dejarte una reseña en Google en segundos. Las calificaciones negativas se quedan contigo, en privado.">
+        <meta property="og:title" content="Tapin — Convierte cada visita en una reseña de Google">
+        <meta property="og:description" content="Tarjeta NFC para negocios: un toque y tus clientes te dejan reseña en Google. Lo negativo se queda en privado, nunca se publica.">
+        <meta property="og:type" content="website">
+        <meta property="og:url" content="https://tapin.page">
+        <meta property="og:locale" content="es_CO">
+        <meta name="twitter:card" content="summary">
+        <meta name="twitter:title" content="Tapin — Convierte cada visita en una reseña de Google">
+        <meta name="twitter:description" content="Tarjeta NFC para negocios: un toque y tus clientes te dejan reseña en Google.">
+        <link rel="canonical" href="https://tapin.page">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
@@ -4647,6 +4724,10 @@ app.get("/", (req, res) => {
             </div>
 
             <a class="admin-link" href="/admin">Entrar como administrador</a>
+            <div style="margin-top:18px;font-size:0.72rem;">
+              <a href="/privacidad" style="color:rgba(255,255,255,0.5);margin-right:14px;">Privacidad</a>
+              <a href="/terminos" style="color:rgba(255,255,255,0.5);">Términos y condiciones</a>
+            </div>
           </div>
 
           <div class="hero-der">
@@ -5491,6 +5572,153 @@ app.get("/cobrar-suscripciones", async (req, res) => {
   }
 
   res.json({ ok: true, procesados: resultado.length, detalle: resultado });
+});
+
+// ---------- SEO técnico ----------
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain").send(
+    `User-agent: *\n` +
+    `Allow: /\n` +
+    `Disallow: /mi-panel\n` +
+    `Disallow: /editar\n` +
+    `Disallow: /stats\n` +
+    `Disallow: /codigos\n` +
+    `Disallow: /admin\n` +
+    `Disallow: /activar\n` +
+    `Disallow: /cuenta\n` +
+    `Disallow: /mis-negocios\n` +
+    `Sitemap: https://tapin.page/sitemap.xml\n`
+  );
+});
+
+app.get("/sitemap.xml", (req, res) => {
+  const paginas = ["/", "/conoce", "/descubre", "/cliente", "/mis-negocios", "/pedido", "/privacidad", "/terminos"];
+  const urls = paginas
+    .map((p) => `<url><loc>https://tapin.page${p}</loc></url>`)
+    .join("\n  ");
+  res.type("application/xml").send(
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  ${urls}\n</urlset>`
+  );
+});
+
+
+app.get("/privacidad", (req, res) => {
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Política de Privacidad — Tapin</title>
+        <style>
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
+               color:${MARCA.texto};margin:0;line-height:1.65;}
+          .topbar{background:${MARCA.verdeOscuro};padding:18px 32px;}
+          .contenido{max-width:720px;margin:0 auto;padding:48px 24px 80px;}
+          h1{font-size:1.6rem;color:${MARCA.verdeOscuro};}
+          h2{font-size:1.05rem;color:${MARCA.verdeOscuro};margin-top:32px;}
+          p,li{font-size:0.92rem;color:${MARCA.texto};}
+          .fecha{color:${MARCA.textoSuave};font-size:0.85rem;margin-bottom:32px;}
+          a{color:${MARCA.verde};}
+        </style>
+      </head>
+      <body>
+        <div class="topbar">${logoSvg("#FFFFFF", 28)}</div>
+        <div class="contenido">
+          <h1>Política de Privacidad</h1>
+          <div class="fecha">Última actualización: ${new Date().toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}</div>
+
+          <p>En Tapin ("nosotros") respetamos tu privacidad y la de tus clientes. Este documento explica qué datos personales recogemos, para qué los usamos, y qué derechos tienes sobre ellos, en cumplimiento de la Ley 1581 de 2012 (Ley de Protección de Datos Personales de Colombia) y sus decretos reglamentarios.</p>
+
+          <h2>1. ¿Qué datos recogemos?</h2>
+          <ul>
+            <li><b>De los negocios:</b> nombre del negocio, correo electrónico, dirección, categoría, enlace de reseñas de Google, y datos de facturación procesados por nuestro proveedor de pagos (Wompi).</li>
+            <li><b>De los clientes finales que califican con la tarjeta:</b> calificación (1-5), comentario opcional (si la calificación es negativa), teléfono (opcional), fecha, hora, y tipo de dispositivo. No pedimos ni guardamos nombres de clientes finales salvo que decidan crear una cuenta de usuario.</li>
+            <li><b>De usuarios registrados (clientes con cuenta):</b> nombre, correo, y contraseña (guardada de forma cifrada, nunca en texto plano).</li>
+          </ul>
+
+          <h2>2. ¿Para qué usamos estos datos?</h2>
+          <ul>
+            <li>Operar el servicio: redirigir calificaciones positivas a Google, mostrar retroalimentación privada al negocio correspondiente.</li>
+            <li>Generar estadísticas y reportes para el negocio (horas pico, tendencias, comparación con su categoría).</li>
+            <li>Enviar alertas y reportes por correo a los negocios.</li>
+            <li>Procesar pagos y suscripciones a través de Wompi.</li>
+            <li>Mejorar el servicio y dar soporte.</li>
+          </ul>
+
+          <h2>3. ¿Con quién compartimos tus datos?</h2>
+          <p>No vendemos ni compartimos tus datos personales con terceros para fines de mercadeo. Compartimos información únicamente con proveedores necesarios para operar el servicio: Wompi (pagos), y proveedores de infraestructura (hosting de correo y servidores). Estos proveedores solo acceden a lo estrictamente necesario para prestar su servicio.</p>
+
+          <h2>4. ¿Cómo protegemos tus datos?</h2>
+          <p>Los datos se almacenan en servidores con acceso restringido. Las contraseñas se guardan cifradas. Las transacciones de pago se procesan directamente por Wompi — Tapin nunca almacena números de tarjeta completos.</p>
+
+          <h2>5. ¿Cuáles son tus derechos?</h2>
+          <p>Como titular de tus datos, tienes derecho a conocer, actualizar, rectificar y solicitar la eliminación de tus datos personales, así como a revocar la autorización otorgada para su tratamiento. Para ejercer estos derechos, escríbenos al correo de soporte indicado en la página de contacto.</p>
+
+          <h2>6. Retención de datos</h2>
+          <p>Conservamos tus datos mientras exista una relación activa con Tapin (mientras tu tarjeta esté activa o tu cuenta exista). Puedes solicitar la eliminación de tus datos en cualquier momento.</p>
+
+          <h2>7. Cambios a esta política</h2>
+          <p>Podemos actualizar esta política ocasionalmente. Los cambios importantes se notificarán a través de nuestros canales habituales.</p>
+
+          <p style="margin-top:32px;"><a href="/terminos">Ver Términos y Condiciones →</a></p>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.get("/terminos", (req, res) => {
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Términos y Condiciones — Tapin</title>
+        <style>
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
+               color:${MARCA.texto};margin:0;line-height:1.65;}
+          .topbar{background:${MARCA.verdeOscuro};padding:18px 32px;}
+          .contenido{max-width:720px;margin:0 auto;padding:48px 24px 80px;}
+          h1{font-size:1.6rem;color:${MARCA.verdeOscuro};}
+          h2{font-size:1.05rem;color:${MARCA.verdeOscuro};margin-top:32px;}
+          p,li{font-size:0.92rem;color:${MARCA.texto};}
+          .fecha{color:${MARCA.textoSuave};font-size:0.85rem;margin-bottom:32px;}
+          a{color:${MARCA.verde};}
+        </style>
+      </head>
+      <body>
+        <div class="topbar">${logoSvg("#FFFFFF", 28)}</div>
+        <div class="contenido">
+          <h1>Términos y Condiciones</h1>
+          <div class="fecha">Última actualización: ${new Date().toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}</div>
+
+          <h2>1. Qué es Tapin</h2>
+          <p>Tapin es un servicio de tarjetas con tecnología NFC que permite a los clientes de un negocio calificar su experiencia con un toque, dirigiendo las calificaciones positivas a Google y gestionando las negativas de forma privada.</p>
+
+          <h2>2. Planes y pagos</h2>
+          <p>El Plan Básico se cobra como pago único e incluye la tarjeta física, envío, y funciones esenciales. El Plan Pro se cobra mensualmente y se renueva automáticamente hasta que el negocio cancele. Los pagos se procesan a través de Wompi. Los precios vigentes están publicados en <a href="/conoce">/conoce</a> y pueden cambiar con previo aviso.</p>
+
+          <h2>3. Responsabilidad sobre las reseñas</h2>
+          <p>Tapin facilita la redirección de clientes a la plataforma de reseñas de Google, pero no controla, edita, ni garantiza el contenido de las reseñas publicadas por terceros en Google. Tapin tampoco publica reseñas en nombre de los clientes ni de los negocios.</p>
+
+          <h2>4. Uso aceptable</h2>
+          <p>El negocio se compromete a usar Tapin de buena fe, sin incentivar reseñas falsas, sin manipular calificaciones, y sin usar el servicio para fines distintos a la gestión legítima de la reputación de su negocio.</p>
+
+          <h2>5. Cancelación</h2>
+          <p>El Plan Pro puede cancelarse en cualquier momento; la suscripción permanece activa hasta el final del período ya pagado. El Plan Básico no es reembolsable una vez enviada la tarjeta física, salvo defectos de fabricación.</p>
+
+          <h2>6. Disponibilidad del servicio</h2>
+          <p>Hacemos nuestro mejor esfuerzo por mantener el servicio disponible de forma continua, pero no garantizamos disponibilidad ininterrumpida. No somos responsables por pérdidas derivadas de interrupciones del servicio fuera de nuestro control razonable.</p>
+
+          <h2>7. Modificaciones</h2>
+          <p>Podemos actualizar estos términos ocasionalmente. El uso continuado del servicio después de un cambio implica la aceptación de los nuevos términos.</p>
+
+          <p style="margin-top:32px;"><a href="/privacidad">Ver Política de Privacidad →</a></p>
+        </div>
+      </body>
+    </html>
+  `);
 });
 
 app.listen(PORT, () => {
