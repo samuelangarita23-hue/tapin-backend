@@ -768,10 +768,11 @@ app.get("/r/:slug", (req, res) => {
                text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.08);}
           h1{font-size:1.25rem;margin:0 0 6px;color:#16201C;}
           p{color:#777;font-size:0.92rem;margin:0 0 28px;}
-          .caras{display:flex;justify-content:space-between;gap:8px;}
-          .caras a{flex:1;text-decoration:none;font-size:2.2rem;padding:14px 0;border-radius:14px;
-                    background:#F8F4EC;transition:transform .15s;}
-          .caras a:active{transform:scale(0.93);}
+          .caras{display:flex;flex-direction:column;gap:8px;}
+          .caras a{text-decoration:none;padding:12px 16px;border-radius:12px;background:#F8F4EC;
+                    transition:transform .15s;display:flex;justify-content:center;gap:4px;}
+          .caras a:active{transform:scale(0.96);}
+          .caras svg{display:block;}
         </style>
       </head>
       <body>
@@ -779,11 +780,18 @@ app.get("/r/:slug", (req, res) => {
           <h1>${negocio.nombre}</h1>
           <p>¿Cómo te fue con nosotros hoy?</p>
           <div class="caras">
-            <a href="/calificar/${slug}?valor=1">😞</a>
-            <a href="/calificar/${slug}?valor=2">😐</a>
-            <a href="/calificar/${slug}?valor=3">🙂</a>
-            <a href="/calificar/${slug}?valor=4">😄</a>
-            <a href="/calificar/${slug}?valor=5">🤩</a>
+            ${[5, 4, 3, 2, 1]
+              .map((n) => {
+                const estrella = (llena) => `
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="${llena ? MARCA.oro : "none"}"
+                       stroke="${MARCA.oro}" stroke-width="1.4" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2.5l2.9 6.06 6.6.77-4.86 4.55 1.28 6.55L12 17.3l-5.92 3.13 1.28-6.55L2.5 9.33l6.6-.77L12 2.5z"/>
+                  </svg>`;
+                return `<a href="/calificar/${slug}?valor=${n}" aria-label="${n} estrella${n > 1 ? "s" : ""}">
+                  ${[1, 2, 3, 4, 5].map((i) => estrella(i <= n)).join("")}
+                </a>`;
+              })
+              .join("")}
           </div>
         </div>
       </body>
@@ -827,14 +835,14 @@ app.get("/calificar/:slug", (req, res) => {
       return res.redirect(302, negocio.googleUrl);
     }
 
-    const frases = [
-      "Excelente atención",
-      "Muy buena comida",
-      "Ambiente increíble",
-      "Rápido y eficiente",
-      "Lo recomiendo 100%",
-      "Volveré seguro",
-    ];
+    const frasesPorCategoria = {
+      restaurante: ["Excelente atención", "Muy buena comida", "Ambiente increíble", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
+      peluqueria: ["Excelente atención", "Quedé feliz con el resultado", "Ambiente muy agradable", "Rápido y puntual", "Lo recomiendo 100%", "Volveré seguro"],
+      tienda: ["Excelente atención", "Buenos precios", "Gran variedad", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
+      clinica: ["Excelente atención", "Muy profesionales", "Instalaciones impecables", "Puntualidad", "Lo recomiendo 100%", "Volveré seguro"],
+      otro: ["Excelente atención", "Muy buen servicio", "Ambiente increíble", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
+    };
+    const frases = frasesPorCategoria[negocio.categoria] || frasesPorCategoria.otro;
     const chips = frases
       .map(
         (f) =>
@@ -875,15 +883,17 @@ app.get("/calificar/:slug", (req, res) => {
     `);
   }
 
-  // Calificación negativa: mostramos un formulario privado en vez de mandarlo a Google
-  const motivosNegativos = [
-    "Atención lenta",
-    "Mala actitud",
-    "Precio alto",
-    "Local sucio",
-    "Producto no era lo esperado",
-    "Otro",
-  ];
+  // Calificación negativa: mostramos un formulario privado en vez de mandarlo a Google.
+  // Los motivos varían según la categoría del negocio — un restaurante y una
+  // peluquería no tienen los mismos problemas típicos.
+  const motivosPorCategoria = {
+    restaurante: ["Atención lenta", "Comida fría o mal preparada", "Precio alto", "Local sucio", "Pedido incorrecto", "Otro"],
+    peluqueria: ["Espera muy larga", "No quedé conforme con el resultado", "Precio alto", "Mala actitud", "Local sucio", "Otro"],
+    tienda: ["Atención lenta", "Producto no era lo esperado", "Precio alto", "Local desordenado", "Mala actitud", "Otro"],
+    clinica: ["Espera muy larga", "Mala actitud del personal", "Precio alto", "Instalaciones sucias", "Atención poco clara", "Otro"],
+    otro: ["Atención lenta", "Mala actitud", "Precio alto", "Local sucio", "Producto no era lo esperado", "Otro"],
+  };
+  const motivosNegativos = motivosPorCategoria[negocio.categoria] || motivosPorCategoria.otro;
   const chipsNegativos = motivosNegativos
     .map((m) => `<a href="/calificar/${slug}/rapido?motivo=${encodeURIComponent(m)}" class="chip">${m}</a>`)
     .join("");
@@ -1770,6 +1780,8 @@ app.get("/stats", (req, res) => {
     negociosPorPais[paisSlug].push(slug);
   }
 
+  const mesActual = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+
   function tarjetaHtml(slug) {
     const eventos = (datos[slug] && datos[slug].eventos) || [];
     const r = calcularResumen(eventos);
@@ -1780,6 +1792,19 @@ app.get("/stats", (req, res) => {
            ${r.semana - promSector >= 0 ? "▲" : "▼"} ${r.semana - promSector >= 0 ? "+" : ""}${r.semana - promSector} vs. promedio del sector
          </div>`
       : "";
+
+    // Indicador de reporte mensual — solo aplica a negocios Pro.
+    let reporteBadge = "";
+    if (esPro(NEGOCIOS_TOTAL[slug])) {
+      const reportes = (datos[slug] && datos[slug].reportesEnviados) || [];
+      const yaEnviado = reportes.some((rp) => rp.mes === mesActual && rp.exitoso);
+      const ultimoFallido = !yaEnviado && reportes.length > 0 ? reportes[reportes.length - 1] : null;
+      reporteBadge = yaEnviado
+        ? `<div class="reporte-badge ok">✅ Reporte de este mes enviado</div>`
+        : ultimoFallido && ultimoFallido.mes === mesActual
+          ? `<div class="reporte-badge fail">⚠️ Falló el envío este mes (${ultimoFallido.motivo || "error"})</div>`
+          : `<div class="reporte-badge pendiente">— Reporte de este mes aún no enviado</div>`;
+    }
 
     return `
       <div class="card">
@@ -1798,6 +1823,7 @@ app.get("/stats", (req, res) => {
 
         <div class="sparkline">${barraSemana(r.dias7)}</div>
         ${sectorBadge}
+        ${reporteBadge}
 
         <div class="card-ultimo">Último toque: <b>${ultimoTexto}</b></div>
 
@@ -1896,6 +1922,10 @@ app.get("/stats", (req, res) => {
           .metric-lbl{font-size:0.68rem;color:${MARCA.verde};margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
           .sparkline{display:flex;align-items:flex-end;gap:5px;height:92px;margin-bottom:16px;max-width:300px;}
           .sector-badge{font-size:0.74rem;font-weight:700;margin-bottom:14px;}
+          .reporte-badge{font-size:0.74rem;font-weight:700;margin-bottom:14px;padding:6px 10px;border-radius:8px;display:inline-block;}
+          .reporte-badge.ok{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};}
+          .reporte-badge.fail{background:#FBEFE9;color:#993C1D;}
+          .reporte-badge.pendiente{background:#F3F1EC;color:${MARCA.textoSuave};}
           .card-ultimo{font-size:0.82rem;color:${MARCA.textoSuave};margin-bottom:16px;padding-top:14px;border-top:1px solid ${MARCA.borde};}
           .card-ultimo b{color:${MARCA.texto};}
           .card-actions{display:flex;flex-wrap:wrap;gap:8px;}
@@ -3375,28 +3405,17 @@ app.get("/export/:slug.csv", (req, res) => {
   res.send(csv);
 });
 
-// Envía un reporte mensual completo por correo: métricas, recomendaciones automáticas
-// y comparación contra el promedio del sector — no solo números, sino contexto.
-// Esto NO se dispara solo — necesitas un servicio externo gratuito (cron-job.org)
-// que visite esta URL una vez al mes. Ver instrucciones en el README.
-// Visítalo así: https://tu-dominio.com/notificar/mi-negocio?key=TU_CLAVE
-app.get("/notificar/:slug", async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
-    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
-  }
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  // El reporte mensual (con picos y caídas por hora) vuelve a ser exclusivo
-  // de Plan Pro, junto con el resto de exportaciones.
+// Envía (y registra) el reporte mensual de un negocio. Se usa tanto desde la
+// ruta individual /notificar/:slug como desde el envío masivo a todos los
+// negocios Pro. Cada intento queda guardado en datos[slug].reportesEnviados
+// con fecha y si fue exitoso — así queda un historial consultable, no solo
+// un envío silencioso que nadie puede confirmar después.
+async function enviarReporteMensualNegocio(slug, negocio, baseUrl) {
   if (!esPro(negocio)) {
-    return res.status(402).send(
-      `Esta función (reporte mensual por correo) es exclusiva del Plan Pro. ` +
-      `Súbele el plan a "${negocio.nombre}" desde /editar/${slug}?key=${req.query.key} para activarla.`
-    );
+    return { ok: false, motivo: "Este negocio no es Plan Pro." };
   }
   if (!negocio.email) {
-    return res.status(400).send("Este negocio no tiene 'email' configurado. Agrégalo en /editar.");
+    return { ok: false, motivo: "Este negocio no tiene 'email' configurado." };
   }
 
   const datos = leerDatos();
@@ -3407,9 +3426,7 @@ app.get("/notificar/:slug", async (req, res) => {
   const horas = analizarHoras(eventos, negocio);
 
   let comparativo = "";
-  // La comparación contra el promedio del sector sigue siendo exclusiva de
-  // Plan Pro (así se anuncia en /conoce) — el resto del reporte ya es básico.
-  if (esPro(negocio) && promedio !== null) {
+  if (promedio !== null) {
     if (r.semana > promedio) {
       comparativo = `Estás <b>por encima</b> del promedio de negocios de tu categoría (${r.semana} vs ${promedio} toques/semana).`;
     } else if (r.semana < promedio) {
@@ -3448,14 +3465,10 @@ app.get("/notificar/:slug", async (req, res) => {
     `;
   }
 
-  const filasBarra = barraSemana(r.dias7);
   const recosHtml = recomendaciones
     .map((texto) => `<div style="background:#F1F7F4;border-left:3px solid ${MARCA.verde};border-radius:8px;padding:12px 14px;font-size:0.88rem;margin-bottom:8px;color:#1F3D2E;">${texto}</div>`)
     .join("");
 
-  // Generamos el informe completo en PDF (mismo que /export/:slug.pdf, con
-  // picos/caídas incluidos) y lo adjuntamos al correo — así el reporte mensual
-  // ya no es solo texto plano, es el documento completo listo para guardar o imprimir.
   const pdfBytes = await generarInformePDF(negocio, slug);
 
   const resultado = await enviarEmail(
@@ -3484,17 +3497,82 @@ app.get("/notificar/:slug", async (req, res) => {
         <h3 style="font-size:0.95rem;margin:20px 0 8px;">Recomendaciones</h3>
         ${recosHtml}
         <p style="font-size:0.82rem;color:#555;margin-top:20px;">📎 Adjunto va el informe completo en PDF, con el detalle de la gráfica por hora y todas tus interacciones recientes.</p>
-        <p style="font-size:0.78rem;color:#999;margin-top:12px;">Ver panel completo: ${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${negocio.claveAcceso || ""}</p>
+        <p style="font-size:0.78rem;color:#999;margin-top:12px;">Ver panel completo: ${baseUrl}/mi-panel/${slug}?key=${negocio.claveAcceso || ""}</p>
       </div>
     `,
     [{ filename: `informe-tapin-${slug}.pdf`, content: Buffer.from(pdfBytes) }]
   );
 
+  // Registramos el intento (exitoso o no) para que quede historial consultable.
+  const ahora = new Date();
+  const datosLog = leerDatos();
+  if (!datosLog[slug]) datosLog[slug] = { total: 0, eventos: [] };
+  if (!datosLog[slug].reportesEnviados) datosLog[slug].reportesEnviados = [];
+  datosLog[slug].reportesEnviados.push({
+    fechaISO: ahora.toISOString(),
+    fechaLegible: ahora.toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) }),
+    mes: `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}`,
+    exitoso: !!resultado.ok,
+    motivo: resultado.ok ? null : resultado.motivo,
+  });
+  guardarDatos(datosLog);
+
+  return resultado.ok ? { ok: true } : { ok: false, motivo: resultado.motivo };
+}
+
+// Envía el reporte mensual de un solo negocio. Puedes seguir usando esto
+// individualmente, pero /enviar-reportes-mensuales (más abajo) ya manda a
+// TODOS los Pro de una sola vez — ya no necesitas un cron por cada negocio.
+// Visítalo así: https://tu-dominio.com/notificar/mi-negocio?key=TU_CLAVE
+app.get("/notificar/:slug", async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const resultado = await enviarReporteMensualNegocio(slug, negocio, baseUrl);
+
   if (resultado.ok) {
     res.send(`Reporte mensual enviado a ${negocio.email}.`);
   } else {
-    res.status(500).send("No se pudo enviar el correo: " + resultado.motivo);
+    res.status(500).send("No se pudo enviar: " + resultado.motivo);
   }
+});
+
+// Envía el reporte mensual a TODOS los negocios Pro de una sola vez, y deja
+// registrado quién sí y quién no. Un solo cron mensual (día 1 de cada mes,
+// por ejemplo) apuntando aquí reemplaza tener que acordarte de mandar cada
+// reporte a mano o configurar un cron por cada negocio.
+// Visítalo así: https://tu-dominio.com/enviar-reportes-mensuales?key=TU_CLAVE
+app.get("/enviar-reportes-mensuales", async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const negocios = todosLosNegocios();
+  const resultado = [];
+
+  for (const slug in negocios) {
+    const negocio = negocios[slug];
+    if (!esPro(negocio)) continue;
+    try {
+      const r = await enviarReporteMensualNegocio(slug, negocio, baseUrl);
+      resultado.push({ slug, nombre: negocio.nombre, ok: r.ok, motivo: r.motivo || null });
+    } catch (err) {
+      resultado.push({ slug, nombre: negocio.nombre, ok: false, motivo: err.message });
+    }
+  }
+
+  res.json({
+    ok: true,
+    enviados: resultado.filter((r) => r.ok).length,
+    fallidos: resultado.filter((r) => !r.ok).length,
+    detalle: resultado,
+  });
 });
 
 // Misma información en JSON, útil si luego quieres conectar esto a un dashboard propio.
@@ -3652,6 +3730,10 @@ app.get("/conoce", (req, res) => {
             <div><h3>Todo queda registrado</h3><p>Cada toque queda guardado con fecha, hora y dispositivo — tu propio historial de actividad, disponible en tu panel cuando quieras verlo.</p></div>
           </div>
 
+          <div class="nota">
+            <b>Consejo clave:</b> los datos de Tapin son tan buenos como la cantidad de gente que use la tarjeta. Si solo la usa 1 de cada 10 clientes, lo que ves en tu panel no representa lo que realmente pasa en tu negocio. Anímala con todos — en caja, en la mesa, al despedirte — para que tus estadísticas reflejen la realidad, no solo a los clientes más entusiastas.
+          </div>
+
           <div class="seccion-titulo">Qué incluye cada plan</div>
           <div class="planes">
             <div class="plan">
@@ -3669,6 +3751,9 @@ app.get("/conoce", (req, res) => {
               <div class="plan-badge">RECOMENDADO</div>
               <div class="plan-nombre">Mensualidad Pro</div>
               <div class="plan-precio">$59.900 <span>COP / mes</span></div>
+              <p style="font-size:0.74rem;color:${MARCA.textoSuave};margin:-8px 0 14px;">
+                $89.900 COP/mes por tarjeta si tienes más de 3 locales con Tapin
+              </p>
               <ul>
                 <li><span class="check">✓</span> Todo lo del pago único, más:</li>
                 <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
