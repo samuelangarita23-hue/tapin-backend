@@ -9,6 +9,12 @@ const path = require("path");
 const nodemailer = require("nodemailer");
 
 const app = express();
+// Render pone la app detrás de un proxy que sí habla HTTPS con el navegador,
+// pero le reenvía a la app en HTTP plano. Sin esta línea, req.protocol
+// siempre da "http" aunque el sitio real sea https — y eso rompe cualquier
+// cosa que arme una URL completa a partir de req.protocol (como el login de
+// Google, que exige que el redirect_uri coincida exactamente con https).
+app.set("trust proxy", 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json()); // necesario para recibir el webhook de Wompi (manda JSON)
 const PORT = process.env.PORT || 3000;
