@@ -2053,11 +2053,11 @@ app.get("/quejas/:slug", (req, res) => {
       const q = quejas[i];
       const estado = q.estado || "pendiente";
       return `<tr>
-        <td>${q.fechaLegible}</td>
-        <td>${q.comentario}</td>
-        <td>${q.telefono ? `<a href="tel:${q.telefono}">${q.telefono}</a>` : "—"}</td>
-        <td><span style="background:${fondos[estado]};color:${colores[estado]};padding:4px 10px;border-radius:100px;font-size:0.74rem;font-weight:700;">${estado}</span></td>
-        <td>
+        <td data-label="Fecha">${q.fechaLegible}</td>
+        <td data-label="Comentario">${q.comentario}</td>
+        <td data-label="Teléfono">${q.telefono ? `<a href="tel:${q.telefono}">${q.telefono}</a>` : "—"}</td>
+        <td data-label="Estado"><span style="background:${fondos[estado]};color:${colores[estado]};padding:4px 10px;border-radius:100px;font-size:0.74rem;font-weight:700;">${estado}</span></td>
+        <td data-label="Acción">
           ${estado !== "contactado" ? `<a href="/quejas/${slug}/estado?key=${req.query.key}&i=${i}&estado=contactado" style="margin-right:8px;">Marcar contactado</a>` : ""}
           ${estado !== "resuelto" ? `<a href="/quejas/${slug}/estado?key=${req.query.key}&i=${i}&estado=resuelto">Marcar resuelto</a>` : ""}
         </td>
@@ -2065,21 +2065,37 @@ app.get("/quejas/:slug", (req, res) => {
     })
     .join("");
 
+  const volverHref = req.query.key === ADMIN_KEY ? `/stats?key=${req.query.key}` : `/mi-panel/${slug}?key=${req.query.key}`;
+
   res.send(`
     <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Retroalimentación — ${negocio.nombre}</title>
     <style>
       ${ESTILO_BASE}
-      .metrics{display:flex;gap:14px;margin-bottom:24px;max-width:600px;}
-      .metric{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:14px;flex:1;text-align:center;}
+      .metrics{display:flex;gap:14px;margin-bottom:24px;max-width:600px;flex-wrap:wrap;}
+      .metric{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:14px;flex:1;min-width:100px;text-align:center;}
       .metric-num{font-size:1.5rem;font-weight:700;color:${MARCA.verde};}
       .metric-lbl{font-size:0.72rem;color:${MARCA.textoSuave};margin-top:4px;}
       table{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden;border:1px solid ${MARCA.borde};}
       th,td{padding:10px 16px;text-align:left;border-bottom:1px solid ${MARCA.borde};font-size:0.86rem;}
       th{background:${MARCA.verdeOscuro};color:#fff;font-size:0.72rem;text-transform:uppercase;}
       a{color:${MARCA.verde};font-weight:600;font-size:0.82rem;text-decoration:none;}
+
+      @media (max-width:720px){
+        table, thead, tbody, tr{display:block;width:100%;}
+        thead{display:none;}
+        table{border:none;background:none;}
+        tr{background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;margin-bottom:12px;padding:6px 0;overflow:hidden;}
+        td{display:flex;justify-content:space-between;align-items:center;gap:12px;
+           border-bottom:1px solid ${MARCA.borde};padding:10px 14px;text-align:right;}
+        td:last-child{border-bottom:none;}
+        td::before{content:attr(data-label);font-weight:700;color:${MARCA.textoSuave};font-size:0.72rem;
+                    text-transform:uppercase;letter-spacing:0.02em;text-align:left;flex-shrink:0;}
+        td[data-label="Comentario"]{text-align:left;}
+        td[data-label="Acción"]{flex-direction:column;align-items:flex-end;gap:6px;}
+      }
     </style></head>
     <body>
-      <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
+      <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="${volverHref}">&larr; Volver al panel</a></div>
       <div class="content">
         <div class="eyebrow">Rescate de clientes</div>
         <h1 class="titulo-pagina">Retroalimentación privada — ${negocio.nombre}</h1>
@@ -2089,8 +2105,8 @@ app.get("/quejas/:slug", (req, res) => {
           <div class="metric"><div class="metric-num">${resueltas}</div><div class="metric-lbl">Resueltas</div></div>
           <div class="metric"><div class="metric-num">${tasaRecuperacion}%</div><div class="metric-lbl">Tasa de recuperación</div></div>
         </div>
-        <table><tr><th>Fecha</th><th>Comentario</th><th>Teléfono</th><th>Estado</th><th>Acción</th></tr>
-        ${filas || "<tr><td colspan='5'>Sin retroalimentación registrada todavía.</td></tr>"}
+        <table><thead><tr><th>Fecha</th><th>Comentario</th><th>Teléfono</th><th>Estado</th><th>Acción</th></tr></thead>
+        <tbody>${filas || "<tr><td colspan='5'>Sin retroalimentación registrada todavía.</td></tr>"}</tbody>
         </table>
       </div>
     </body></html>
