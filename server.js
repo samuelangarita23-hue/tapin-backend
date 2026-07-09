@@ -539,10 +539,10 @@ function barraSemana(dias7) {
     .map((v, i) => {
       const alturaPx = 6 + Math.round((v / max) * 46);
       return `
-        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;">
-          <div style="font-size:0.65rem;color:#888;">${v}</div>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;height:100%;">
+          <div style="font-size:0.75rem;font-weight:700;color:${MARCA.textoSuave};line-height:1;">${v}</div>
           <div style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
-          <div style="font-size:0.62rem;color:#999;text-transform:capitalize;">${nombresDias[i]}</div>
+          <div style="font-size:0.62rem;color:#999;text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
         </div>`;
     })
     .join("");
@@ -1890,11 +1890,11 @@ app.get("/stats", (req, res) => {
           .card-slug{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:2px;font-family:monospace;}
           .card-total{text-align:right;font-size:1.7rem;font-weight:700;color:${MARCA.verde};line-height:1;}
           .card-total span{display:block;font-size:0.6rem;font-weight:600;color:${MARCA.textoSuave};margin-top:4px;letter-spacing:0.04em;text-transform:uppercase;}
-          .card-metrics{display:flex;gap:12px;margin-bottom:18px;max-width:340px;}
+          .card-metrics{display:flex;gap:12px;margin-bottom:26px;max-width:340px;}
           .metric{background:${MARCA.verdeClaro};border-radius:12px;padding:12px 14px;flex:1;text-align:center;}
           .metric-num{font-size:1.3rem;font-weight:700;color:${MARCA.verdeOscuro};}
           .metric-lbl{font-size:0.68rem;color:${MARCA.verde};margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
-          .sparkline{display:flex;align-items:flex-end;gap:5px;height:64px;margin-bottom:10px;max-width:300px;}
+          .sparkline{display:flex;align-items:flex-end;gap:5px;height:92px;margin-bottom:16px;max-width:300px;}
           .sector-badge{font-size:0.74rem;font-weight:700;margin-bottom:14px;}
           .card-ultimo{font-size:0.82rem;color:${MARCA.textoSuave};margin-bottom:16px;padding-top:14px;border-top:1px solid ${MARCA.borde};}
           .card-ultimo b{color:${MARCA.texto};}
