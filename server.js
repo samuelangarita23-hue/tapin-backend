@@ -1360,7 +1360,7 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
 
               <label>Plan</label>
               <select name="plan">
-                <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($119.900 — envío incluido)</option>
+                <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($100.000 — envío incluido)</option>
                 <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($59.900/mes — alertas, reporte mensual, contenido)</option>
               </select>
 
@@ -1622,7 +1622,7 @@ app.get("/activar/:codigo", (req, res) => {
 
               <label>Plan</label>
               <select name="plan">
-                <option value="basico">Básico ($119.900 — envío incluido)</option>
+                <option value="basico">Básico ($100.000 — envío incluido)</option>
                 <option value="pro">Pro ($59.900/mes — alertas, reporte mensual, contenido)</option>
               </select>
 
@@ -3857,7 +3857,7 @@ app.get("/conoce", (req, res) => {
           <div class="planes">
             <div class="plan">
               <div class="plan-nombre">Pago único</div>
-              <div class="plan-precio">$119.900 <span>COP</span></div>
+              <div class="plan-precio">$100.000 <span>COP</span></div>
               <p style="font-size:0.78rem;color:${MARCA.verde};font-weight:700;margin:-6px 0 14px;">Envío incluido</p>
               <ul>
                 <li><span class="check">✓</span> Tarjeta NFC física + envío incluido</li>
@@ -4228,7 +4228,18 @@ function renderizarPaginaNegocios(email) {
           <div class="eyebrow">Panel de dueño</div>
           <h1 class="titulo-pagina">Tus negocios</h1>
           <div class="subtitulo">${misSlugs.length} ${misSlugs.length === 1 ? "local registrado" : "locales registrados"} con este correo.</div>
-          <div class="grid">${tarjetas || "<p>No encontramos negocios asociados a este correo.</p>"}</div>
+          <div class="grid">${tarjetas}</div>
+          ${misSlugs.length === 0 ? `
+          <div class="card" style="max-width:420px;">
+            <div class="card-nombre" style="margin-bottom:6px;">Todavía no tienes ningún negocio activado con este correo</div>
+            <p style="color:${MARCA.textoSuave};font-size:0.85rem;margin:0 0 16px;">Si ya tienes una tarjeta física, escribe su código aquí para activarla (ahí vas a poner el nombre de tu negocio y el link de tus reseñas de Google):</p>
+            <form method="POST" action="/mis-negocios/ir-a-codigo">
+              <input type="text" name="codigo" required placeholder="Código de tu tarjeta"
+                     style="width:100%;box-sizing:border-box;padding:12px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.9rem;text-transform:uppercase;margin-bottom:10px;">
+              <button type="submit" style="width:100%;background:${MARCA.oro};color:#fff;border:none;border-radius:9px;padding:12px;font-weight:700;font-size:0.9rem;cursor:pointer;">Activar tarjeta</button>
+            </form>
+          </div>
+          ` : ""}
         </div>
       </body>
     </html>`;
@@ -4242,10 +4253,12 @@ function renderizarPaginaNegocios(email) {
 //   credenciales → ID de cliente de OAuth → tipo "Aplicación web".
 //   En "URI de redirección autorizados" hay que agregar exactamente:
 //   https://tapin.page/auth/google/callback
+// tipo=negocio (por defecto) o tipo=cliente — decide a quién logueamos al volver.
 app.get("/auth/google/iniciar", (req, res) => {
   if (!process.env.GOOGLE_CLIENT_ID) {
     return res.status(500).send("El login con Google todavía no está configurado (falta GOOGLE_CLIENT_ID en Render).");
   }
+  const tipo = req.query.tipo === "cliente" ? "cliente" : "negocio";
   const redirectUri = `${req.protocol}://${req.get("host")}/auth/google/callback`;
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID,
@@ -4253,6 +4266,7 @@ app.get("/auth/google/iniciar", (req, res) => {
     response_type: "code",
     scope: "openid email",
     prompt: "select_account",
+    state: tipo,
   });
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 });
@@ -4291,8 +4305,36 @@ app.get("/auth/google/callback", async (req, res) => {
     if (!info.email) {
       return res.status(401).send("Google no devolvió un correo válido.");
     }
+    const email = info.email.trim().toLowerCase();
 
-    res.send(renderizarPaginaNegocios(info.email.trim().toLowerCase()));
+    if (req.query.state === "cliente") {
+      // Cliente final: si ya existe una cuenta con este correo, entra a esa.
+      // Si no existe, se crea sola — Google ya verificó el correo, así que no
+      // hace falta pedirle contraseña.
+      const clientes = leerClientes();
+      let entrada = Object.entries(clientes).find(([, c]) => c.email === email);
+      let clienteId;
+      if (entrada) {
+        clienteId = entrada[0];
+      } else {
+        clienteId = generarToken();
+        clientes[clienteId] = {
+          nombre: info.name || email.split("@")[0],
+          email,
+          salt: null,
+          hash: null,
+          metodoGoogle: true,
+          favoritos: [],
+          historial: [],
+          creado: new Date().toISOString(),
+        };
+        guardarClientes(clientes);
+      }
+      iniciarSesionCliente(res, clienteId, true);
+      return res.redirect("/cuenta");
+    }
+
+    res.send(renderizarPaginaNegocios(email));
   } catch (err) {
     console.error("[auth/google] Error:", err.message);
     res.status(500).send("Ocurrió un error verificando tu cuenta de Google. Intenta de nuevo.");
@@ -4370,6 +4412,22 @@ app.get("/cliente", (req, res) => {
           <div class="panel activo" id="panel-login">
             <h2>Bienvenido de vuelta</h2>
             <p>Entra para ver tus favoritos y tu historial de reseñas.</p>
+            <a href="/auth/google/iniciar?tipo=cliente" style="display:flex;align-items:center;justify-content:center;gap:10px;
+               width:100%;box-sizing:border-box;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
+               padding:13px;font-weight:700;font-size:0.9rem;color:${MARCA.texto};text-decoration:none;margin-bottom:14px;">
+              <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <path fill="#EA4335" d="M24 9.5c3.4 0 6.4 1.2 8.8 3.5l6.5-6.5C35.3 2.5 30 0 24 0 14.6 0 6.5 5.4 2.5 13.2l7.6 5.9C12 12.9 17.5 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7c4.3-4 6.8-9.9 6.8-17.4z"/>
+                <path fill="#FBBC05" d="M10.1 19.1a14.5 14.5 0 000 9.8l-7.6 5.9a24 24 0 010-21.6z"/>
+                <path fill="#34A853" d="M24 48c6 0 11.3-2 15-5.4l-7.3-5.7c-2 1.4-4.6 2.2-7.7 2.2-6.5 0-12-4.4-14-10.3l-7.6 5.9C6.5 42.6 14.6 48 24 48z"/>
+              </svg>
+              Iniciar sesión con Google
+            </a>
+            <div style="display:flex;align-items:center;gap:10px;margin:16px 0;color:#999;font-size:0.76rem;">
+              <div style="flex:1;height:1px;background:${MARCA.borde};"></div>
+              o con tu correo
+              <div style="flex:1;height:1px;background:${MARCA.borde};"></div>
+            </div>
             <form method="POST" action="/cliente/login">
               <input type="email" name="email" required placeholder="Correo electrónico">
               <div class="campo-clave">
@@ -4453,7 +4511,7 @@ app.post("/cliente/login", (req, res) => {
 
   const clientes = leerClientes();
   const entrada = Object.entries(clientes).find(([, c]) => c.email === email);
-  if (!entrada || !verificarPassword(password, entrada[1].salt, entrada[1].hash)) {
+  if (!entrada || !entrada[1].hash || !verificarPassword(password, entrada[1].salt, entrada[1].hash)) {
     return res.redirect("/cliente?error=credenciales");
   }
 
@@ -5012,10 +5070,10 @@ app.get("/admin/entrar", (req, res) => {
 });
 
 // ---------- Flujo de compra: pedido → pago con Wompi → confirmación ----------
-// Esto es para el Plan Básico ($119.900 COP, pago único, incluye la tarjeta física y el envío
+// Esto es para el Plan Básico ($100.000 COP, pago único, incluye la tarjeta física y el envío
 // y el envío). El Plan Pro (mensual) necesita una integración distinta — ver nota
 // al final del archivo README sobre pagos recurrentes.
-const PRECIO_BASICO_COP = 119900;
+const PRECIO_BASICO_COP = 100000;
 const PRECIO_PRO_COP = 59900;
 
 // Departamentos y municipios de Colombia, para el selector de ciudad en /pedido.
