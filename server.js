@@ -5076,6 +5076,19 @@ app.get("/admin/entrar", (req, res) => {
 const PRECIO_BASICO_COP = 119900;
 const PRECIO_PRO_COP = 59900;
 
+// Descuento por volumen — Plan B (Moderado). El precio por tarjeta baja según
+// cuántas se pidan de una vez, pero nunca por debajo de un margen saludable.
+const ESCALONES_DESCUENTO = [
+  { minimo: 25, precio: 93500, descuento: "22%" },
+  { minimo: 10, precio: 101900, descuento: "15%" },
+  { minimo: 4, precio: 110300, descuento: "8%" },
+  { minimo: 1, precio: PRECIO_BASICO_COP, descuento: null },
+];
+function precioTarjetaPorCantidad(cantidad) {
+  const escalon = ESCALONES_DESCUENTO.find((e) => cantidad >= e.minimo);
+  return escalon || ESCALONES_DESCUENTO[ESCALONES_DESCUENTO.length - 1];
+}
+
 // Departamentos y municipios de Colombia, para el selector de ciudad en /pedido.
 const COLOMBIA_CIUDADES = {"Amazonas":["Leticia","Puerto Nariño"],"Antioquia":["Abejorral","Abriaquí","Alejandría","Amagá","Amalfi","Andes","Angelópolis","Angostura","Anorí","Anzá","Apartadó","Arboletes","Argelia","Armenia","Barbosa","Bello","Belmira","Betania","Betulia","Briceño","Buriticá","Cáceres","Caicedo","Caldas","Campamento","Cañasgordas","Caracolí","Caramanta","Carepa","Carolina del Príncipe","Caucasia","Chigorodó","Cisneros","Ciudad Bolívar","Cocorná","Concepción","Concordia","Copacabana","Dabeiba","Donmatías","Ebéjico","El Bagre","El Carmen de Viboral","El Peñol","El Retiro","El Santuario","Entrerríos","Envigado","Fredonia","Frontino","Giraldo","Girardota","Gómez Plata","Granada","Guadalupe","Guarne","Guatapé","Heliconia","Hispania","Itagüí","Ituango","Jardín","Jericó","La Ceja","La Estrella","La Pintada","La Unión","Liborina","Maceo","Marinilla","Medellín","Montebello","Murindó","Mutatá","Nariño","Nechí","Necoclí","Olaya","Peque","Pueblorrico","Puerto Berrío","Puerto Nare","Puerto Triunfo","Remedios","Rionegro","Sabanalarga","Sabaneta","Salgar","San Andrés de Cuerquia","San Carlos","San Francisco","San Jerónimo","San José de la Montaña","San Juan de Urabá","San Luis","San Pedro de los Milagros","San Pedro de Urabá","San Rafael","San Roque","San Vicente","Santa Bárbara","Santa Fe de Antioquia","Santa Rosa de Osos","Santo Domingo","Segovia","Sonsón","Sopetrán","Támesis","Tarazá","Tarso","Titiribí","Toledo","Turbo","Uramita","Urrao","Valdivia","Valparaíso","Vegachí","Venecia","Vigía del Fuerte","Yalí","Yarumal","Yolombó","Yondó","Zaragoza"],"Arauca":["Arauca","Arauquita","Cravo Norte","Fortul","Puerto Rondón","Saravena","Tame"],"Atlántico":["Baranoa","Barranquilla","Campo de la Cruz","Candelaria","Galapa","Juan de Acosta","Luruaco","Malambo","Manatí","Palmar de Varela","Piojó","Polonuevo","Ponedera","Puerto Colombia","Repelón","Sabanagrande","Sabanalarga","Santa Lucía","Santo Tomás","Soledad","Suán","Tubará","Usiacurí"],"Bolívar":["Achí","Altos del Rosario","Arenal","Arjona","Arroyohondo","Barranco de Loba","Brazuelo de Papayal","Calamar","Cantagallo","Cartagena de Indias","Cicuco","Clemencia","Córdoba","El Carmen de Bolívar","El Guamo","El Peñón","Hatillo de Loba","Magangué","Mahates","Margarita","María la Baja","Mompós","Montecristo","Morales","Norosí","Pinillos","Regidor","Río Viejo","San Cristóbal","San Estanislao","San Fernando","San Jacinto","San Jacinto del Cauca","San Juan Nepomuceno","San Martín de Loba","San Pablo","Santa Catalina","Santa Rosa","Santa Rosa del Sur","Simití","Soplaviento","Talaigua Nuevo","Tiquisio","Turbaco","Turbaná","Villanueva","Zambrano"],"Boyacá":["Almeida","Aquitania","Arcabuco","Belén","Berbeo","Betéitiva","Boavita","Boyacá","Briceño","Buenavista","Busbanzá","Caldas","Campohermoso","Cerinza","Chinavita","Chiquinquirá","Chíquiza","Chiscas","Chita","Chitaraque","Chivatá","Chivor","Ciénega","Cómbita","Coper","Corrales","Covarachía","Cubará","Cucaita","Cuítiva","Duitama","El Cocuy","El Espino","Firavitoba","Floresta","Gachantivá","Gámeza","Garagoa","Guacamayas","Guateque","Guayatá","Güicán","Iza","Jenesano","Jericó","La Capilla","La Uvita","La Victoria","Labranzagrande","Macanal","Maripí","Miraflores","Mongua","Monguí","Moniquirá","Motavita","Muzo","Nobsa","Nuevo Colón","Oicatá","Otanche","Pachavita","Páez","Paipa","Pajarito","Panqueba","Pauna","Paya","Paz del Río","Pesca","Pisba","Puerto Boyacá","Quípama","Ramiriquí","Ráquira","Rondón","Saboyá","Sáchica","Samacá","San Eduardo","San José de Pare","San Luis de Gaceno","San Mateo","San Miguel de Sema","San Pablo de Borbur","Santa María","Santa Rosa de Viterbo","Santa Sofía","Santana","Sativanorte","Sativasur","Siachoque","Soatá","Socha","Socotá","Sogamoso","Somondoco","Sora","Soracá","Sotaquirá","Susacón","Sutamarchán","Sutatenza","Tasco","Tenza","Tibaná","Tibasosa","Tinjacá","Tipacoque","Toca","Togüí","Tópaga","Tota","Tunja","Tununguá","Turmequé","Tuta","Tutazá","Úmbita","Ventaquemada","Villa de Leyva","Viracachá","Zetaquira"],"Caldas":["Aguadas","Anserma","Aranzazu","Belalcázar","Chinchiná","Filadelfia","La Dorada","La Merced","Manizales","Manzanares","Marmato","Marquetalia","Marulanda","Neira","Norcasia","Pácora","Palestina","Pensilvania","Riosucio","Risaralda","Salamina","Samaná","San José","Supía","Victoria","Villamaría","Viterbo"],"Caquetá":["Albania","Belén de los Andaquíes","Cartagena del Chairá","Curillo","El Doncello","El Paujil","Florencia","La Montañita","Milán","Morelia","Puerto Rico","San José del Fragua","San Vicente del Caguán","Solano","Solita","Valparaíso"],"Casanare":["Aguazul","Chámeza","Hato Corozal","La Salina","Maní","Monterrey","Nunchía","Orocué","Paz de Ariporo","Pore","Recetor","Sabanalarga","Sácama","San Luis de Palenque","Támara","Tauramena","Trinidad","Villanueva","Yopal"],"Cauca":["Almaguer","Argelia","Balboa","Bolívar","Buenos Aires","Cajibío","Caldono","Caloto","Corinto","El Tambo","Florencia","Guachené","Guapí","Inzá","Jambaló","La Sierra","La Vega","López de Micay","Mercaderes","Miranda","Morales","Padilla","Páez","Patía","Piamonte","Piendamó","Popayán","Puerto Tejada","Puracé","Rosas","San Sebastián","Santa Rosa","Santander de Quilichao","Silvia","Sotará","Suárez","Sucre","Timbío","Timbiquí","Toribío","Totoró","Villa Rica"],"Cesar":["Aguachica","Agustín Codazzi","Astrea","Becerril","Bosconia","Chimichagua","Chiriguaná","Curumaní","El Copey","El Paso","Gamarra","González","La Gloria (Cesar)","La Jagua de Ibirico","La Paz","Manaure Balcón del Cesar","Pailitas","Pelaya","Pueblo Bello","Río de Oro","San Alberto","San Diego","San Martín","Tamalameque","Valledupar"],"Chocó":["Acandí","Alto Baudó","Bagadó","Bahía Solano","Bajo Baudó","Bojayá","Cantón de San Pablo","Cértegui","Condoto","El Atrato","El Carmen de Atrato","El Carmen del Darién","Istmina","Juradó","Litoral de San Juan","Lloró","Medio Atrato","Medio Baudó","Medio San Juan","Nóvita","Nuquí","Quibdó","Río Iró","Río Quito","Riosucio","San José del Palmar","Sipí","Tadó","Unguía","Unión Panamericana"],"Córdoba":["Ayapel","Buenavista","Canalete","Cereté","Chimá","Chinú","Ciénaga de Oro","Cotorra","La Apartada","Lorica","Los Córdobas","Momil","Montelíbano","Montería","Moñitos","Planeta Rica","Pueblo Nuevo","Puerto Escondido","Puerto Libertador","Purísima","Sahagún","San Andrés de Sotavento","San Antero","San Bernardo del Viento","San Carlos","San José de Uré","San Pelayo","Tierralta","Tuchín","Valencia"],"Cundinamarca":["Agua de Dios","Albán","Anapoima","Anolaima","Apulo","Arbeláez","Beltrán","Bituima","Bogotá","Bojacá","Cabrera","Cachipay","Cajicá","Caparrapí","Cáqueza","Carmen de Carupa","Chaguaní","Chía","Chipaque","Choachí","Chocontá","Cogua","Cota","Cucunubá","El Colegio","El Peñón","El Rosal","Facatativá","Fómeque","Fosca","Funza","Fúquene","Fusagasugá","Gachalá","Gachancipá","Gachetá","Gama","Girardot","Granada","Guachetá","Guaduas","Guasca","Guataquí","Guatavita","Guayabal de Síquima","Guayabetal","Gutiérrez","Jerusalén","Junín","La Calera","La Mesa","La Palma","La Peña","La Vega","Lenguazaque","Machetá","Madrid","Manta","Medina","Mosquera","Nariño","Nemocón","Nilo","Nimaima","Nocaima","Pacho","Paime","Pandi","Paratebueno","Pasca","Puerto Salgar","Pulí","Quebradanegra","Quetame","Quipile","Ricaurte","San Antonio del Tequendama","San Bernardo","San Cayetano","San Francisco","San Juan de Rioseco","Sasaima","Sesquilé","Sibaté","Silvania","Simijaca","Soacha","Sopó","Subachoque","Suesca","Supatá","Susa","Sutatausa","Tabio","Tausa","Tena","Tenjo","Tibacuy","Tibirita","Tocaima","Tocancipá","Topaipí","Ubalá","Ubaque","Ubaté","Une","Útica","Venecia","Vergara","Vianí","Villagómez","Villapinzón","Villeta","Viotá","Yacopí","Zipacón","Zipaquirá"],"Guainía":["Inírida"],"Guaviare":["Calamar","El Retorno","Miraflores","San José del Guaviare"],"Huila":["Acevedo","Agrado","Aipe","Algeciras","Altamira","Baraya","Campoalegre","Colombia","El Pital","Elías","Garzón","Gigante","Guadalupe","Hobo","Íquira","Isnos","La Argentina","La Plata","Nátaga","Neiva","Oporapa","Paicol","Palermo","Palestina","Pitalito","Rivera","Saladoblanco","San Agustín","Santa María","Suaza","Tarqui","Tello","Teruel","Tesalia","Timaná","Villavieja","Yaguará"],"La Guajira":["Albania","Barrancas","Dibulla","Distracción","El Molino","Fonseca","Hatonuevo","La Jagua del Pilar","Maicao","Manaure","Riohacha","San Juan del Cesar","Uribia","Urumita","Villanueva"],"Magdalena":["Algarrobo","Aracataca","Ariguaní","Cerro de San Antonio","Chibolo","Chibolo","Ciénaga","Concordia","El Banco","El Piñón","El Retén","Fundación","Guamal","Nueva Granada","Pedraza","Pijiño del Carmen","Pivijay","Plato","Pueblo Viejo","Remolino","Sabanas de San Ángel","Salamina","San Sebastián de Buenavista","San Zenón","Santa Ana","Santa Bárbara de Pinto","Santa Marta","Sitionuevo","Tenerife","Zapayán","Zona Bananera"],"Meta":["Acacías","Barranca de Upía","Cabuyaro","Castilla la Nueva","Cubarral","Cumaral","El Calvario","El Castillo","El Dorado","Fuente de Oro","Granada","Guamal","La Macarena","La Uribe","Lejanías","Mapiripán","Mesetas","Puerto Concordia","Puerto Gaitán","Puerto Lleras","Puerto López","Puerto Rico","Restrepo","San Carlos de Guaroa","San Juan de Arama","San Juanito","San Martín","Villavicencio","Vista Hermosa"],"Nariño":["Aldana","Ancuyá","Arboleda","Barbacoas","Belén","Buesaco","Chachagüí","Colón","Consacá","Contadero","Córdoba","Cuaspud","Cumbal","Cumbitara","El Charco","El Peñol","El Rosario","El Tablón","El Tambo","Francisco Pizarro","Funes","Guachucal","Guaitarilla","Gualmatán","Iles","Imués","Ipiales","La Cruz","La Florida","La Llanada","La Tola","La Unión","Leiva","Linares","Los Andes","Magüí Payán","Mallama","Mosquera","Nariño","Olaya Herrera","Ospina","Pasto","Policarpa","Potosí","Providencia","Puerres","Pupiales","Ricaurte","Roberto Payán","Samaniego","San Bernardo","San José de Albán","San Lorenzo","San Pablo","San Pedro de Cartago","Sandoná","Santa Bárbara","Santacruz","Sapuyes","Taminango","Tangua","Tumaco","Túquerres","Yacuanquer"],"Norte de Santander":["Ábrego","Arboledas","Bochalema","Bucarasica","Cáchira","Cácota","Chinácota","Chitagá","Convención","Cúcuta","Cucutilla","Duranía","El Carmen","El Tarra","El Zulia","Gramalote","Hacarí","Herrán","La Esperanza","La Playa de Belén","Labateca","Los Patios","Lourdes","Mutiscua","Ocaña","Pamplona","Pamplonita","Puerto Santander","Ragonvalia","Salazar de Las Palmas","San Calixto","San Cayetano","Santiago","Santo Domingo de Silos","Sardinata","Teorama","Tibú","Toledo","Villa Caro","Villa del Rosario"],"Putumayo":["Colón","Mocoa","Orito","Puerto Asís","Puerto Caicedo","Puerto Guzmán","Puerto Leguízamo","San Francisco","San Miguel","Santiago","Sibundoy","Valle del Guamuez","Villagarzón"],"Quindío":["Armenia","Buenavista","Calarcá","Circasia","Córdoba","Filandia","Génova","La Tebaida","Montenegro","Pijao","Quimbaya","Salento"],"Risaralda":["Apía","Balboa","Belén de Umbría","Dosquebradas","Guática","La Celia","La Virginia","Marsella","Mistrató","Pereira","Pueblo Rico","Quinchía","Santa Rosa de Cabal","Santuario"],"San Andrés y Providencia":["Providencia y Santa Catalina Islas","San Andrés"],"Santander":["Aguada","Albania","Aratoca","Barbosa","Barichara","Barrancabermeja","Betulia","Bolívar","Bucaramanga","Cabrera","California","Capitanejo","Carcasí","Cepitá","Cerrito","Charalá","Charta","Chima","Chipatá","Cimitarra","Concepción","Confines","Contratación","Coromoro","Curití","El Carmen de Chucurí","El Guacamayo","El Peñón","El Playón","El Socorro","Encino","Enciso","Florián","Floridablanca","Galán","Gámbita","Girón","Guaca","Guadalupe","Guapotá","Guavatá","Güepsa","Hato","Jesús María","Jordán","La Belleza","La Paz","Landázuri","Lebrija","Los Santos","Macaravita","Málaga","Matanza","Mogotes","Molagavita","Ocamonte","Oiba","Onzaga","Palmar","Palmas del Socorro","Páramo","Piedecuesta","Pinchote","Puente Nacional","Puerto Parra","Puerto Wilches","Rionegro","Sabana de Torres","San Andrés","San Benito","San Gil","San Joaquín","San José de Miranda","San Miguel","San Vicente de Chucurí","Santa Bárbara","Santa Helena del Opón","Simacota","Suaita","Sucre","Suratá","Tona","Valle de San José","Vélez","Vetas","Villanueva","Zapatoca"],"Sucre":["Buenavista","Caimito","Chalán","Colosó","Corozal","Coveñas","El Roble","Galeras","Guaranda","La Unión","Los Palmitos","Majagual","Morroa","Ovejas","Sampués","San Antonio de Palmito","San Benito Abad","San Juan de Betulia","San Marcos","San Onofre","San Pedro","Sincé","Sincelejo","Sucre","Tolú","Tolú Viejo"],"Tolima":["Alpujarra","Alvarado","Ambalema","Anzoátegui","Armero","Ataco","Cajamarca","Carmen de Apicalá","Casabianca","Chaparral","Coello","Coyaima","Cunday","Dolores","El Espinal","Falán","Flandes","Fresno","Guamo","Herveo","Honda","Ibagué","Icononzo","Lérida","Líbano","Mariquita","Melgar","Murillo","Natagaima","Ortega","Palocabildo","Piedras","Planadas","Prado","Purificación","Rioblanco","Roncesvalles","Rovira","Saldaña","San Antonio","San Luis","Santa Isabel","Suárez","Valle de San Juan","Venadillo","Villahermosa","Villarrica"],"Valle del Cauca":["Alcalá","Andalucía","Ansermanuevo","Argelia","Bolívar","Buenaventura","Buga","Bugalagrande","Caicedonia","Cali","Calima","Candelaria","Cartago","Dagua","El Águila","El Cairo","El Cerrito","El Dovio","Florida","Ginebra","Guacarí","Jamundí","La Cumbre","La Unión","La Victoria","Obando","Palmira","Pradera","Restrepo","Riofrío","Roldanillo","San Pedro","Sevilla","Toro","Trujillo","Tuluá","Ulloa","Versalles","Vijes","Yotoco","Yumbo","Zarzal"],"Vaupés":["Carurú","Mitú","Taraira"],"Vichada":["Cumaribo","La Primavera","Puerto Carreño","Santa Rosalía"]};
 
@@ -5101,6 +5114,10 @@ app.get("/pedido", (req, res) => {
                 margin-bottom:14px;font-family:inherit;}
           .precio{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};padding:14px 16px;border-radius:10px;
                    font-weight:700;text-align:center;margin-bottom:18px;}
+          .descuento-info{background:#FBF6E9;border:1px solid #F0E2B8;border-radius:10px;padding:12px 14px;
+                           margin:-6px 0 18px;font-size:0.82rem;color:#7A5A00;display:none;}
+          .descuento-info.activo{display:block;}
+          .descuento-info b{display:block;font-size:0.95rem;margin-bottom:2px;}
           .pro-opcion{display:flex;align-items:flex-start;gap:10px;background:${MARCA.crema};border:1px solid ${MARCA.borde};
                    border-radius:10px;padding:12px 14px;margin-bottom:18px;}
           .pro-opcion input{width:auto;margin:3px 0 0;}
@@ -5115,8 +5132,12 @@ app.get("/pedido", (req, res) => {
           <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
           <h1>Pide tu tarjeta Tapin</h1>
           <p>Llena tus datos, paga en línea con Wompi, y te enviamos la tarjeta a tu negocio.</p>
-          <div class="precio">Plan Básico — $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP (incluye envío)</div>
+          <div class="precio">Plan Básico — $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP c/u (incluye envío)</div>
           <form method="POST" action="/pedido">
+            <label>¿Cuántas tarjetas necesitas?</label>
+            <input type="number" name="cantidad" id="input-cantidad" min="1" max="500" value="1" required>
+            <div class="descuento-info" id="descuento-info"></div>
+
             <label>Nombre del negocio</label>
             <input type="text" name="nombreNegocio" required>
 
@@ -5152,6 +5173,30 @@ app.get("/pedido", (req, res) => {
         </div>
 
         <script>
+          // Precio escalonado por volumen (Plan B) — mismos tramos que en el servidor.
+          const ESCALONES = ${JSON.stringify(ESCALONES_DESCUENTO)};
+          const PRECIO_BASE = ${PRECIO_BASICO_COP};
+          const inputCantidad = document.getElementById("input-cantidad");
+          const descuentoInfo = document.getElementById("descuento-info");
+
+          function actualizarDescuento() {
+            const cantidad = Math.max(1, parseInt(inputCantidad.value, 10) || 1);
+            const escalon = ESCALONES.find((e) => cantidad >= e.minimo);
+            const total = escalon.precio * cantidad;
+            if (escalon.descuento) {
+              descuentoInfo.innerHTML =
+                "<b>¡Descuento por volumen aplicado! " + escalon.descuento + " off</b>" +
+                "$" + escalon.precio.toLocaleString("es-CO") + " COP por tarjeta × " + cantidad +
+                " = $" + total.toLocaleString("es-CO") + " COP total (antes $" +
+                (PRECIO_BASE * cantidad).toLocaleString("es-CO") + ")";
+              descuentoInfo.classList.add("activo");
+            } else {
+              descuentoInfo.classList.remove("activo");
+            }
+          }
+          inputCantidad.addEventListener("input", actualizarDescuento);
+          actualizarDescuento();
+
           // Departamentos y ciudades de Colombia — el usuario elige primero el
           // departamento, y la ciudad se autocompleta filtrando solo las de ese
           // departamento (igual que en cualquier formulario de dirección).
@@ -5192,18 +5237,23 @@ app.get("/pedido", (req, res) => {
 });
 
 app.post("/pedido", (req, res) => {
-  const { nombreNegocio, email, telefono, direccion, ciudad, departamento, incluirPro } = req.body;
+  const { nombreNegocio, email, telefono, direccion, ciudad, departamento, incluirPro, cantidad } = req.body;
   if (!nombreNegocio || !email || !telefono || !direccion || !ciudad || !departamento) {
     return res.status(400).send("Faltan datos del pedido.");
   }
 
+  const cantidadLimpia = Math.min(500, Math.max(1, parseInt(cantidad, 10) || 1));
+  const escalon = precioTarjetaPorCantidad(cantidadLimpia);
   const proIncluido = incluirPro === "si";
-  const monto = PRECIO_BASICO_COP + (proIncluido ? PRECIO_PRO_COP : 0);
+  const monto = escalon.precio * cantidadLimpia + (proIncluido ? PRECIO_PRO_COP : 0);
 
   const pedidos = leerPedidos();
   const id = generarToken();
   pedidos[id] = {
     nombreNegocio, email, telefono, direccion, ciudad, departamento,
+    cantidad: cantidadLimpia,
+    precioUnidad: escalon.precio,
+    descuentoAplicado: escalon.descuento,
     proIncluido,
     monto,
     estado: "pendiente", // pendiente | aprobado | rechazado
@@ -5261,7 +5311,11 @@ app.get("/pagar/:id", (req, res) => {
           <div class="resumen">
             <div><b>Negocio:</b> ${pedido.nombreNegocio}</div>
             <div><b>Envío a:</b> ${pedido.direccion}, ${pedido.ciudad}, ${pedido.departamento}</div>
-            <div style="margin-top:8px;"><b>Plan Básico:</b> $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP</div>
+            <div style="margin-top:8px;">
+              <b>Plan Básico:</b> ${pedido.cantidad || 1} tarjeta${(pedido.cantidad || 1) > 1 ? "s" : ""}
+              × $${(pedido.precioUnidad || PRECIO_BASICO_COP).toLocaleString("es-CO")} COP c/u
+            </div>
+            ${pedido.descuentoAplicado ? `<div style="color:#7A5A00;">✓ Descuento por volumen aplicado: ${pedido.descuentoAplicado} off por tarjeta</div>` : ""}
             ${pedido.proIncluido ? `<div><b>Primer mes Plan Pro:</b> $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP</div>` : ""}
           </div>
           <div class="monto">$${pedido.monto.toLocaleString("es-CO")} COP</div>
@@ -5374,10 +5428,46 @@ app.get("/pago-confirmado", async (req, res) => {
 
   if (pedido) {
     if (estado === "APPROVED") {
+      const yaGenerado = pedido.estado === "aprobado" && pedido.codigosGenerados;
       pedido.estado = "aprobado";
       mensaje = pedido.proIncluido
         ? "¡Pago aprobado! Tu tarjeta Tapin va en camino, con tu primer mes de Plan Pro ya incluido."
         : "¡Pago aprobado! Tu tarjeta Tapin va en camino.";
+
+      // Generamos un código de activación por cada tarjeta comprada, y se los
+      // mandamos por correo de una vez — no dependemos de que Samuel los
+      // genere a mano después. Solo se hace la primera vez que se confirma
+      // (si alguien recarga esta página, no se duplican códigos ni correos).
+      if (!yaGenerado) {
+        const cantidadComprada = pedido.cantidad || 1;
+        const codigos = leerCodigos();
+        const nuevosCodigos = [];
+        for (let i = 0; i < cantidadComprada; i++) {
+          let nuevo;
+          do {
+            nuevo = generarCodigo();
+          } while (codigos[nuevo]);
+          codigos[nuevo] = { activado: false, creado: new Date().toISOString() };
+          nuevosCodigos.push(nuevo);
+        }
+        guardarCodigos(codigos);
+        pedido.codigosGenerados = nuevosCodigos;
+
+        const baseUrl = `${req.protocol}://${req.get("host")}`;
+        const filasCodigos = nuevosCodigos
+          .map((c) => `<li style="margin-bottom:8px;"><b style="letter-spacing:0.05em;">${c}</b> — <a href="${baseUrl}/activar/${c}">Activar esta tarjeta</a></li>`)
+          .join("");
+        enviarEmail(
+          pedido.email,
+          nuevosCodigos.length === 1 ? "Tu código de activación Tapin" : `Tus ${nuevosCodigos.length} códigos de activación Tapin`,
+          `<div style="font-family:-apple-system,Arial,sans-serif;max-width:460px;">
+             <h2 style="color:${MARCA.verdeOscuro};">¡Gracias por tu compra, ${pedido.nombreNegocio}!</h2>
+             <p>Tu pago fue aprobado. Cuando te llegue${nuevosCodigos.length > 1 ? "n" : ""} la${nuevosCodigos.length > 1 ? "s" : ""} tarjeta${nuevosCodigos.length > 1 ? "s" : ""} física${nuevosCodigos.length > 1 ? "s" : ""}, activa cada una con su link:</p>
+             <ul style="padding-left:18px;">${filasCodigos}</ul>
+             <p style="font-size:0.8rem;color:#888;">Si tienes más de una tarjeta, usa el mismo correo al activarlas para verlas todas juntas en <a href="${baseUrl}/mis-negocios">tu panel</a>.</p>
+           </div>`
+        ).catch((err) => console.error("[pago-confirmado] Error enviando códigos:", err.message));
+      }
     } else if (estado === "DECLINED" || estado === "ERROR") {
       pedido.estado = "rechazado";
       mensaje = "El pago no pudo procesarse. Puedes intentar de nuevo.";
