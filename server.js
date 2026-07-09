@@ -2336,10 +2336,12 @@ app.get("/mi-panel/:slug", (req, res) => {
           .sentimiento-leyenda i{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
           .sentimiento-vacio{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};padding:6px 0;}
 
-          .tabla-actividad{width:100%;border-collapse:collapse;font-size:0.78rem;}
+          .tabla-actividad{width:100%;border-collapse:collapse;font-size:0.78rem;table-layout:fixed;}
+          .tabla-actividad th:first-child, .tabla-actividad td:first-child{width:58%;}
+          .tabla-actividad th:last-child, .tabla-actividad td:last-child{width:42%;}
           .tabla-actividad th{text-align:left;color:${MARCA.textoSuave};font-weight:600;font-size:0.66rem;
                                text-transform:uppercase;letter-spacing:0.03em;padding:0 0 6px;border-bottom:1px solid ${MARCA.borde};}
-          .tabla-actividad td{padding:7px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.texto};}
+          .tabla-actividad td{padding:7px 10px 7px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.texto};}
           .tabla-actividad tr:last-child td{border-bottom:none;}
 
           .fila-herramientas{display:flex;gap:10px;flex-wrap:wrap;}
