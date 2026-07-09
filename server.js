@@ -371,13 +371,15 @@ function clienteActual(req) {
   return clientes[clienteId] ? { id: clienteId, ...clientes[clienteId] } : null;
 }
 
-function iniciarSesionCliente(res, clienteId) {
+function iniciarSesionCliente(res, clienteId, recordar = true) {
   const sesiones = leerSesionesClientes();
   const token = generarToken() + generarToken(); // más largo que los magic links, es persistente
   sesiones[token] = clienteId;
   guardarSesionesClientes(sesiones);
-  const TREINTA_DIAS = 30 * 24 * 60 * 60;
-  res.setHeader("Set-Cookie", `tapin_sesion=${token}; HttpOnly; Path=/; Max-Age=${TREINTA_DIAS}; SameSite=Lax`);
+  // Si "recordar" está marcado, la sesión dura 30 días. Si no, es una cookie
+  // de sesión normal — se borra sola al cerrar el navegador.
+  const maxAge = recordar ? `Max-Age=${30 * 24 * 60 * 60}; ` : "";
+  res.setHeader("Set-Cookie", `tapin_sesion=${token}; HttpOnly; Path=/; ${maxAge}SameSite=Lax`);
 }
 
 function generarCodigo() {
@@ -1589,16 +1591,18 @@ app.get("/activar/:codigo", (req, res) => {
               <input type="text" name="claveAcceso" required minlength="6"
                      placeholder="Mínimo 6 caracteres — la vas a necesitar para entrar a tu panel">
 
-              <label>Dirección del negocio</label>
-              <div class="direccion-wrap">
-                <input type="text" id="input-direccion" name="direccion" autocomplete="off"
-                       placeholder="Escribe al menos 3 letras — ej: Cra 7 Chía">
-                <div class="sugerencias" id="lista-sugerencias"></div>
-              </div>
-              <div class="direccion-estado" id="direccion-estado"></div>
-              <input type="hidden" name="lat" id="input-lat">
-              <input type="hidden" name="lng" id="input-lng">
-              <input type="hidden" name="ciudad" id="input-ciudad">
+              <label>Departamento</label>
+              <select name="departamento" id="sel-departamento" required>
+                <option value="">Selecciona un departamento...</option>
+              </select>
+
+              <label>Ciudad</label>
+              <input type="text" name="ciudad" id="input-ciudad" list="lista-ciudades" required
+                     placeholder="Primero elige el departamento" autocomplete="off" disabled>
+              <datalist id="lista-ciudades"></datalist>
+
+              <label>Dirección exacta</label>
+              <input type="text" name="direccion" required placeholder="Ej: Cra 7 # 12-34, local 2">
 
               <label>Categoría</label>
               <div class="categorias" id="categorias">
@@ -1639,80 +1643,34 @@ app.get("/activar/:codigo", (req, res) => {
             });
           });
 
-          // ---------- Buscador de direcciones con autocompletado (OpenStreetMap Nominatim, gratis) ----------
-          const inputDireccion = document.getElementById('input-direccion');
-          const listaSugerencias = document.getElementById('lista-sugerencias');
-          const estadoDireccion = document.getElementById('direccion-estado');
-          const inputPais = document.getElementById('input-pais');
-          let temporizador = null;
-          let ultimaConsulta = '';
+          // ---------- Departamento y ciudad (igual que en /pedido) ----------
+          const COLOMBIA_CIUDADES = ${JSON.stringify(COLOMBIA_CIUDADES)};
+          const selDepto = document.getElementById('sel-departamento');
+          const inputCiudadActivar = document.getElementById('input-ciudad');
+          const listaCiudadesActivar = document.getElementById('lista-ciudades');
 
-          function paisCodigo() {
-            const opcion = inputPais.options[inputPais.selectedIndex];
-            return opcion ? opcion.dataset.codigo : 'co';
-          }
-
-          async function buscarDirecciones(texto) {
-            try {
-              const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6' +
-                          '&countrycodes=' + paisCodigo() + '&q=' + encodeURIComponent(texto);
-              const resp = await fetch(url, { headers: { 'Accept-Language': 'es' } });
-              const resultados = await resp.json();
-              mostrarSugerencias(resultados);
-            } catch (err) {
-              estadoDireccion.textContent = 'No se pudo buscar en este momento. Puedes escribir la dirección manualmente.';
-            }
-          }
-
-          function mostrarSugerencias(resultados) {
-            listaSugerencias.innerHTML = '';
-            if (!resultados || resultados.length === 0) {
-              listaSugerencias.classList.remove('activo');
-              return;
-            }
-            resultados.forEach((r) => {
-              const item = document.createElement('div');
-              item.className = 'sugerencia-item';
-              item.textContent = r.display_name;
-              item.addEventListener('click', () => seleccionarDireccion(r));
-              listaSugerencias.appendChild(item);
-            });
-            listaSugerencias.classList.add('activo');
-          }
-
-          function seleccionarDireccion(r) {
-            inputDireccion.value = r.display_name;
-            document.getElementById('input-lat').value = r.lat;
-            document.getElementById('input-lng').value = r.lon;
-            const dir = r.address || {};
-            const ciudad = dir.city || dir.town || dir.village || dir.municipality || '';
-            document.getElementById('input-ciudad').value = ciudad;
-            listaSugerencias.classList.remove('activo');
-            estadoDireccion.innerHTML = '<span class="direccion-ok">✓ Ubicación encontrada — aparecerá en el mapa público de Tapin.</span>';
-          }
-
-          inputDireccion.addEventListener('input', () => {
-            const texto = inputDireccion.value.trim();
-            clearTimeout(temporizador);
-            estadoDireccion.textContent = '';
-            document.getElementById('input-lat').value = '';
-            document.getElementById('input-lng').value = '';
-            if (texto.length < 3) {
-              listaSugerencias.classList.remove('activo');
-              return;
-            }
-            // Pequeña espera antes de buscar, para no mandar una consulta por cada tecla.
-            temporizador = setTimeout(() => {
-              if (texto !== ultimaConsulta) {
-                ultimaConsulta = texto;
-                buscarDirecciones(texto);
-              }
-            }, 400);
+          Object.keys(COLOMBIA_CIUDADES).forEach((depto) => {
+            const opt = document.createElement('option');
+            opt.value = depto;
+            opt.textContent = depto;
+            selDepto.appendChild(opt);
           });
 
-          document.addEventListener('click', (e) => {
-            if (!e.target.closest('.direccion-wrap')) {
-              listaSugerencias.classList.remove('activo');
+          selDepto.addEventListener('change', () => {
+            listaCiudadesActivar.innerHTML = '';
+            inputCiudadActivar.value = '';
+            const ciudades = COLOMBIA_CIUDADES[selDepto.value] || [];
+            if (ciudades.length) {
+              inputCiudadActivar.disabled = false;
+              inputCiudadActivar.placeholder = 'Escribe para buscar tu ciudad...';
+              ciudades.forEach((c) => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                listaCiudadesActivar.appendChild(opt);
+              });
+            } else {
+              inputCiudadActivar.disabled = true;
+              inputCiudadActivar.placeholder = 'Primero elige el departamento';
             }
           });
         </script>
@@ -1730,7 +1688,7 @@ app.post("/activar/:codigo", (req, res) => {
   if (!entrada) return res.status(404).send("Código no válido.");
   if (entrada.activado) return res.status(400).send("Esta tarjeta ya fue activada antes.");
 
-  const { nombre, googleUrl, categoria, pais, email, plan, direccion, lat, lng, ciudad, claveAcceso } = req.body;
+  const { nombre, googleUrl, categoria, pais, email, plan, direccion, departamento, ciudad, claveAcceso } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
@@ -1755,8 +1713,7 @@ app.post("/activar/:codigo", (req, res) => {
     email: email || "",
     plan: plan === "pro" ? "pro" : "basico",
     direccion: direccion || "",
-    lat: lat ? parseFloat(lat) : null,
-    lng: lng ? parseFloat(lng) : null,
+    departamento: departamento || "",
     ciudad: ciudad || "",
   };
 
@@ -1883,6 +1840,7 @@ app.get("/stats", (req, res) => {
           <a href="/quejas/${slug}?key=${key}">Retroalimentación</a>
           <a href="/contenido/${slug}?key=${key}">Contenido</a>
           <a href="/notificar/${slug}?key=${key}">Enviar reporte por email</a>
+          <a href="/reportes-guardados/${slug}?key=${key}">Reportes guardados</a>
         </div>
       </div>`;
   }
@@ -2640,6 +2598,7 @@ app.get("/mi-panel/:slug", (req, res) => {
             <div class="fila-herramientas">
               <a href="/quejas/${slug}?key=${req.query.key}" class="btn-herramienta">Retroalimentación privada</a>
               <a href="/contenido/${slug}?key=${req.query.key}" class="btn-herramienta">Generador de contenido</a>
+              <a href="/reportes-guardados/${slug}?key=${req.query.key}" class="btn-herramienta">Reportes guardados</a>
             </div>
           </div>
 
@@ -3533,6 +3492,18 @@ async function enviarReporteMensualNegocio(slug, negocio, baseUrl) {
 
   const pdfBytes = await generarInformePDF(negocio, slug);
 
+  // Guardamos una copia del PDF en el disco persistente, organizada por
+  // negocio y mes — así queda un archivo histórico consultable después,
+  // no solo un correo que se manda y se olvida.
+  const mesArchivo = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const carpetaReportes = path.join(DATA_DIR, "reportes", slug);
+  try {
+    fs.mkdirSync(carpetaReportes, { recursive: true });
+    fs.writeFileSync(path.join(carpetaReportes, `${mesArchivo}.pdf`), Buffer.from(pdfBytes));
+  } catch (err) {
+    console.error(`[reportes] No se pudo guardar el PDF de ${slug}:`, err.message);
+  }
+
   const resultado = await enviarEmail(
     negocio.email,
     `📊 Reporte mensual de Tapin — ${negocio.nombre}`,
@@ -3635,6 +3606,86 @@ app.get("/enviar-reportes-mensuales", async (req, res) => {
     fallidos: resultado.filter((r) => !r.ok).length,
     detalle: resultado,
   });
+});
+
+// ---------- Historial de reportes mensuales guardados ----------
+// Lista los PDFs de reportes que se han guardado en disco para un negocio,
+// con link de descarga para cada mes. Accesible por el admin o por el propio
+// negocio con su clave.
+app.get("/reportes-guardados/:slug", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!autorizadoProNegocio(req, negocio, slug)) {
+    return res.status(401).send("No autorizado.");
+  }
+
+  const carpeta = path.join(DATA_DIR, "reportes", slug);
+  let archivos = [];
+  try {
+    archivos = fs.readdirSync(carpeta)
+      .filter((f) => f.endsWith(".pdf"))
+      .sort()
+      .reverse();
+  } catch {
+    archivos = [];
+  }
+
+  const filas = archivos
+    .map((f) => {
+      const mes = f.replace(".pdf", "");
+      const [anio, mesNum] = mes.split("-");
+      const nombreMes = new Date(`${anio}-${mesNum}-01`).toLocaleDateString("es-CO", { month: "long", year: "numeric" });
+      return `<tr>
+        <td style="text-transform:capitalize;">${nombreMes}</td>
+        <td><a href="/reportes-guardados/${slug}/${mes}.pdf?key=${req.query.key}">Descargar PDF</a></td>
+      </tr>`;
+    })
+    .join("");
+
+  res.send(`
+    <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Reportes guardados — ${negocio.nombre}</title>
+      <style>
+        ${ESTILO_BASE}
+        table{border-collapse:collapse;width:100%;max-width:500px;background:#fff;border-radius:10px;overflow:hidden;border:1px solid ${MARCA.borde};}
+        th,td{padding:12px 16px;text-align:left;border-bottom:1px solid ${MARCA.borde};font-size:0.88rem;}
+        th{background:${MARCA.verdeOscuro};color:#fff;font-size:0.72rem;text-transform:uppercase;}
+        a{color:${MARCA.verde};font-weight:600;text-decoration:none;}
+      </style></head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
+        <div class="content">
+          <div class="eyebrow">Historial</div>
+          <h1 class="titulo-pagina">Reportes mensuales — ${negocio.nombre}</h1>
+          <div class="subtitulo">Cada reporte mensual queda guardado aquí, no solo enviado por correo.</div>
+          <table>
+            <tr><th>Mes</th><th>Descarga</th></tr>
+            ${filas || `<tr><td colspan="2">Todavía no hay reportes guardados para este negocio.</td></tr>`}
+          </table>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Descarga un PDF de reporte guardado específico.
+app.get("/reportes-guardados/:slug/:mes.pdf", (req, res) => {
+  const { slug, mes } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!autorizadoProNegocio(req, negocio, slug)) {
+    return res.status(401).send("No autorizado.");
+  }
+
+  const archivo = path.join(DATA_DIR, "reportes", slug, `${mes}.pdf`);
+  if (!fs.existsSync(archivo)) {
+    return res.status(404).send("Ese reporte no existe.");
+  }
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="reporte-${slug}-${mes}.pdf"`);
+  res.send(fs.readFileSync(archivo));
 });
 
 // Misma información en JSON, útil si luego quieres conectar esto a un dashboard propio.
@@ -3978,6 +4029,18 @@ app.get("/mis-negocios", (req, res) => {
     </form>`;
 
   const bloqueLogin = `
+    <a href="/auth/google/iniciar" style="display:flex;align-items:center;justify-content:center;gap:10px;
+       width:100%;box-sizing:border-box;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
+       padding:13px;font-weight:700;font-size:0.9rem;color:${MARCA.texto};text-decoration:none;margin-bottom:14px;">
+      <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#EA4335" d="M24 9.5c3.4 0 6.4 1.2 8.8 3.5l6.5-6.5C35.3 2.5 30 0 24 0 14.6 0 6.5 5.4 2.5 13.2l7.6 5.9C12 12.9 17.5 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7c4.3-4 6.8-9.9 6.8-17.4z"/>
+        <path fill="#FBBC05" d="M10.1 19.1a14.5 14.5 0 000 9.8l-7.6 5.9a24 24 0 010-21.6z"/>
+        <path fill="#34A853" d="M24 48c6 0 11.3-2 15-5.4l-7.3-5.7c-2 1.4-4.6 2.2-7.7 2.2-6.5 0-12-4.4-14-10.3l-7.6 5.9C6.5 42.6 14.6 48 24 48z"/>
+      </svg>
+      Iniciar sesión con Google
+    </a>
+    <div class="divisor">o con tu correo</div>
     <form method="POST" action="/mis-negocios/solicitar">
       <input type="email" name="email" required placeholder="tu@negocio.com">
       <button type="submit">Enviarme el acceso</button>
@@ -4102,29 +4165,14 @@ app.post("/mis-negocios/solicitar", async (req, res) => {
 
 // El link mágico en sí — muestra todos los negocios del dueño, cada uno como
 // una tarjeta bonita, con acceso directo a su panel individual.
-app.get("/mis-negocios/:token", (req, res) => {
-  const tokens = leerTokens();
-  const entrada = tokens[req.params.token];
-  if (!entrada) {
-    return res.status(401).send("Este link no es válido o ya expiró. Solicita uno nuevo en /mis-negocios.");
-  }
-
-  // Expiración de 24 horas — un link mágico viejo ya no debe funcionar.
-  const VEINTICUATRO_HORAS_MS = 24 * 60 * 60 * 1000;
-  const antiguedad = Date.now() - new Date(entrada.creado).getTime();
-  if (antiguedad > VEINTICUATRO_HORAS_MS) {
-    delete tokens[req.params.token];
-    guardarTokens(tokens);
-    return res.status(401).send(
-      `Este link expiró (los links de acceso duran 24 horas por seguridad). ` +
-      `<a href="/mis-negocios">Solicita uno nuevo aquí</a>.`
-    );
-  }
-
+// Arma la página "Tus negocios" a partir de un correo ya verificado (por
+// magic link o por Google) — reutilizada por /mis-negocios/:token y por el
+// login con Google.
+function renderizarPaginaNegocios(email) {
   const todos = todosLosNegocios();
   const datos = leerDatos();
   const misSlugs = Object.keys(todos).filter(
-    (slug) => (todos[slug].email || "").trim().toLowerCase() === entrada.email
+    (slug) => (todos[slug].email || "").trim().toLowerCase() === email
   );
 
   const tarjetas = misSlugs.map((slug) => {
@@ -4146,7 +4194,7 @@ app.get("/mis-negocios/:token", (req, res) => {
       </div>`;
   }).join("");
 
-  res.send(`
+  return `
     <html>
       <head>
         <meta charset="utf-8">
@@ -4177,8 +4225,94 @@ app.get("/mis-negocios/:token", (req, res) => {
           <div class="grid">${tarjetas || "<p>No encontramos negocios asociados a este correo.</p>"}</div>
         </div>
       </body>
-    </html>
-  `);
+    </html>`;
+}
+
+// ---------- Iniciar sesión con Google (negocios) ----------
+// Usa OAuth 2.0 de Google directamente (fetch a sus endpoints, sin librerías
+// extra). Necesita dos variables de entorno en Render:
+//   GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET — se sacan gratis en
+//   console.cloud.google.com → APIs y servicios → Credenciales → Crear
+//   credenciales → ID de cliente de OAuth → tipo "Aplicación web".
+//   En "URI de redirección autorizados" hay que agregar exactamente:
+//   https://tapin.page/auth/google/callback
+app.get("/auth/google/iniciar", (req, res) => {
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    return res.status(500).send("El login con Google todavía no está configurado (falta GOOGLE_CLIENT_ID en Render).");
+  }
+  const redirectUri = `${req.protocol}://${req.get("host")}/auth/google/callback`;
+  const params = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid email",
+    prompt: "select_account",
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+});
+
+app.get("/auth/google/callback", async (req, res) => {
+  if (!req.query.code) {
+    return res.status(400).send("No llegó el código de Google. Intenta de nuevo desde /mis-negocios.");
+  }
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    return res.status(500).send("El login con Google todavía no está configurado.");
+  }
+
+  try {
+    const redirectUri = `${req.protocol}://${req.get("host")}/auth/google/callback`;
+    const resp = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code: req.query.code,
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      }),
+    });
+    const data = await resp.json();
+    if (!data.access_token) {
+      console.error("[auth/google] Error obteniendo token:", JSON.stringify(data));
+      return res.status(401).send("No se pudo verificar tu cuenta de Google. Intenta de nuevo.");
+    }
+
+    const infoResp = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${data.access_token}` },
+    });
+    const info = await infoResp.json();
+    if (!info.email) {
+      return res.status(401).send("Google no devolvió un correo válido.");
+    }
+
+    res.send(renderizarPaginaNegocios(info.email.trim().toLowerCase()));
+  } catch (err) {
+    console.error("[auth/google] Error:", err.message);
+    res.status(500).send("Ocurrió un error verificando tu cuenta de Google. Intenta de nuevo.");
+  }
+});
+
+app.get("/mis-negocios/:token", (req, res) => {
+  const tokens = leerTokens();
+  const entrada = tokens[req.params.token];
+  if (!entrada) {
+    return res.status(401).send("Este link no es válido o ya expiró. Solicita uno nuevo en /mis-negocios.");
+  }
+
+  // Expiración de 24 horas — un link mágico viejo ya no debe funcionar.
+  const VEINTICUATRO_HORAS_MS = 24 * 60 * 60 * 1000;
+  const antiguedad = Date.now() - new Date(entrada.creado).getTime();
+  if (antiguedad > VEINTICUATRO_HORAS_MS) {
+    delete tokens[req.params.token];
+    guardarTokens(tokens);
+    return res.status(401).send(
+      `Este link expiró (los links de acceso duran 24 horas por seguridad). ` +
+      `<a href="/mis-negocios">Solicita uno nuevo aquí</a>.`
+    );
+  }
+
+  res.send(renderizarPaginaNegocios(entrada.email));
 });
 
 // ---------- Páginas de cliente: registro / login / cuenta ----------
@@ -4236,6 +4370,10 @@ app.get("/cliente", (req, res) => {
                 <input type="password" id="clave-login" name="password" required placeholder="Contraseña">
                 <button type="button" class="ver-clave" id="boton-clave-login" onclick="alternarClave('clave-login')">${ICONO_OJO_ABIERTO}</button>
               </div>
+              <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;font-weight:400;margin:-6px 0 14px;cursor:pointer;">
+                <input type="checkbox" name="recordar" value="si" checked style="width:auto;margin:0;">
+                Mantener mi sesión iniciada
+              </label>
               <button type="submit">Entrar</button>
             </form>
           </div>
@@ -4305,6 +4443,7 @@ app.post("/cliente/registro", (req, res) => {
 app.post("/cliente/login", (req, res) => {
   const email = (req.body.email || "").trim().toLowerCase();
   const password = req.body.password || "";
+  const recordar = req.body.recordar === "si";
 
   const clientes = leerClientes();
   const entrada = Object.entries(clientes).find(([, c]) => c.email === email);
@@ -4312,7 +4451,7 @@ app.post("/cliente/login", (req, res) => {
     return res.redirect("/cliente?error=credenciales");
   }
 
-  iniciarSesionCliente(res, entrada[0]);
+  iniciarSesionCliente(res, entrada[0], recordar);
   res.redirect("/cuenta");
 });
 
