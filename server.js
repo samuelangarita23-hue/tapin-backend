@@ -1898,9 +1898,10 @@ app.get("/stats", (req, res) => {
           .sector-badge{font-size:0.74rem;font-weight:700;margin-bottom:14px;}
           .card-ultimo{font-size:0.82rem;color:${MARCA.textoSuave};margin-bottom:16px;padding-top:14px;border-top:1px solid ${MARCA.borde};}
           .card-ultimo b{color:${MARCA.texto};}
-          .card-actions{display:flex;flex-wrap:wrap;}
-          .card-actions a{color:${MARCA.verde};font-weight:600;text-decoration:none;font-size:0.78rem;white-space:nowrap;margin:0 14px 6px 0;}
-          .card-actions a:hover{color:${MARCA.verdeOscuro};text-decoration:underline;}
+          .card-actions{display:flex;flex-wrap:wrap;gap:8px;}
+          .card-actions a{color:${MARCA.verdeOscuro};font-weight:600;text-decoration:none;font-size:0.74rem;
+                          white-space:nowrap;background:${MARCA.verdeClaro};padding:6px 12px;border-radius:100px;}
+          .card-actions a:hover{background:${MARCA.verde};color:#fff;}
           .seccion-pais{margin-bottom:36px;}
           .pais-header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;
                        border-bottom:2px solid ${MARCA.verdeOscuro};padding-bottom:10px;margin-bottom:18px;}
@@ -1911,15 +1912,25 @@ app.get("/stats", (req, res) => {
                     font-size:0.82rem;padding:9px 18px;border-radius:100px;text-decoration:none;
                     margin:0 8px 8px 0;display:inline-block;}
           .btn-pais:hover{border-color:${MARCA.verdeOscuro};background:${MARCA.verdeClaro};}
+          .topbar-nav{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:flex-end;}
+          .topbar-nav a{color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;white-space:nowrap;}
+          .topbar-nav a:hover{color:#fff;text-decoration:underline;}
+          @media (max-width:640px){
+            .topbar{flex-direction:column;align-items:flex-start;gap:10px;padding:16px 20px;}
+            .topbar-nav{justify-content:flex-start;width:100%;}
+            .content{padding:20px 16px 50px;}
+            .card{padding:18px;}
+            .card-top{flex-wrap:wrap;gap:10px;}
+          }
         </style>
       </head>
       <body>
         <div class="topbar">
           <div style="display:flex;align-items:center;gap:0;">${logoSvg("#FFFFFF", 30)}</div>
-          <div>
-            <a href="/descubre" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;margin-right:18px;" target="_blank">Mapa público</a>
-            <a href="/editar?key=${key}" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;margin-right:18px;">Editar negocios</a>
-            <a href="/codigos?key=${key}" style="color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;">+ Generar tarjetas</a>
+          <div class="topbar-nav">
+            <a href="/descubre" target="_blank">Mapa público</a>
+            <a href="/editar?key=${key}">Editar negocios</a>
+            <a href="/codigos?key=${key}">+ Generar tarjetas</a>
           </div>
         </div>
         <div class="content">
