@@ -1360,7 +1360,7 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
 
               <label>Plan</label>
               <select name="plan">
-                <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($100.000 — envío incluido)</option>
+                <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($119.900 — envío incluido)</option>
                 <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($59.900/mes — alertas, reporte mensual, contenido)</option>
               </select>
 
@@ -1622,7 +1622,7 @@ app.get("/activar/:codigo", (req, res) => {
 
               <label>Plan</label>
               <select name="plan">
-                <option value="basico">Básico ($100.000 — envío incluido)</option>
+                <option value="basico">Básico ($119.900 — envío incluido)</option>
                 <option value="pro">Pro ($59.900/mes — alertas, reporte mensual, contenido)</option>
               </select>
 
@@ -3857,7 +3857,7 @@ app.get("/conoce", (req, res) => {
           <div class="planes">
             <div class="plan">
               <div class="plan-nombre">Pago único</div>
-              <div class="plan-precio">$100.000 <span>COP</span></div>
+              <div class="plan-precio">$119.900 <span>COP</span></div>
               <p style="font-size:0.78rem;color:${MARCA.verde};font-weight:700;margin:-6px 0 14px;">Envío incluido</p>
               <ul>
                 <li><span class="check">✓</span> Tarjeta NFC física + envío incluido</li>
@@ -5070,10 +5070,10 @@ app.get("/admin/entrar", (req, res) => {
 });
 
 // ---------- Flujo de compra: pedido → pago con Wompi → confirmación ----------
-// Esto es para el Plan Básico ($100.000 COP, pago único, incluye la tarjeta física y el envío
+// Esto es para el Plan Básico ($119.900 COP, pago único, incluye la tarjeta física y el envío
 // y el envío). El Plan Pro (mensual) necesita una integración distinta — ver nota
 // al final del archivo README sobre pagos recurrentes.
-const PRECIO_BASICO_COP = 100000;
+const PRECIO_BASICO_COP = 119900;
 const PRECIO_PRO_COP = 59900;
 
 // Departamentos y municipios de Colombia, para el selector de ciudad en /pedido.
