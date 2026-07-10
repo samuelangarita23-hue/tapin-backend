@@ -2705,7 +2705,6 @@ app.get("/mi-panel/:slug", (req, res) => {
               <a href="/quejas/${slug}?key=${req.query.key}" class="btn-herramienta">Retroalimentación privada</a>
               <a href="/contenido/${slug}?key=${req.query.key}" class="btn-herramienta">Generador de contenido</a>
               <a href="/reportes-guardados/${slug}?key=${req.query.key}" class="btn-herramienta">Reportes guardados</a>
-              <a href="/mi-panel/${slug}/fidelizacion?key=${req.query.key}" class="btn-herramienta">Fidelización</a>
             </div>
           </div>
 
@@ -2948,248 +2947,6 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
         </div>
       </body>
     </html>
-  `);
-});
-
-// ---------- Tarjeta de fidelización (tarjeta física aparte, incluida en Plan Pro) ----------
-// Funciona igual sin importar la categoría del negocio: el dueño define en
-// texto libre cada cuántos sellos se gana algo, y qué es ese algo. Funciona
-// tanto para clientes con cuenta en Tapin (se identifican solos) como sin
-// cuenta (se identifican con teléfono o correo, sin crear nada).
-
-function normalizarIdentificador(valor) {
-  return (valor || "").trim().toLowerCase();
-}
-
-// Panel del negocio: configurar la meta y el premio, y ver quién lleva cuántos sellos.
-app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
-    return res.status(401).send("No autorizado.");
-  }
-  if (!esPro(negocio)) {
-    return res.status(402).send(
-      `La tarjeta de fidelización es exclusiva del Plan Pro. ` +
-      `Súbele el plan a "${negocio.nombre}" desde /mejorar-a-pro/${slug}?key=${claveUsada} para activarla.`
-    );
-  }
-  req.query.key = claveUsada;
-
-  const fid = negocio.fidelizacion || { metaSellos: 10, premio: "" };
-  const datos = leerDatos();
-  const clientesFid = (datos[slug] && datos[slug].fidelizacion) || {};
-
-  const filas = Object.entries(clientesFid)
-    .sort((a, b) => (b[1].sellos || 0) - (a[1].sellos || 0))
-    .map(([id, c]) => {
-      const listo = fid.metaSellos && c.sellos >= fid.metaSellos;
-      return `<tr style="${listo ? `background:${MARCA.verdeClaro};` : ""}">
-        <td>${c.nombre || id}</td>
-        <td>${id}</td>
-        <td>${c.sellos || 0} / ${fid.metaSellos || "—"}</td>
-        <td>${listo
-          ? `<a href="/mi-panel/${slug}/fidelizacion/${encodeURIComponent(id)}/canjear?key=${claveUsada}" style="color:${MARCA.verdeOscuro};font-weight:700;">Canjear premio</a>`
-          : ""}</td>
-      </tr>`;
-    })
-    .join("");
-
-  res.send(`
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Fidelización — ${negocio.nombre}</title>
-        <style>
-          ${ESTILO_BASE}
-          table{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden;border:1px solid ${MARCA.borde};margin-bottom:24px;}
-          th,td{padding:10px 14px;text-align:left;border-bottom:1px solid ${MARCA.borde};font-size:0.85rem;}
-          th{background:${MARCA.verdeOscuro};color:#fff;font-size:0.7rem;text-transform:uppercase;}
-          a{color:${MARCA.verde};font-weight:600;text-decoration:none;font-size:0.82rem;}
-          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px;max-width:420px;margin-bottom:28px;}
-          input{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;}
-          label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin-bottom:6px;}
-          button{width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:12px;font-weight:700;cursor:pointer;}
-          .tarjeta-info{background:${MARCA.verdeClaro};border-radius:10px;padding:14px 16px;font-size:0.85rem;color:${MARCA.verdeOscuro};margin-bottom:24px;}
-        </style>
-      </head>
-      <body>
-        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/mi-panel/${slug}?key=${claveUsada}" style="color:#CFE3D8;">&larr; Volver al panel</a></div>
-        <div class="content">
-          <div class="eyebrow">Plan Pro</div>
-          <h1 class="titulo-pagina">Fidelización — ${negocio.nombre}</h1>
-          <div class="subtitulo">Cada visita suma un sello. Tú decides cada cuántos y qué se ganan.</div>
-
-          <div class="tarjeta-info">
-            La tarjeta física de fidelización debe tener grabado: <b>${req.protocol}://${req.get("host")}/fidelidad/${slug}</b>
-          </div>
-
-          <div class="form-card">
-            <h3 style="margin-top:0;">Configuración</h3>
-            <form method="POST" action="/mi-panel/${slug}/fidelizacion?key=${claveUsada}">
-              <label>¿Cada cuántos sellos se gana algo?</label>
-              <input type="number" name="metaSellos" min="1" max="100" value="${fid.metaSellos || 10}" required>
-              <label>¿Qué se gana? (se le muestra tal cual al cliente)</label>
-              <input type="text" name="premio" value="${fid.premio || ""}" placeholder="Ej: Café gratis, 10% de descuento..." required>
-              <button type="submit">Guardar</button>
-            </form>
-          </div>
-
-          <table>
-            <tr><th>Cliente</th><th>Identificador</th><th>Sellos</th><th>Acción</th></tr>
-            ${filas || `<tr><td colspan="4">Todavía no hay clientes en el programa de fidelización.</td></tr>`}
-          </table>
-        </div>
-      </body>
-    </html>
-  `);
-});
-
-app.post("/mi-panel/:slug/fidelizacion", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
-    return res.status(401).send("No autorizado.");
-  }
-  if (!esPro(negocio)) return res.status(402).send("Exclusivo del Plan Pro.");
-
-  const metaSellos = Math.min(100, Math.max(1, parseInt(req.body.metaSellos, 10) || 10));
-  const premio = (req.body.premio || "").trim();
-  if (!premio) return res.status(400).send("Falta describir el premio.");
-
-  guardarCambiosNegocio(slug, negocio, { fidelizacion: { metaSellos, premio } });
-  res.redirect(`/mi-panel/${slug}/fidelizacion?key=${claveUsada}`);
-});
-
-// El dueño confirma que le entregó el premio a un cliente — reinicia su contador a 0.
-app.get("/mi-panel/:slug/fidelizacion/:id/canjear", (req, res) => {
-  const { slug, id } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
-    return res.status(401).send("No autorizado.");
-  }
-  const datos = leerDatos();
-  if (!datos[slug] || !datos[slug].fidelizacion || !datos[slug].fidelizacion[decodeURIComponent(id)]) {
-    return res.status(404).send("Ese cliente no existe en el programa.");
-  }
-  datos[slug].fidelizacion[decodeURIComponent(id)].sellos = 0;
-  guardarDatos(datos);
-  res.redirect(`/mi-panel/${slug}/fidelizacion?key=${claveUsada}`);
-});
-
-// Lo que graba el chip NFC de la tarjeta de fidelización.
-app.get("/fidelidad/:slug", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!esPro(negocio) || !negocio.fidelizacion) {
-    return res.status(402).send("Este negocio no tiene activa la fidelización todavía.");
-  }
-
-  const cliente = clienteActual(req);
-  if (cliente) {
-    // Ya tiene cuenta y sesión iniciada en Tapin — se identifica solo, sin pedirle nada.
-    return res.redirect(`/fidelidad/${slug}/sumar?id=${encodeURIComponent(normalizarIdentificador(cliente.email))}&nombre=${encodeURIComponent(cliente.nombre || "")}`);
-  }
-
-  res.send(`
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:${MARCA.verdeOscuro};margin:0;
-               min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
-          .box{background:#fff;border-radius:18px;padding:32px 26px;max-width:360px;width:100%;text-align:center;}
-          h1{font-size:1.15rem;color:${MARCA.texto};margin:14px 0 4px;}
-          p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0 0 20px;}
-          input{width:100%;padding:13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.95rem;box-sizing:border-box;margin-bottom:12px;}
-          button{width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:13px;font-weight:700;cursor:pointer;}
-          .divisor{font-size:0.76rem;color:#999;margin:16px 0;}
-        </style>
-      </head>
-      <body>
-        <div class="box">
-          <div>${logoSvg(MARCA.verdeOscuro, 30)}</div>
-          <h1>${negocio.nombre}</h1>
-          <p>Escribe tu correo o celular para sumar tu sello de hoy</p>
-          <form method="POST" action="/fidelidad/${slug}/identificar">
-            <input type="text" name="identificador" required placeholder="Tu correo o celular">
-            <input type="text" name="nombre" placeholder="Tu nombre (opcional)">
-            <button type="submit">Sumar mi sello</button>
-          </form>
-          <div class="divisor">¿Ya tienes cuenta en Tapin? <a href="/cliente" style="color:${MARCA.verde};">Inicia sesión</a> y no tengas que escribir esto cada vez.</div>
-        </div>
-      </body>
-    </html>
-  `);
-});
-
-app.post("/fidelidad/:slug/identificar", (req, res) => {
-  const { slug } = req.params;
-  const identificador = normalizarIdentificador(req.body.identificador);
-  if (!identificador) return res.status(400).send("Falta tu correo o celular.");
-  res.redirect(`/fidelidad/${slug}/sumar?id=${encodeURIComponent(identificador)}&nombre=${encodeURIComponent(req.body.nombre || "")}`);
-});
-
-app.get("/fidelidad/:slug/sumar", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  const fid = negocio.fidelizacion;
-  if (!esPro(negocio) || !fid) {
-    return res.status(402).send("Este negocio no tiene activa la fidelización todavía.");
-  }
-
-  const id = normalizarIdentificador(req.query.id);
-  if (!id) return res.status(400).send("Falta identificador.");
-  const nombre = (req.query.nombre || "").trim();
-
-  const datos = leerDatos();
-  if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
-  if (!datos[slug].fidelizacion) datos[slug].fidelizacion = {};
-  const actual = datos[slug].fidelizacion[id] || { sellos: 0, nombre: nombre || id };
-  actual.sellos = (actual.sellos || 0) + 1;
-  if (nombre) actual.nombre = nombre;
-  datos[slug].fidelizacion[id] = actual;
-  guardarDatos(datos);
-
-  const listo = actual.sellos >= fid.metaSellos;
-
-  res.send(`
-    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-      body{font-family:-apple-system,sans-serif;background:${MARCA.verdeOscuro};display:flex;align-items:center;
-      justify-content:center;min-height:100vh;margin:0;padding:24px;}
-      .box{background:#fff;border-radius:18px;padding:36px 28px;max-width:360px;text-align:center;}
-      .check{font-size:2.5rem;margin-bottom:10px;}
-      .sellos{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin:16px 0;}
-      .sello{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-             font-size:0.8rem;font-weight:700;}
-      .sello.lleno{background:${MARCA.oro};color:#fff;}
-      .sello.vacio{background:${MARCA.crema};color:${MARCA.textoSuave};border:1px solid ${MARCA.borde};}
-    </style></head>
-    <body><div class="box">
-      <div class="check">${listo ? "🎉" : "✓"}</div>
-      <h2>${listo ? "¡Premio desbloqueado!" : "¡Sello sumado!"}</h2>
-      <div class="sellos">
-        ${Array.from({ length: fid.metaSellos }, (_, i) =>
-          `<div class="sello ${i < actual.sellos % fid.metaSellos || (listo && i < fid.metaSellos) ? "lleno" : "vacio"}">${i + 1}</div>`
-        ).join("")}
-      </div>
-      <p style="color:${MARCA.textoSuave};">
-        ${listo
-          ? `Ya tienes: <b>${fid.premio}</b> — muéstrale esta pantalla al negocio.`
-          : `Llevas <b>${actual.sellos} de ${fid.metaSellos}</b> — sigue así para ganar: ${fid.premio}`}
-      </p>
-    </div></body></html>
   `);
 });
 
@@ -4252,15 +4009,24 @@ app.get("/descubre", (req, res) => {
   const cliente = clienteActual(req);
   const misFavoritos = cliente ? (cliente.favoritos || []) : [];
 
+  const ICONOS_CATEGORIA = {
+    restaurante: "🍽", peluqueria: "💇", tienda: "🛍", clinica: "🩺", otro: "📍",
+  };
+  const NOMBRES_CATEGORIA = {
+    restaurante: "Restaurantes", peluqueria: "Peluquerías", tienda: "Tiendas", clinica: "Clínicas", otro: "Otros",
+  };
+
   const puntos = Object.keys(todos)
     .map((slug) => ({ slug, negocio: todos[slug] }))
     .filter(({ negocio }) => negocio.lat != null && negocio.lng != null)
     .map(({ slug, negocio }) => {
       const rep = reputacionNegocio(slug, datos);
+      const categoria = negocio.categoria || "otro";
       return {
         slug,
         nombre: negocio.nombre,
-        categoria: negocio.categoria || "negocio",
+        categoria,
+        icono: ICONOS_CATEGORIA[categoria] || ICONOS_CATEGORIA.otro,
         direccion: negocio.direccion || "",
         lat: negocio.lat,
         lng: negocio.lng,
@@ -4269,6 +4035,11 @@ app.get("/descubre", (req, res) => {
         ...rep,
       };
     });
+
+  const categoriasPresentes = [...new Set(puntos.map((p) => p.categoria))];
+  const chipsCategoria = categoriasPresentes
+    .map((c) => `<button class="chip-cat" data-cat="${c}" onclick="filtrar('${c}', this)">${ICONOS_CATEGORIA[c] || "📍"} ${NOMBRES_CATEGORIA[c] || c}</button>`)
+    .join("");
 
   const puntosJSON = JSON.stringify(puntos);
   const centroLat = puntos.length ? puntos.reduce((s, p) => s + p.lat, 0) / puntos.length : 4.8617;
@@ -4289,17 +4060,37 @@ app.get("/descubre", (req, res) => {
           .content{padding:0;max-width:none;}
           .topbar{position:relative;z-index:1000;}
           #mapa{height:calc(100vh - 68px);width:100%;}
-          .leyenda{position:absolute;bottom:20px;left:20px;z-index:900;background:#fff;border-radius:12px;
+
+          .barra-filtros{position:absolute;top:84px;left:16px;right:16px;z-index:900;display:flex;gap:8px;
+                          overflow-x:auto;padding-bottom:4px;-ms-overflow-style:none;scrollbar-width:none;}
+          .barra-filtros::-webkit-scrollbar{display:none;}
+          .chip-cat{flex-shrink:0;background:#fff;border:1.5px solid ${MARCA.borde};color:${MARCA.texto};
+                    padding:8px 14px;border-radius:100px;font-size:0.8rem;font-weight:700;cursor:pointer;
+                    box-shadow:0 2px 10px rgba(0,0,0,0.08);white-space:nowrap;}
+          .chip-cat.activo{background:${MARCA.verdeOscuro};color:#fff;border-color:${MARCA.verdeOscuro};}
+
+          .leyenda{position:absolute;bottom:20px;left:16px;z-index:900;background:#fff;border-radius:14px;
                    padding:12px 16px;box-shadow:0 4px 20px rgba(0,0,0,0.12);font-size:0.78rem;max-width:220px;}
-          .leyenda-titulo{font-weight:700;margin-bottom:6px;color:${MARCA.texto};}
-          .popup-nombre{font-weight:700;font-size:0.95rem;margin-bottom:2px;}
-          .popup-cat{color:${MARCA.textoSuave};font-size:0.75rem;text-transform:capitalize;margin-bottom:6px;}
-          .popup-estrellas{color:${MARCA.oro};font-size:0.9rem;margin-bottom:2px;}
-          .popup-link{display:inline-block;margin-top:6px;background:${MARCA.verde};color:#fff;text-decoration:none;
-                      padding:6px 12px;border-radius:100px;font-size:0.76rem;font-weight:600;}
-          .popup-fav{display:inline-block;margin-top:6px;margin-left:6px;background:${MARCA.crema};color:${MARCA.texto};
-                     text-decoration:none;padding:6px 12px;border-radius:100px;font-size:0.76rem;font-weight:600;
-                     border:1px solid ${MARCA.borde};cursor:pointer;}
+          .leyenda-titulo{font-weight:800;margin-bottom:4px;color:${MARCA.texto};}
+          .leyenda-num{color:${MARCA.verde};font-weight:800;}
+
+          .pin-tapin{display:flex;align-items:center;justify-content:center;width:34px;height:34px;
+                     border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${MARCA.verdeOscuro};
+                     border:2.5px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,0.3);}
+          .pin-tapin span{transform:rotate(45deg);font-size:1rem;}
+          .pin-tapin.favorito{background:${MARCA.oro};}
+
+          .popup-card{min-width:200px;}
+          .popup-nombre{font-weight:800;font-size:1rem;margin-bottom:1px;}
+          .popup-cat{color:${MARCA.textoSuave};font-size:0.74rem;text-transform:capitalize;margin-bottom:8px;}
+          .popup-estrellas{color:${MARCA.oro};font-size:0.95rem;margin-bottom:2px;}
+          .popup-pct{color:${MARCA.textoSuave};font-size:0.76rem;}
+          .popup-dir{font-size:0.76rem;color:#888;margin-top:4px;}
+          .popup-botones{display:flex;gap:6px;margin-top:10px;}
+          .popup-link{flex:1;text-align:center;background:${MARCA.verde};color:#fff;text-decoration:none;
+                      padding:8px 10px;border-radius:9px;font-size:0.78rem;font-weight:700;}
+          .popup-fav{width:36px;background:${MARCA.crema};color:${MARCA.texto};text-decoration:none;
+                     padding:8px;border-radius:9px;font-size:0.9rem;border:1px solid ${MARCA.borde};cursor:pointer;}
           .popup-fav.activo{background:${MARCA.oro};color:#fff;border-color:${MARCA.oro};}
           .vacio{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:900;text-align:center;
                  background:#fff;padding:24px 30px;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,0.12);}
@@ -4308,9 +4099,10 @@ app.get("/descubre", (req, res) => {
       <body>
         <div class="topbar"><a class="back" href="/">&larr; Inicio</a><div>${logoSvg("#FFFFFF", 30)}</div><div style="width:60px;"></div></div>
         <div id="mapa"></div>
+        ${chipsCategoria ? `<div class="barra-filtros">${chipsCategoria}</div>` : ""}
         <div class="leyenda">
-          <div class="leyenda-titulo">Mapa de negocios Tapin</div>
-          Entre más intenso el color, más actividad de clientes. Toca un punto para ver su reputación.
+          <div class="leyenda-titulo"><span class="leyenda-num">${puntos.length}</span> negocio${puntos.length === 1 ? "" : "s"} en el mapa</div>
+          Entre más intenso el color de fondo, más actividad de clientes.
         </div>
         <script>
           const puntos = ${puntosJSON};
@@ -4320,13 +4112,81 @@ app.get("/descubre", (req, res) => {
             attribution: '&copy; OpenStreetMap'
           }).addTo(mapa);
 
+          let capaCalor = null;
+          let marcadores = [];
+          let filtroActivo = null;
+
           async function alternarFavorito(slug, boton) {
             if (!hayCliente) { window.location.href = '/cliente'; return; }
             const esFav = boton.classList.contains('activo');
             const ruta = esFav ? 'quitar' : 'guardar';
             await fetch('/favoritos/' + slug + '/' + ruta, { method: 'POST' });
             boton.classList.toggle('activo');
-            boton.textContent = boton.classList.contains('activo') ? '★ Guardado' : '☆ Guardar';
+            boton.textContent = boton.classList.contains('activo') ? '★' : '☆';
+          }
+
+          function dibujarPin(p) {
+            const icono = L.divIcon({
+              className: '',
+              html: '<div class="pin-tapin' + (p.esFavorito ? ' favorito' : '') + '"><span>' + p.icono + '</span></div>',
+              iconSize: [34, 34],
+              iconAnchor: [17, 32],
+              popupAnchor: [0, -30],
+            });
+            const marker = L.marker([p.lat, p.lng], { icon: icono }).addTo(mapa);
+
+            const estrellasHtml = '★'.repeat(p.estrellas) + '☆'.repeat(5 - p.estrellas);
+            const contenedor = document.createElement('div');
+            contenedor.className = 'popup-card';
+            contenedor.innerHTML =
+              '<div class="popup-nombre">' + p.nombre + '</div>' +
+              '<div class="popup-cat">' + p.categoria + '</div>' +
+              '<div class="popup-estrellas">' + estrellasHtml + '</div>' +
+              '<div class="popup-pct">' + p.porcentaje + '% de reseñas positivas</div>' +
+              (p.direccion ? '<div class="popup-dir">' + p.direccion + '</div>' : '') +
+              '<div class="popup-botones"></div>';
+
+            const botones = contenedor.querySelector('.popup-botones');
+            const link = document.createElement('a');
+            link.className = 'popup-link';
+            link.href = p.googleUrl;
+            link.target = '_blank';
+            link.textContent = 'Ver en Google';
+            botones.appendChild(link);
+
+            const botonFav = document.createElement('button');
+            botonFav.className = 'popup-fav' + (p.esFavorito ? ' activo' : '');
+            botonFav.textContent = p.esFavorito ? '★' : '☆';
+            botonFav.onclick = function () { alternarFavorito(p.slug, botonFav); };
+            botones.appendChild(botonFav);
+
+            marker.bindPopup(contenedor);
+            return marker;
+          }
+
+          function pintarMapa(lista) {
+            marcadores.forEach((m) => mapa.removeLayer(m));
+            marcadores = lista.map(dibujarPin);
+            if (capaCalor) mapa.removeLayer(capaCalor);
+            const heatData = lista.map(p => [p.lat, p.lng, Math.max(0.3, Math.min(1, p.total / 50))]);
+            if (heatData.length) {
+              capaCalor = L.heatLayer(heatData, { radius: 45, blur: 35, maxZoom: 15 });
+              capaCalor.addTo(mapa);
+              capaCalor.bringToBack();
+            }
+          }
+
+          function filtrar(categoria, boton) {
+            const chips = document.querySelectorAll('.chip-cat');
+            if (filtroActivo === categoria) {
+              filtroActivo = null;
+              chips.forEach((c) => c.classList.remove('activo'));
+              pintarMapa(puntos);
+            } else {
+              filtroActivo = categoria;
+              chips.forEach((c) => c.classList.toggle('activo', c === boton));
+              pintarMapa(puntos.filter((p) => p.categoria === categoria));
+            }
           }
 
           if (puntos.length === 0) {
@@ -4336,31 +4196,7 @@ app.get("/descubre", (req, res) => {
             div.innerHTML = '<b>Todavía no hay negocios con ubicación configurada.</b>';
             document.getElementById('mapa').parentElement.appendChild(div);
           } else {
-            const heatData = puntos.map(p => [p.lat, p.lng, Math.max(0.3, Math.min(1, p.total / 50))]);
-            L.heatLayer(heatData, { radius: 45, blur: 35, maxZoom: 15 }).addTo(mapa);
-
-            puntos.forEach(p => {
-              const estrellasHtml = '★'.repeat(p.estrellas) + '☆'.repeat(5 - p.estrellas);
-              const marker = L.circleMarker([p.lat, p.lng], {
-                radius: 8, color: '#0F5132', fillColor: '#C9A24B', fillOpacity: 0.9, weight: 2
-              }).addTo(mapa);
-
-              const contenedor = document.createElement('div');
-              contenedor.innerHTML =
-                '<div class="popup-nombre">' + p.nombre + '</div>' +
-                '<div class="popup-cat">' + p.categoria + '</div>' +
-                '<div class="popup-estrellas">' + estrellasHtml + ' (' + p.porcentaje + '% positivas)</div>' +
-                (p.direccion ? '<div style="font-size:0.78rem;color:#888;">' + p.direccion + '</div>' : '') +
-                '<a class="popup-link" href="' + p.googleUrl + '" target="_blank">Ver en Google</a>';
-
-              const botonFav = document.createElement('button');
-              botonFav.className = 'popup-fav' + (p.esFavorito ? ' activo' : '');
-              botonFav.textContent = p.esFavorito ? '★ Guardado' : '☆ Guardar';
-              botonFav.onclick = function () { alternarFavorito(p.slug, botonFav); };
-              contenedor.appendChild(botonFav);
-
-              marker.bindPopup(contenedor);
-            });
+            pintarMapa(puntos);
           }
         </script>
       </body>
@@ -4884,36 +4720,49 @@ app.get("/cuenta", (req, res) => {
   if (!cliente) return res.redirect("/cliente");
 
   const todos = todosLosNegocios();
+  const iconosCategoria = {
+    restaurante: "🍽", peluqueria: "💇", tienda: "🛍", clinica: "🩺", otro: "📍",
+  };
 
-  const favoritosHtml = (cliente.favoritos || [])
-    .filter((slug) => todos[slug])
+  const favoritos = (cliente.favoritos || []).filter((slug) => todos[slug]);
+  const historial = (cliente.historial || []).slice().reverse();
+  const promedioDado = historial.length
+    ? (historial.reduce((s, h) => s + h.valor, 0) / historial.length).toFixed(1)
+    : null;
+
+  const favoritosHtml = favoritos
     .map((slug) => {
       const n = todos[slug];
+      const icono = iconosCategoria[n.categoria] || iconosCategoria.otro;
       return `
         <div class="fav-card">
-          <div>
+          <div class="fav-icono">${icono}</div>
+          <div class="fav-info">
             <div class="fav-nombre">${n.nombre}</div>
-            <div class="fav-cat">${n.categoria || "—"} ${n.direccion ? "· " + n.direccion : ""}</div>
+            <div class="fav-cat">${n.categoria || "negocio"} ${n.direccion ? "· " + n.direccion : ""}</div>
           </div>
           <div class="fav-acciones">
-            <a href="${n.googleUrl}" target="_blank">Ver en Google</a>
-            <a href="#" onclick="quitar('${slug}');return false;" class="quitar">Quitar</a>
+            <a href="${n.googleUrl}" target="_blank" title="Ver en Google">↗</a>
+            <a href="#" onclick="quitar('${slug}');return false;" class="quitar" title="Quitar de favoritos">✕</a>
           </div>
         </div>`;
     }).join("");
 
-  const historialHtml = (cliente.historial || [])
-    .slice()
-    .reverse()
-    .map((h) => `
-      <div class="hist-fila">
-        <div>
-          <b>${h.negocioNombre}</b>
-          <span class="hist-fecha">${h.fecha}</span>
-        </div>
-        <div class="hist-estrellas">${"★".repeat(h.valor)}${"☆".repeat(5 - h.valor)}</div>
-      </div>`
-    ).join("");
+  const historialHtml = historial
+    .map((h, i) => {
+      const color = h.valor >= 4 ? MARCA.verde : h.valor === 3 ? MARCA.oro : MARCA.rojo;
+      return `
+        <div class="linea-item">
+          <div class="linea-punto" style="background:${color};"></div>
+          <div class="linea-contenido">
+            <div class="linea-top">
+              <b>${h.negocioNombre}</b>
+              <span class="linea-estrellas" style="color:${MARCA.oro};">${"★".repeat(h.valor)}${"☆".repeat(5 - h.valor)}</span>
+            </div>
+            <div class="linea-fecha">${h.fecha}</div>
+          </div>
+        </div>`;
+    }).join("");
 
   res.send(`
     <html>
@@ -4923,19 +4772,49 @@ app.get("/cuenta", (req, res) => {
         <title>Mi cuenta — Tapin</title>
         <style>
           ${ESTILO_BASE}
-          .seccion-titulo{font-size:1.05rem;font-weight:700;margin:32px 0 14px;}
-          .fav-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;padding:16px 18px;
-                    display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+          .content{max-width:640px;}
+          .hero-cuenta{background:linear-gradient(135deg, ${MARCA.verdeOscuro} 0%, #0F5132 100%);
+                       border-radius:20px;padding:32px 28px;color:#fff;margin-bottom:28px;position:relative;overflow:hidden;}
+          .hero-cuenta::before{content:"";position:absolute;top:-40%;right:-15%;width:220px;height:220px;
+                                border-radius:50%;background:radial-gradient(circle, rgba(201,162,75,0.35), transparent 70%);}
+          .hero-saludo{font-size:1.5rem;font-weight:800;position:relative;}
+          .hero-email{color:#CFE3D8;font-size:0.85rem;margin-top:2px;position:relative;}
+          .hero-stats{display:flex;gap:12px;margin-top:22px;position:relative;flex-wrap:wrap;}
+          .hero-stat{background:rgba(255,255,255,0.12);border-radius:14px;padding:12px 16px;flex:1;min-width:96px;}
+          .hero-stat-num{font-size:1.4rem;font-weight:800;}
+          .hero-stat-lbl{font-size:0.66rem;color:#CFE3D8;text-transform:uppercase;letter-spacing:0.04em;margin-top:2px;}
+
+          .seccion-titulo{font-size:1.05rem;font-weight:800;margin:32px 0 14px;color:${MARCA.texto};
+                           display:flex;align-items:center;gap:8px;}
+
+          .fav-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px;
+                    display:flex;align-items:center;gap:14px;margin-bottom:10px;transition:box-shadow .15s,transform .15s;}
+          .fav-card:hover{box-shadow:0 6px 18px rgba(11,61,44,0.08);transform:translateY(-1px);}
+          .fav-icono{width:42px;height:42px;border-radius:11px;background:${MARCA.verdeClaro};display:flex;
+                     align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;}
+          .fav-info{flex:1;min-width:0;}
           .fav-nombre{font-weight:700;font-size:0.95rem;}
           .fav-cat{color:${MARCA.textoSuave};font-size:0.78rem;text-transform:capitalize;}
-          .fav-acciones a{font-size:0.78rem;font-weight:700;text-decoration:none;margin-left:14px;}
+          .fav-acciones{display:flex;gap:6px;flex-shrink:0;}
+          .fav-acciones a{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+                          text-decoration:none;font-size:0.9rem;background:${MARCA.crema};color:${MARCA.texto};}
           .fav-acciones .quitar{color:${MARCA.rojo};}
-          .hist-fila{background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;padding:14px 18px;
-                     display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
-          .hist-fecha{color:${MARCA.textoSuave};font-size:0.76rem;display:block;}
-          .hist-estrellas{color:${MARCA.oro};}
-          .vacio-msg{color:${MARCA.textoSuave};font-size:0.85rem;background:#fff;padding:20px;border-radius:12px;
-                     border:1px dashed ${MARCA.borde};}
+          .fav-acciones a:hover{background:${MARCA.verdeClaro};}
+
+          .linea{position:relative;padding-left:6px;}
+          .linea-item{position:relative;padding:0 0 20px 26px;}
+          .linea-item::before{content:"";position:absolute;left:5px;top:14px;bottom:-6px;width:1.5px;background:${MARCA.borde};}
+          .linea-item:last-child::before{display:none;}
+          .linea-punto{position:absolute;left:0;top:3px;width:11px;height:11px;border-radius:50%;box-shadow:0 0 0 3px #fff;}
+          .linea-contenido{background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;padding:12px 16px;}
+          .linea-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+          .linea-estrellas{font-size:0.85rem;white-space:nowrap;}
+          .linea-fecha{color:${MARCA.textoSuave};font-size:0.74rem;margin-top:2px;}
+
+          .vacio-msg{color:${MARCA.textoSuave};font-size:0.86rem;background:#fff;padding:26px 22px;border-radius:14px;
+                     border:1.5px dashed ${MARCA.borde};text-align:center;}
+          .vacio-msg .vacio-icono{font-size:1.8rem;margin-bottom:8px;display:block;}
+          .vacio-msg a{color:${MARCA.verde};font-weight:700;}
         </style>
       </head>
       <body>
@@ -4944,15 +4823,21 @@ app.get("/cuenta", (req, res) => {
           <a class="back" href="/cliente/salir">Cerrar sesión</a>
         </div>
         <div class="content">
-          <div class="eyebrow">Mi cuenta</div>
-          <h1 class="titulo-pagina">Hola, ${cliente.nombre.split(" ")[0]}</h1>
-          <div class="subtitulo">${cliente.email}</div>
+          <div class="hero-cuenta">
+            <div class="hero-saludo">Hola, ${cliente.nombre.split(" ")[0]} 👋</div>
+            <div class="hero-email">${cliente.email}</div>
+            <div class="hero-stats">
+              <div class="hero-stat"><div class="hero-stat-num">${favoritos.length}</div><div class="hero-stat-lbl">Favoritos</div></div>
+              <div class="hero-stat"><div class="hero-stat-num">${historial.length}</div><div class="hero-stat-lbl">Reseñas</div></div>
+              ${promedioDado ? `<div class="hero-stat"><div class="hero-stat-num">${promedioDado}★</div><div class="hero-stat-lbl">Promedio dado</div></div>` : ""}
+            </div>
+          </div>
 
-          <div class="seccion-titulo">Tus negocios favoritos</div>
-          ${favoritosHtml || `<div class="vacio-msg">Todavía no has guardado ningún negocio. Explora el <a href="/descubre">mapa de negocios</a> y guárdalos desde ahí.</div>`}
+          <div class="seccion-titulo">⭐ Tus negocios favoritos</div>
+          ${favoritosHtml || `<div class="vacio-msg"><span class="vacio-icono">🗺️</span>Todavía no has guardado ningún negocio.<br><a href="/descubre">Explora el mapa de negocios →</a></div>`}
 
-          <div class="seccion-titulo">Tu historial de reseñas</div>
-          ${historialHtml || `<div class="vacio-msg">Todavía no has calificado ningún negocio con Tapin.</div>`}
+          <div class="seccion-titulo">📝 Tu historial de reseñas</div>
+          ${historial.length ? `<div class="linea">${historialHtml}</div>` : `<div class="vacio-msg"><span class="vacio-icono">✨</span>Todavía no has calificado ningún negocio con Tapin.</div>`}
         </div>
         <script>
           async function quitar(slug) {
