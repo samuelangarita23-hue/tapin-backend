@@ -574,6 +574,70 @@ function analizarHoras(eventos, negocio) {
   };
 }
 
+// Idea 5: mirando TODO el histórico (no solo la última semana), ¿cuál día de
+// la semana rinde menos? Necesita al menos 3 días distintos con datos para
+// que la conclusión tenga algo de sentido — si no, devuelve null.
+function diaMasFlojo(eventos, negocio) {
+  const zona = zonaDe(negocio);
+  const porDia = new Array(7).fill(0); // 0=domingo ... 6=sábado
+  const mapaDia = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  for (const e of eventos) {
+    const nombreCorto = new Date(e.fechaISO).toLocaleString("en-US", { timeZone: zona, weekday: "short" });
+    porDia[mapaDia[nombreCorto]]++;
+  }
+  const conDatos = porDia.map((v, i) => ({ v, i })).filter((d) => d.v > 0);
+  if (conDatos.length < 3) return null;
+  const min = conDatos.reduce((a, b) => (b.v < a.v ? b : a));
+  const nombres = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+  return { dia: nombres[min.i], toques: min.v };
+}
+
+// Idea 6: compara esta semana contra el PROPIO promedio histórico del
+// negocio (no contra el sector) — si cayó fuerte, avisa. Necesita algo de
+// histórico acumulado para que el promedio signifique algo.
+function alertaCaidaPropia(eventos, semanaActual) {
+  if (eventos.length < 10) return null;
+  const primerEvento = new Date(eventos[0].fechaISO);
+  const semanasTranscurridas = Math.max(1, Math.round((Date.now() - primerEvento.getTime()) / (7 * 86400000)));
+  const promedioSemanal = eventos.length / semanasTranscurridas;
+  if (promedioSemanal < 3) return null; // muy poco volumen para que el aviso sirva de algo
+  if (semanaActual < promedioSemanal * 0.6) {
+    return {
+      pctCaida: Math.round((1 - semanaActual / promedioSemanal) * 100),
+      promedioSemanal: Math.round(promedioSemanal),
+    };
+  }
+  return null;
+}
+
+// Idea 7: cuántos clientes CON CUENTA en Tapin han calificado este negocio 3
+// veces o más — es la mejor señal de clientes recurrentes que ya tenemos,
+// sin pedir ningún dato nuevo.
+function contarClientesRecurrentes(slug) {
+  const clientes = leerClientes();
+  let recurrentes = 0;
+  for (const id in clientes) {
+    const visitas = (clientes[id].historial || []).filter((h) => h.slug === slug).length;
+    if (visitas >= 3) recurrentes++;
+  }
+  return recurrentes;
+}
+
+// Idea 8: percentil del negocio dentro de su propia categoría y país, según
+// toques de la última semana — sin exponer nombres de la competencia.
+// Necesita al menos 3 negocios de la misma categoría para que un percentil
+// tenga sentido.
+function percentilCategoria(negocio, slug, todosNegocios, datos) {
+  const pares = Object.entries(todosNegocios).filter(
+    ([s, n]) => n.categoria === negocio.categoria && n.pais === negocio.pais
+  );
+  if (pares.length < 3) return null;
+  const valores = pares.map(([s]) => calcularResumen((datos[s] && datos[s].eventos) || []).semana);
+  const propio = calcularResumen((datos[slug] && datos[slug].eventos) || []).semana;
+  const debajoOigual = valores.filter((v) => v <= propio).length;
+  return Math.round((debajoOigual / valores.length) * 100);
+}
+
 function barraSemana(dias7) {
   const max = Math.max(1, ...dias7);
   const nombresDias = [];
@@ -1361,7 +1425,7 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
               <label>Plan</label>
               <select name="plan">
                 <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($119.900 — envío incluido)</option>
-                <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($79.900/mes — alertas, reporte mensual, contenido)</option>
+                <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($59.900/mes — alertas, reporte mensual, contenido)</option>
               </select>
 
               <label>Dirección (aparece en el mapa público de /descubre)</label>
@@ -1623,7 +1687,7 @@ app.get("/activar/:codigo", (req, res) => {
               <label>Plan</label>
               <select name="plan">
                 <option value="basico">Básico ($119.900 — envío incluido)</option>
-                <option value="pro">Pro ($79.900/mes — alertas, reporte mensual, contenido)</option>
+                <option value="pro">Pro ($59.900/mes — alertas, reporte mensual, contenido)</option>
               </select>
 
               <label>País (define la hora local de los reportes)</label>
@@ -2337,6 +2401,22 @@ app.get("/mi-panel/:slug", (req, res) => {
 
   const promSector = esPro(negocio) ? promedioSector(negocio.categoria, slug, datos) : null;
 
+  // Ideas 5-9: solo tienen sentido para negocios Pro (van en esa sección del panel).
+  const diaFlojo = esPro(negocio) ? diaMasFlojo(eventos, negocio) : null;
+  const caida = esPro(negocio) ? alertaCaidaPropia(eventos, r.semana) : null;
+  const clientesRecurrentes = esPro(negocio) ? contarClientesRecurrentes(slug) : 0;
+  const percentil = esPro(negocio) ? percentilCategoria(negocio, slug, todosNegocios, datos) : null;
+
+  // Idea 9: resumen de los últimos 30 días en una sola frase, combinando lo
+  // que ya calculamos (mejor no repetir cálculos: reutiliza horas y r).
+  let resumenFrase = null;
+  if (esPro(negocio) && r.total > 0) {
+    const partes = [`${r.semana} toques esta semana`];
+    if (horas.totalMes > 0) partes.push(`pico ${horas.picoHora}:00`);
+    if (totalCalificado > 0) partes.push(`${pctPositivas}% positivas`);
+    resumenFrase = partes.join(" · ");
+  }
+
   res.send(`
     <html>
       <head>
@@ -2503,6 +2583,26 @@ app.get("/mi-panel/:slug", (req, res) => {
           ` : ""}
 
           ${esPro(negocio) ? `
+          ${resumenFrase || caida || diaFlojo || clientesRecurrentes > 0 || percentil !== null ? `
+          <div class="seccion">
+            <div class="card-titulo">Lo que dicen tus datos</div>
+            <div class="chart-card" style="margin-top:0;display:flex;flex-direction:column;gap:10px;">
+              ${resumenFrase ? `<div class="reco" style="border-left-color:${MARCA.verde};"><b>Resumen (30 días):</b> ${resumenFrase}</div>` : ""}
+              ${caida ? `<div class="reco" style="border-left-color:${MARCA.rojo};background:#FBEFE9;color:#993C1D;">
+                <b>⚠ Caída esta semana</b> — ${caida.pctCaida}% por debajo de tu propio promedio (~${caida.promedioSemanal} toques/semana).
+              </div>` : ""}
+              ${diaFlojo ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
+                Tu día más flojo históricamente es el <b>${diaFlojo.dia}</b> — considera una promo esos días.
+              </div>` : ""}
+              ${clientesRecurrentes > 0 ? `<div class="reco" style="border-left-color:${MARCA.verde};">
+                Tienes <b>${clientesRecurrentes} ${clientesRecurrentes === 1 ? "cliente" : "clientes"}</b> que ya te calificaron 3 veces o más — son tus más fieles.
+              </div>` : ""}
+              ${percentil !== null ? `<div class="reco" style="border-left-color:${MARCA.verde};">
+                Estás en el <b>${percentil >= 50 ? "top " + (100 - percentil + 1) + "%" : "resto"}</b> de los negocios de tu categoría en toques esta semana.
+              </div>` : ""}
+            </div>
+          </div>
+          ` : ""}
           <div class="seccion">
             <div class="card-titulo">Tus horas pico <span class="suave">últimos 30 días</span></div>
             <div class="chart-card" style="margin-top:0;">
@@ -2605,7 +2705,7 @@ app.get("/mi-panel/:slug", (req, res) => {
               <a href="/quejas/${slug}?key=${req.query.key}" class="btn-herramienta">Retroalimentación privada</a>
               <a href="/contenido/${slug}?key=${req.query.key}" class="btn-herramienta">Generador de contenido</a>
               <a href="/reportes-guardados/${slug}?key=${req.query.key}" class="btn-herramienta">Reportes guardados</a>
-              <a href="/mi-panel/${slug}/empleados?key=${req.query.key}" class="btn-herramienta">Empleados y asistencia</a>
+              <a href="/mi-panel/${slug}/fidelizacion?key=${req.query.key}" class="btn-herramienta">Fidelización</a>
             </div>
           </div>
 
@@ -2618,7 +2718,9 @@ app.get("/mi-panel/:slug", (req, res) => {
             <div class="seccion-header">
               <div class="eyebrow">Plan Básico</div>
               <h2>Mejora a Pro y desbloquea todo esto</h2>
-              <p>Tu plan actual muestra lo esencial. Con Pro tienes mucho más detalle para tomar decisiones.</p>
+              <p>${horas.totalMes > 0
+                ? `Con Pro verías, por ejemplo, que tu hora pico real es <b>${horas.picoHora}:00</b> — información que hoy tenemos calculada pero no te podemos mostrar.`
+                : `Tu plan actual muestra lo esencial. Con Pro tienes mucho más detalle para tomar decisiones.`}</p>
             </div>
             <div class="chart-card" style="opacity:0.55;filter:grayscale(0.4);pointer-events:none;">
               <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
@@ -2849,74 +2951,18 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
   `);
 });
 
-// ---------- Tarjeta de asistencia de empleados (incluida en Plan Pro) ----------
+// ---------- Tarjeta de fidelización (tarjeta física aparte, incluida en Plan Pro) ----------
+// Funciona igual sin importar la categoría del negocio: el dueño define en
+// texto libre cada cuántos sellos se gana algo, y qué es ese algo. Funciona
+// tanto para clientes con cuenta en Tapin (se identifican solos) como sin
+// cuenta (se identifican con teléfono o correo, sin crear nada).
 
-// Código corto de 4 dígitos, único dentro de los trabajadores de ESE negocio
-// (no hace falta que sea único a nivel global — cada negocio verifica solo
-// contra sus propios trabajadores).
-function generarCodigoTrabajador(trabajadoresExistentes) {
-  let codigo;
-  do {
-    codigo = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
-  } while (trabajadoresExistentes && trabajadoresExistentes[codigo]);
-  return codigo;
+function normalizarIdentificador(valor) {
+  return (valor || "").trim().toLowerCase();
 }
 
-// Mira los eventos de HOY de un trabajador y decide qué botón(es) mostrarle:
-// sin marcar nada -> entrada; ya entró -> descanso o salida; en descanso ->
-// terminar descanso; ya salió -> nada más por hoy.
-function estadoTrabajadorHoy(eventosHoy) {
-  if (eventosHoy.length === 0) return { siguiente: "entrada" };
-  const ultimo = eventosHoy[eventosHoy.length - 1];
-  if (ultimo.tipo === "entrada") return { siguiente: "descanso_o_salida" };
-  if (ultimo.tipo === "inicio_descanso") return { siguiente: "fin_descanso" };
-  if (ultimo.tipo === "fin_descanso") return { siguiente: "descanso_o_salida" };
-  if (ultimo.tipo === "salida") return { siguiente: "terminado" };
-  return { siguiente: "entrada" };
-}
-
-const NOMBRES_TIPO_EVENTO = {
-  entrada: "Entrada",
-  inicio_descanso: "Inicio de descanso",
-  fin_descanso: "Fin de descanso",
-  salida: "Salida",
-};
-
-// Suma el tiempo trabajado a partir de una lista de eventos (de un día o de
-// varios) — empareja entrada/salida y resta los descansos. Si el trabajador
-// sigue "adentro" (entró pero no ha salido), cuenta hasta el momento actual.
-function calcularMsTrabajados(eventos) {
-  const ordenados = [...eventos].sort((a, b) => new Date(a.fechaISO) - new Date(b.fechaISO));
-  let inicioTrabajo = null;
-  let inicioDescanso = null;
-  let msTrabajados = 0;
-  let msDescanso = 0;
-  for (const e of ordenados) {
-    const t = new Date(e.fechaISO).getTime();
-    if (e.tipo === "entrada") inicioTrabajo = t;
-    else if (e.tipo === "inicio_descanso") inicioDescanso = t;
-    else if (e.tipo === "fin_descanso" && inicioDescanso != null) {
-      msDescanso += t - inicioDescanso;
-      inicioDescanso = null;
-    } else if (e.tipo === "salida" && inicioTrabajo != null) {
-      msTrabajados += t - inicioTrabajo;
-      inicioTrabajo = null;
-    }
-  }
-  if (inicioTrabajo != null) msTrabajados += Date.now() - inicioTrabajo; // sigue trabajando ahora mismo
-  return Math.max(0, msTrabajados - msDescanso);
-}
-
-function formatoHoras(ms) {
-  const totalMin = Math.round(ms / 60000);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return `${h}h ${String(m).padStart(2, "0")}m`;
-}
-
-// Panel del negocio: gestionar trabajadores (agregar, ver códigos, desactivar)
-// y ver la actividad de hoy. Exclusivo de Plan Pro — viene incluido en los $79.900.
-app.get("/mi-panel/:slug/empleados", (req, res) => {
+// Panel del negocio: configurar la meta y el premio, y ver quién lleva cuántos sellos.
+app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
@@ -2926,68 +2972,28 @@ app.get("/mi-panel/:slug/empleados", (req, res) => {
   }
   if (!esPro(negocio)) {
     return res.status(402).send(
-      `La tarjeta de asistencia de empleados es exclusiva del Plan Pro. ` +
+      `La tarjeta de fidelización es exclusiva del Plan Pro. ` +
       `Súbele el plan a "${negocio.nombre}" desde /mejorar-a-pro/${slug}?key=${claveUsada} para activarla.`
     );
   }
   req.query.key = claveUsada;
 
-  const trabajadores = negocio.trabajadores || {};
+  const fid = negocio.fidelizacion || { metaSellos: 10, premio: "" };
   const datos = leerDatos();
-  const asistencia = (datos[slug] && datos[slug].asistencia) || [];
-  const zona = zonaDe(negocio);
-  const hoyStr = new Date().toLocaleDateString("es-CO", { timeZone: zona });
-  const eventosHoy = asistencia.filter(
-    (e) => new Date(e.fechaISO).toLocaleDateString("es-CO", { timeZone: zona }) === hoyStr
-  );
-  const HACE_7_DIAS = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const eventosSemana = asistencia.filter((e) => new Date(e.fechaISO).getTime() >= HACE_7_DIAS);
+  const clientesFid = (datos[slug] && datos[slug].fidelizacion) || {};
 
-  const HACE_30_DIAS = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const eventosInusuales30d = asistencia.filter(
-    (e) => e.dispositivoInusual && new Date(e.fechaISO).getTime() >= HACE_30_DIAS
-  );
-
-  const filasTrabajadores = Object.entries(trabajadores)
-    .map(([codigo, t]) => {
-      const eventosDeHoy = eventosHoy.filter((e) => e.trabajadorCodigo === codigo);
-      const eventosDeSemana = eventosSemana.filter((e) => e.trabajadorCodigo === codigo);
-      const ultimo = eventosDeHoy[eventosDeHoy.length - 1];
-      const estadoTexto = ultimo
-        ? `${NOMBRES_TIPO_EVENTO[ultimo.tipo]} — ${ultimo.horaLegible}`
-        : "Sin marcar hoy";
-      const alertasDeEste = eventosInusuales30d.filter((e) => e.trabajadorCodigo === codigo);
-      const alertaDispositivo = alertasDeEste.length > 0
-        ? `<div style="color:${MARCA.rojo};font-size:0.72rem;font-weight:700;margin-top:2px;">
-             ⚠ dispositivo distinto — última vez: ${alertasDeEste[alertasDeEste.length - 1].fechaLegible}, ${alertasDeEste[alertasDeEste.length - 1].horaLegible}
-             (${alertasDeEste.length} en los últimos 30 días)
-             <a href="/mi-panel/${slug}/empleados/${codigo}/restablecer-dispositivo?key=${claveUsada}" style="font-weight:600;">— era su celular nuevo, olvidar</a>
-           </div>`
-        : "";
-      const horasHoy = formatoHoras(calcularMsTrabajados(eventosDeHoy));
-      const horasSemana = formatoHoras(calcularMsTrabajados(eventosDeSemana));
-      return `<tr style="${t.activo === false ? "opacity:0.5;" : ""}">
-        <td>${t.nombre}</td>
-        <td><code style="background:${MARCA.crema};padding:3px 8px;border-radius:6px;font-weight:700;letter-spacing:0.05em;">${codigo}</code></td>
-        <td>${estadoTexto}${alertaDispositivo}</td>
-        <td>${horasHoy}</td>
-        <td>${horasSemana}</td>
-        <td>${t.activo === false
-          ? `<a href="/mi-panel/${slug}/empleados/${codigo}/reactivar?key=${claveUsada}">Reactivar</a>`
-          : `<a href="/mi-panel/${slug}/empleados/${codigo}/desactivar?key=${claveUsada}" style="color:${MARCA.rojo};">Desactivar</a>`}</td>
+  const filas = Object.entries(clientesFid)
+    .sort((a, b) => (b[1].sellos || 0) - (a[1].sellos || 0))
+    .map(([id, c]) => {
+      const listo = fid.metaSellos && c.sellos >= fid.metaSellos;
+      return `<tr style="${listo ? `background:${MARCA.verdeClaro};` : ""}">
+        <td>${c.nombre || id}</td>
+        <td>${id}</td>
+        <td>${c.sellos || 0} / ${fid.metaSellos || "—"}</td>
+        <td>${listo
+          ? `<a href="/mi-panel/${slug}/fidelizacion/${encodeURIComponent(id)}/canjear?key=${claveUsada}" style="color:${MARCA.verdeOscuro};font-weight:700;">Canjear premio</a>`
+          : ""}</td>
       </tr>`;
-    })
-    .join("");
-
-  const filasHoy = eventosHoy
-    .slice()
-    .reverse()
-    .map((e) => {
-      const nombre = (trabajadores[e.trabajadorCodigo] && trabajadores[e.trabajadorCodigo].nombre) || "(trabajador eliminado)";
-      const marca = e.dispositivoInusual
-        ? `<span style="color:${MARCA.rojo};">⚠ ${e.horaLegible} (dispositivo distinto)</span>`
-        : e.horaLegible;
-      return `<tr><td>${nombre}</td><td>${NOMBRES_TIPO_EVENTO[e.tipo] || e.tipo}</td><td>${marca}</td></tr>`;
     })
     .join("");
 
@@ -2996,7 +3002,7 @@ app.get("/mi-panel/:slug/empleados", (req, res) => {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Empleados — ${negocio.nombre}</title>
+        <title>Fidelización — ${negocio.nombre}</title>
         <style>
           ${ESTILO_BASE}
           table{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden;border:1px solid ${MARCA.borde};margin-bottom:24px;}
@@ -3005,6 +3011,7 @@ app.get("/mi-panel/:slug/empleados", (req, res) => {
           a{color:${MARCA.verde};font-weight:600;text-decoration:none;font-size:0.82rem;}
           .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px;max-width:420px;margin-bottom:28px;}
           input{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;}
+          label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin-bottom:6px;}
           button{width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:12px;font-weight:700;cursor:pointer;}
           .tarjeta-info{background:${MARCA.verdeClaro};border-radius:10px;padding:14px 16px;font-size:0.85rem;color:${MARCA.verdeOscuro};margin-bottom:24px;}
         </style>
@@ -3013,31 +3020,27 @@ app.get("/mi-panel/:slug/empleados", (req, res) => {
         <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/mi-panel/${slug}?key=${claveUsada}" style="color:#CFE3D8;">&larr; Volver al panel</a></div>
         <div class="content">
           <div class="eyebrow">Plan Pro</div>
-          <h1 class="titulo-pagina">Empleados — ${negocio.nombre}</h1>
-          <div class="subtitulo">Entradas, salidas y descansos, con un código por trabajador.</div>
+          <h1 class="titulo-pagina">Fidelización — ${negocio.nombre}</h1>
+          <div class="subtitulo">Cada visita suma un sello. Tú decides cada cuántos y qué se ganan.</div>
 
           <div class="tarjeta-info">
-            La tarjeta física de asistencia debe tener grabado: <b>${req.protocol}://${req.get("host")}/asistencia/${slug}</b> —
-            tus trabajadores la tocan con su celular y marcan con su código.
+            La tarjeta física de fidelización debe tener grabado: <b>${req.protocol}://${req.get("host")}/fidelidad/${slug}</b>
           </div>
 
           <div class="form-card">
-            <h3 style="margin-top:0;">Agregar trabajador</h3>
-            <form method="POST" action="/mi-panel/${slug}/empleados/agregar?key=${claveUsada}">
-              <input type="text" name="nombre" required placeholder="Nombre del trabajador">
-              <button type="submit">Generar código</button>
+            <h3 style="margin-top:0;">Configuración</h3>
+            <form method="POST" action="/mi-panel/${slug}/fidelizacion?key=${claveUsada}">
+              <label>¿Cada cuántos sellos se gana algo?</label>
+              <input type="number" name="metaSellos" min="1" max="100" value="${fid.metaSellos || 10}" required>
+              <label>¿Qué se gana? (se le muestra tal cual al cliente)</label>
+              <input type="text" name="premio" value="${fid.premio || ""}" placeholder="Ej: Café gratis, 10% de descuento..." required>
+              <button type="submit">Guardar</button>
             </form>
           </div>
 
           <table>
-            <tr><th>Nombre</th><th>Código</th><th>Hoy</th><th>Horas hoy</th><th>Horas semana</th><th>Acción</th></tr>
-            ${filasTrabajadores || `<tr><td colspan="6">Todavía no has agregado ningún trabajador.</td></tr>`}
-          </table>
-
-          <h3>Actividad de hoy</h3>
-          <table>
-            <tr><th>Trabajador</th><th>Marca</th><th>Hora</th></tr>
-            ${filasHoy || `<tr><td colspan="3">Sin marcas todavía hoy.</td></tr>`}
+            <tr><th>Cliente</th><th>Identificador</th><th>Sellos</th><th>Acción</th></tr>
+            ${filas || `<tr><td colspan="4">Todavía no hay clientes en el programa de fidelización.</td></tr>`}
           </table>
         </div>
       </body>
@@ -3045,7 +3048,7 @@ app.get("/mi-panel/:slug/empleados", (req, res) => {
   `);
 });
 
-app.post("/mi-panel/:slug/empleados/agregar", (req, res) => {
+app.post("/mi-panel/:slug/fidelizacion", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
@@ -3055,288 +3058,137 @@ app.post("/mi-panel/:slug/empleados/agregar", (req, res) => {
   }
   if (!esPro(negocio)) return res.status(402).send("Exclusivo del Plan Pro.");
 
-  const nombre = (req.body.nombre || "").trim();
-  if (!nombre) return res.status(400).send("Falta el nombre del trabajador.");
+  const metaSellos = Math.min(100, Math.max(1, parseInt(req.body.metaSellos, 10) || 10));
+  const premio = (req.body.premio || "").trim();
+  if (!premio) return res.status(400).send("Falta describir el premio.");
 
-  const trabajadores = { ...(negocio.trabajadores || {}) };
-  const codigo = generarCodigoTrabajador(trabajadores);
-  trabajadores[codigo] = { nombre, activo: true, creado: new Date().toISOString() };
-  guardarCambiosNegocio(slug, negocio, { trabajadores });
-
-  res.send(`
-    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>${ESTILO_BASE}
-      .ok-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:420px;text-align:center;}
-      .codigo-grande{font-size:2.4rem;font-weight:800;letter-spacing:0.1em;color:${MARCA.verdeOscuro};
-                      background:${MARCA.verdeClaro};border-radius:12px;padding:16px;margin:16px 0;}
-    </style></head>
-    <body>
-      <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
-      <div class="content">
-        <div class="eyebrow">Listo</div>
-        <h1 class="titulo-pagina">Código generado</h1>
-        <div class="ok-card">
-          <p>Dale este código a <b>${nombre}</b> — lo usa cada vez que marque entrada, salida o descanso:</p>
-          <div class="codigo-grande">${codigo}</div>
-          <a href="/mi-panel/${slug}/empleados?key=${claveUsada}" style="color:${MARCA.verde};font-weight:700;">&larr; Volver a empleados</a>
-        </div>
-      </div>
-    </body></html>
-  `);
+  guardarCambiosNegocio(slug, negocio, { fidelizacion: { metaSellos, premio } });
+  res.redirect(`/mi-panel/${slug}/fidelizacion?key=${claveUsada}`);
 });
 
-app.get("/mi-panel/:slug/empleados/:codigo/desactivar", (req, res) => {
-  const { slug, codigo } = req.params;
+// El dueño confirma que le entregó el premio a un cliente — reinicia su contador a 0.
+app.get("/mi-panel/:slug/fidelizacion/:id/canjear", (req, res) => {
+  const { slug, id } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
   if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
     return res.status(401).send("No autorizado.");
   }
-  const trabajadores = { ...(negocio.trabajadores || {}) };
-  if (!trabajadores[codigo]) return res.status(404).send("Ese trabajador no existe.");
-  trabajadores[codigo] = { ...trabajadores[codigo], activo: false };
-  guardarCambiosNegocio(slug, negocio, { trabajadores });
-  res.redirect(`/mi-panel/${slug}/empleados?key=${claveUsada}`);
-});
-
-app.get("/mi-panel/:slug/empleados/:codigo/reactivar", (req, res) => {
-  const { slug, codigo } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
-    return res.status(401).send("No autorizado.");
+  const datos = leerDatos();
+  if (!datos[slug] || !datos[slug].fidelizacion || !datos[slug].fidelizacion[decodeURIComponent(id)]) {
+    return res.status(404).send("Ese cliente no existe en el programa.");
   }
-  const trabajadores = { ...(negocio.trabajadores || {}) };
-  if (!trabajadores[codigo]) return res.status(404).send("Ese trabajador no existe.");
-  trabajadores[codigo] = { ...trabajadores[codigo], activo: true };
-  guardarCambiosNegocio(slug, negocio, { trabajadores });
-  res.redirect(`/mi-panel/${slug}/empleados?key=${claveUsada}`);
+  datos[slug].fidelizacion[decodeURIComponent(id)].sellos = 0;
+  guardarDatos(datos);
+  res.redirect(`/mi-panel/${slug}/fidelizacion?key=${claveUsada}`);
 });
 
-// El dueño "olvida" el celular registrado de un trabajador — útil si cambió
-// de celular de verdad. La próxima vez que marque, ese nuevo celular queda
-// registrado como el de confianza.
-app.get("/mi-panel/:slug/empleados/:codigo/restablecer-dispositivo", (req, res) => {
-  const { slug, codigo } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
-    return res.status(401).send("No autorizado.");
-  }
-  const trabajadores = { ...(negocio.trabajadores || {}) };
-  if (!trabajadores[codigo]) return res.status(404).send("Ese trabajador no existe.");
-  const { dispositivoToken, ...resto } = trabajadores[codigo];
-  trabajadores[codigo] = resto;
-  guardarCambiosNegocio(slug, negocio, { trabajadores });
-  res.redirect(`/mi-panel/${slug}/empleados?key=${claveUsada}`);
-});
-
-// Lo que graba el chip NFC de la tarjeta de asistencia — pantalla con teclado
-// numérico para que el trabajador escriba su código.
-app.get("/asistencia/:slug", (req, res) => {
+// Lo que graba el chip NFC de la tarjeta de fidelización.
+app.get("/fidelidad/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!esPro(negocio)) return res.status(402).send("Este negocio no tiene activa la tarjeta de asistencia.");
+  if (!esPro(negocio) || !negocio.fidelizacion) {
+    return res.status(402).send("Este negocio no tiene activa la fidelización todavía.");
+  }
+
+  const cliente = clienteActual(req);
+  if (cliente) {
+    // Ya tiene cuenta y sesión iniciada en Tapin — se identifica solo, sin pedirle nada.
+    return res.redirect(`/fidelidad/${slug}/sumar?id=${encodeURIComponent(normalizarIdentificador(cliente.email))}&nombre=${encodeURIComponent(cliente.nombre || "")}`);
+  }
 
   res.send(`
     <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Marcar asistencia — ${negocio.nombre}</title>
         <style>
-          *{box-sizing:border-box;}
           body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:${MARCA.verdeOscuro};margin:0;
                min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
           .box{background:#fff;border-radius:18px;padding:32px 26px;max-width:360px;width:100%;text-align:center;}
-          h1{font-size:1.1rem;color:${MARCA.texto};margin:14px 0 4px;}
+          h1{font-size:1.15rem;color:${MARCA.texto};margin:14px 0 4px;}
           p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0 0 20px;}
-          #pantalla{font-size:1.6rem;letter-spacing:0.2em;font-weight:800;color:${MARCA.verdeOscuro};
-                     background:${MARCA.crema};border-radius:12px;padding:14px;margin-bottom:16px;min-height:1.4em;}
-          .teclado{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-          .tecla{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};border:none;border-radius:10px;
-                 padding:18px 0;font-size:1.3rem;font-weight:700;cursor:pointer;}
-          .tecla:active{transform:scale(0.94);}
-          .tecla.borrar{background:#FBEFE9;color:#993C1D;}
-          .tecla.entrar{background:${MARCA.verdeOscuro};color:#fff;grid-column:span 3;}
-          #error{color:#C0392B;font-size:0.82rem;min-height:1.2em;margin-top:8px;}
+          input{width:100%;padding:13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.95rem;box-sizing:border-box;margin-bottom:12px;}
+          button{width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:13px;font-weight:700;cursor:pointer;}
+          .divisor{font-size:0.76rem;color:#999;margin:16px 0;}
         </style>
       </head>
       <body>
         <div class="box">
           <div>${logoSvg(MARCA.verdeOscuro, 30)}</div>
           <h1>${negocio.nombre}</h1>
-          <p>Escribe tu código para marcar</p>
-          <div id="pantalla">····</div>
-          <div id="error"></div>
-          <div class="teclado">
-            ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button class="tecla" onclick="tocar('${n}')">${n}</button>`).join("")}
-            <button class="tecla borrar" onclick="borrar()">&larr;</button>
-            <button class="tecla" onclick="tocar('0')">0</button>
-            <button class="tecla entrar" onclick="enviar()">Entrar</button>
-          </div>
-        </div>
-        <script>
-          let codigo = '';
-          function pintar() {
-            document.getElementById('pantalla').textContent = codigo.padEnd(6, '·');
-          }
-          function tocar(n) {
-            if (codigo.length < 6) { codigo += n; pintar(); }
-            if (codigo.length === 6) setTimeout(enviar, 150);
-          }
-          function borrar() {
-            codigo = codigo.slice(0, -1);
-            pintar();
-            document.getElementById('error').textContent = '';
-          }
-          function enviar() {
-            if (codigo.length !== 6) {
-              document.getElementById('error').textContent = 'Escribe los 6 dígitos.';
-              return;
-            }
-            window.location.href = '/asistencia/${slug}/verificar?codigo=' + codigo;
-          }
-        </script>
-      </body>
-    </html>
-  `);
-});
-
-app.get("/asistencia/:slug/verificar", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!esPro(negocio)) return res.status(402).send("Este negocio no tiene activa la tarjeta de asistencia.");
-
-  const codigo = (req.query.codigo || "").trim();
-  const trabajadores = negocio.trabajadores || {};
-  const trabajador = trabajadores[codigo];
-
-  if (!trabajador || trabajador.activo === false) {
-    return res.send(`
-      <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>body{font-family:-apple-system,sans-serif;background:${MARCA.verdeOscuro};display:flex;align-items:center;
-      justify-content:center;min-height:100vh;margin:0;padding:24px;}
-      .box{background:#fff;border-radius:18px;padding:32px;max-width:360px;text-align:center;}</style></head>
-      <body><div class="box"><h2>Código no reconocido</h2><p>Verifica que lo escribiste bien, o pídele al dueño del negocio que te confirme tu código.</p>
-      <a href="/asistencia/${slug}" style="color:${MARCA.verde};font-weight:700;">&larr; Intentar de nuevo</a></div></body></html>
-    `);
-  }
-
-  const datos = leerDatos();
-  const asistencia = (datos[slug] && datos[slug].asistencia) || [];
-  const zona = zonaDe(negocio);
-  const hoyStr = new Date().toLocaleDateString("es-CO", { timeZone: zona });
-  const eventosHoy = asistencia.filter(
-    (e) => e.trabajadorCodigo === codigo && new Date(e.fechaISO).toLocaleDateString("es-CO", { timeZone: zona }) === hoyStr
-  );
-  const { siguiente } = estadoTrabajadorHoy(eventosHoy);
-
-  let botones = "";
-  if (siguiente === "entrada") {
-    botones = `<a href="/asistencia/${slug}/marcar?codigo=${codigo}&tipo=entrada" class="boton">Marcar entrada</a>`;
-  } else if (siguiente === "descanso_o_salida") {
-    botones = `
-      <a href="/asistencia/${slug}/marcar?codigo=${codigo}&tipo=inicio_descanso" class="boton secundario">Iniciar descanso</a>
-      <a href="/asistencia/${slug}/marcar?codigo=${codigo}&tipo=salida" class="boton">Marcar salida</a>`;
-  } else if (siguiente === "fin_descanso") {
-    botones = `<a href="/asistencia/${slug}/marcar?codigo=${codigo}&tipo=fin_descanso" class="boton">Terminar descanso</a>`;
-  } else {
-    botones = `<p style="color:${MARCA.textoSuave};">Ya marcaste salida hoy — ¡buen trabajo!</p>`;
-  }
-
-  res.send(`
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:${MARCA.verdeOscuro};margin:0;
-               min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
-          .box{background:#fff;border-radius:18px;padding:32px 26px;max-width:360px;width:100%;text-align:center;}
-          h1{font-size:1.2rem;color:${MARCA.texto};margin:6px 0 20px;}
-          .boton{display:block;background:${MARCA.verdeOscuro};color:#fff;text-decoration:none;font-weight:700;
-                 padding:15px;border-radius:12px;margin-bottom:10px;font-size:0.95rem;}
-          .boton.secundario{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};}
-        </style>
-      </head>
-      <body>
-        <div class="box">
-          <h1>Hola, ${trabajador.nombre} 👋</h1>
-          ${botones}
+          <p>Escribe tu correo o celular para sumar tu sello de hoy</p>
+          <form method="POST" action="/fidelidad/${slug}/identificar">
+            <input type="text" name="identificador" required placeholder="Tu correo o celular">
+            <input type="text" name="nombre" placeholder="Tu nombre (opcional)">
+            <button type="submit">Sumar mi sello</button>
+          </form>
+          <div class="divisor">¿Ya tienes cuenta en Tapin? <a href="/cliente" style="color:${MARCA.verde};">Inicia sesión</a> y no tengas que escribir esto cada vez.</div>
         </div>
       </body>
     </html>
   `);
 });
 
-app.get("/asistencia/:slug/marcar", (req, res) => {
+app.post("/fidelidad/:slug/identificar", (req, res) => {
+  const { slug } = req.params;
+  const identificador = normalizarIdentificador(req.body.identificador);
+  if (!identificador) return res.status(400).send("Falta tu correo o celular.");
+  res.redirect(`/fidelidad/${slug}/sumar?id=${encodeURIComponent(identificador)}&nombre=${encodeURIComponent(req.body.nombre || "")}`);
+});
+
+app.get("/fidelidad/:slug/sumar", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!esPro(negocio)) return res.status(402).send("Este negocio no tiene activa la tarjeta de asistencia.");
-
-  const codigo = (req.query.codigo || "").trim();
-  const tipo = req.query.tipo;
-  const trabajadores = negocio.trabajadores || {};
-  const trabajador = trabajadores[codigo];
-  if (!trabajador || trabajador.activo === false) {
-    return res.status(404).send("Código no reconocido.");
-  }
-  if (!NOMBRES_TIPO_EVENTO[tipo]) {
-    return res.status(400).send("Tipo de marca inválido.");
+  const fid = negocio.fidelizacion;
+  if (!esPro(negocio) || !fid) {
+    return res.status(402).send("Este negocio no tiene activa la fidelización todavía.");
   }
 
-  // Detección suave de "buddy punching": la primera vez que un código marca,
-  // registramos el celular (una cookie, nada invasivo). Si luego el mismo
-  // código marca desde OTRO celular, no lo bloqueamos — pero lo marcamos en
-  // rojo en el panel para que el dueño lo revise. El dueño puede "olvidar"
-  // el dispositivo registrado si el trabajador cambió de celular de verdad.
-  let dispositivoToken = leerCookie(req, "tapin_dispositivo");
-  if (!dispositivoToken) {
-    dispositivoToken = generarToken();
-    res.setHeader("Set-Cookie", `tapin_dispositivo=${dispositivoToken}; Max-Age=${60 * 60 * 24 * 365}; Path=/; HttpOnly; SameSite=Lax`);
-  }
-  let dispositivoInusual = false;
-  const trabajadoresActualizados = { ...trabajadores };
-  if (!trabajador.dispositivoToken) {
-    // Primera vez que marca este código — queda registrado como su celular de confianza.
-    trabajadoresActualizados[codigo] = { ...trabajador, dispositivoToken };
-    guardarCambiosNegocio(slug, negocio, { trabajadores: trabajadoresActualizados });
-  } else if (trabajador.dispositivoToken !== dispositivoToken) {
-    dispositivoInusual = true;
-  }
+  const id = normalizarIdentificador(req.query.id);
+  if (!id) return res.status(400).send("Falta identificador.");
+  const nombre = (req.query.nombre || "").trim();
 
   const datos = leerDatos();
   if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
-  if (!datos[slug].asistencia) datos[slug].asistencia = [];
-  const zona = zonaDe(negocio);
-  const ahora = new Date();
-  datos[slug].asistencia.push({
-    trabajadorCodigo: codigo,
-    tipo,
-    fechaISO: ahora.toISOString(),
-    fechaLegible: ahora.toLocaleDateString("es-CO", { timeZone: zona, day: "numeric", month: "short" }),
-    horaLegible: ahora.toLocaleTimeString("es-CO", { timeZone: zona, hour: "2-digit", minute: "2-digit" }),
-    dispositivoInusual,
-  });
+  if (!datos[slug].fidelizacion) datos[slug].fidelizacion = {};
+  const actual = datos[slug].fidelizacion[id] || { sellos: 0, nombre: nombre || id };
+  actual.sellos = (actual.sellos || 0) + 1;
+  if (nombre) actual.nombre = nombre;
+  datos[slug].fidelizacion[id] = actual;
   guardarDatos(datos);
+
+  const listo = actual.sellos >= fid.metaSellos;
 
   res.send(`
     <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>body{font-family:-apple-system,sans-serif;background:${MARCA.verdeOscuro};display:flex;align-items:center;
-    justify-content:center;min-height:100vh;margin:0;padding:24px;}
-    .box{background:#fff;border-radius:18px;padding:36px 28px;max-width:360px;text-align:center;}
-    .check{font-size:2.5rem;margin-bottom:10px;}</style></head>
+    <style>
+      body{font-family:-apple-system,sans-serif;background:${MARCA.verdeOscuro};display:flex;align-items:center;
+      justify-content:center;min-height:100vh;margin:0;padding:24px;}
+      .box{background:#fff;border-radius:18px;padding:36px 28px;max-width:360px;text-align:center;}
+      .check{font-size:2.5rem;margin-bottom:10px;}
+      .sellos{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin:16px 0;}
+      .sello{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+             font-size:0.8rem;font-weight:700;}
+      .sello.lleno{background:${MARCA.oro};color:#fff;}
+      .sello.vacio{background:${MARCA.crema};color:${MARCA.textoSuave};border:1px solid ${MARCA.borde};}
+    </style></head>
     <body><div class="box">
-      <div class="check">✓</div>
-      <h2>${NOMBRES_TIPO_EVENTO[tipo]} registrada</h2>
-      <p style="color:${MARCA.textoSuave};">${trabajador.nombre} — ${ahora.toLocaleTimeString("es-CO", { timeZone: zona, hour: "2-digit", minute: "2-digit" })}</p>
+      <div class="check">${listo ? "🎉" : "✓"}</div>
+      <h2>${listo ? "¡Premio desbloqueado!" : "¡Sello sumado!"}</h2>
+      <div class="sellos">
+        ${Array.from({ length: fid.metaSellos }, (_, i) =>
+          `<div class="sello ${i < actual.sellos % fid.metaSellos || (listo && i < fid.metaSellos) ? "lleno" : "vacio"}">${i + 1}</div>`
+        ).join("")}
+      </div>
+      <p style="color:${MARCA.textoSuave};">
+        ${listo
+          ? `Ya tienes: <b>${fid.premio}</b> — muéstrale esta pantalla al negocio.`
+          : `Llevas <b>${actual.sellos} de ${fid.metaSellos}</b> — sigue así para ganar: ${fid.premio}`}
+      </p>
     </div></body></html>
   `);
 });
@@ -4362,7 +4214,7 @@ app.get("/conoce", (req, res) => {
             <div class="plan pro">
               <div class="plan-badge">RECOMENDADO</div>
               <div class="plan-nombre">Mensualidad Pro</div>
-              <div class="plan-precio">$79.900 <span>COP / mes</span></div>
+              <div class="plan-precio">$59.900 <span>COP / mes</span></div>
               <p style="font-size:0.74rem;color:${MARCA.textoSuave};margin:-8px 0 14px;">
                 Con varios locales, el precio por local sube: $109.900 (4-9 locales) · $129.900 (10-24) · $149.900 (25-49) · $169.900 (50+)
               </p>
@@ -4371,7 +4223,6 @@ app.get("/conoce", (req, res) => {
               </p>
               <ul>
                 <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                <li><span class="check">✓</span> Tarjeta de asistencia de empleados (entradas, salidas y descansos)</li>
                 <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
                 <li><span class="check">✓</span> Alerta instantánea por correo ante retroalimentación negativa</li>
                 <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
@@ -5571,16 +5422,16 @@ app.get("/admin/entrar", (req, res) => {
 // y el envío). El Plan Pro (mensual) necesita una integración distinta — ver nota
 // al final del archivo README sobre pagos recurrentes.
 const PRECIO_BASICO_COP = 119900;
-const PRECIO_PRO_COP = 79900;
+const PRECIO_PRO_COP = 59900;
 // Mientras más locales activos en Plan Pro tenga el mismo negocio, más paga
 // por cada uno — al contrario que las tarjetas: un negocio grande saca más
 // valor de comparar entre sus propias sedes, así que tiene sentido que pague
 // más por local, no menos. Ya anunciado en /conoce.
 const ESCALONES_PRO = [
-  { minimo: 50, precio: 169900 },
-  { minimo: 25, precio: 149900 },
-  { minimo: 10, precio: 129900 },
-  { minimo: 4, precio: 109900 },
+  { minimo: 50, precio: 149900 },
+  { minimo: 25, precio: 129900 },
+  { minimo: 10, precio: 109900 },
+  { minimo: 4, precio: 89900 },
   { minimo: 1, precio: PRECIO_PRO_COP },
 ];
 
