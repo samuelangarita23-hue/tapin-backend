@@ -1361,7 +1361,7 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
               <label>Plan</label>
               <select name="plan">
                 <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($119.900 — envío incluido)</option>
-                <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($59.900/mes — alertas, reporte mensual, contenido)</option>
+                <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($79.900/mes — alertas, reporte mensual, contenido)</option>
               </select>
 
               <label>Dirección (aparece en el mapa público de /descubre)</label>
@@ -1623,7 +1623,7 @@ app.get("/activar/:codigo", (req, res) => {
               <label>Plan</label>
               <select name="plan">
                 <option value="basico">Básico ($119.900 — envío incluido)</option>
-                <option value="pro">Pro ($59.900/mes — alertas, reporte mensual, contenido)</option>
+                <option value="pro">Pro ($79.900/mes — alertas, reporte mensual, contenido)</option>
               </select>
 
               <label>País (define la hora local de los reportes)</label>
@@ -2605,6 +2605,7 @@ app.get("/mi-panel/:slug", (req, res) => {
               <a href="/quejas/${slug}?key=${req.query.key}" class="btn-herramienta">Retroalimentación privada</a>
               <a href="/contenido/${slug}?key=${req.query.key}" class="btn-herramienta">Generador de contenido</a>
               <a href="/reportes-guardados/${slug}?key=${req.query.key}" class="btn-herramienta">Reportes guardados</a>
+              <a href="/mi-panel/${slug}/empleados?key=${req.query.key}" class="btn-herramienta">Empleados y asistencia</a>
             </div>
           </div>
 
@@ -2845,6 +2846,498 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
         </div>
       </body>
     </html>
+  `);
+});
+
+// ---------- Tarjeta de asistencia de empleados (incluida en Plan Pro) ----------
+
+// Código corto de 4 dígitos, único dentro de los trabajadores de ESE negocio
+// (no hace falta que sea único a nivel global — cada negocio verifica solo
+// contra sus propios trabajadores).
+function generarCodigoTrabajador(trabajadoresExistentes) {
+  let codigo;
+  do {
+    codigo = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
+  } while (trabajadoresExistentes && trabajadoresExistentes[codigo]);
+  return codigo;
+}
+
+// Mira los eventos de HOY de un trabajador y decide qué botón(es) mostrarle:
+// sin marcar nada -> entrada; ya entró -> descanso o salida; en descanso ->
+// terminar descanso; ya salió -> nada más por hoy.
+function estadoTrabajadorHoy(eventosHoy) {
+  if (eventosHoy.length === 0) return { siguiente: "entrada" };
+  const ultimo = eventosHoy[eventosHoy.length - 1];
+  if (ultimo.tipo === "entrada") return { siguiente: "descanso_o_salida" };
+  if (ultimo.tipo === "inicio_descanso") return { siguiente: "fin_descanso" };
+  if (ultimo.tipo === "fin_descanso") return { siguiente: "descanso_o_salida" };
+  if (ultimo.tipo === "salida") return { siguiente: "terminado" };
+  return { siguiente: "entrada" };
+}
+
+const NOMBRES_TIPO_EVENTO = {
+  entrada: "Entrada",
+  inicio_descanso: "Inicio de descanso",
+  fin_descanso: "Fin de descanso",
+  salida: "Salida",
+};
+
+// Suma el tiempo trabajado a partir de una lista de eventos (de un día o de
+// varios) — empareja entrada/salida y resta los descansos. Si el trabajador
+// sigue "adentro" (entró pero no ha salido), cuenta hasta el momento actual.
+function calcularMsTrabajados(eventos) {
+  const ordenados = [...eventos].sort((a, b) => new Date(a.fechaISO) - new Date(b.fechaISO));
+  let inicioTrabajo = null;
+  let inicioDescanso = null;
+  let msTrabajados = 0;
+  let msDescanso = 0;
+  for (const e of ordenados) {
+    const t = new Date(e.fechaISO).getTime();
+    if (e.tipo === "entrada") inicioTrabajo = t;
+    else if (e.tipo === "inicio_descanso") inicioDescanso = t;
+    else if (e.tipo === "fin_descanso" && inicioDescanso != null) {
+      msDescanso += t - inicioDescanso;
+      inicioDescanso = null;
+    } else if (e.tipo === "salida" && inicioTrabajo != null) {
+      msTrabajados += t - inicioTrabajo;
+      inicioTrabajo = null;
+    }
+  }
+  if (inicioTrabajo != null) msTrabajados += Date.now() - inicioTrabajo; // sigue trabajando ahora mismo
+  return Math.max(0, msTrabajados - msDescanso);
+}
+
+function formatoHoras(ms) {
+  const totalMin = Math.round(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${h}h ${String(m).padStart(2, "0")}m`;
+}
+
+// Panel del negocio: gestionar trabajadores (agregar, ver códigos, desactivar)
+// y ver la actividad de hoy. Exclusivo de Plan Pro — viene incluido en los $79.900.
+app.get("/mi-panel/:slug/empleados", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  const claveUsada = claveEfectiva(req, slug);
+  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  if (!esPro(negocio)) {
+    return res.status(402).send(
+      `La tarjeta de asistencia de empleados es exclusiva del Plan Pro. ` +
+      `Súbele el plan a "${negocio.nombre}" desde /mejorar-a-pro/${slug}?key=${claveUsada} para activarla.`
+    );
+  }
+  req.query.key = claveUsada;
+
+  const trabajadores = negocio.trabajadores || {};
+  const datos = leerDatos();
+  const asistencia = (datos[slug] && datos[slug].asistencia) || [];
+  const zona = zonaDe(negocio);
+  const hoyStr = new Date().toLocaleDateString("es-CO", { timeZone: zona });
+  const eventosHoy = asistencia.filter(
+    (e) => new Date(e.fechaISO).toLocaleDateString("es-CO", { timeZone: zona }) === hoyStr
+  );
+  const HACE_7_DIAS = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const eventosSemana = asistencia.filter((e) => new Date(e.fechaISO).getTime() >= HACE_7_DIAS);
+
+  const HACE_30_DIAS = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const eventosInusuales30d = asistencia.filter(
+    (e) => e.dispositivoInusual && new Date(e.fechaISO).getTime() >= HACE_30_DIAS
+  );
+
+  const filasTrabajadores = Object.entries(trabajadores)
+    .map(([codigo, t]) => {
+      const eventosDeHoy = eventosHoy.filter((e) => e.trabajadorCodigo === codigo);
+      const eventosDeSemana = eventosSemana.filter((e) => e.trabajadorCodigo === codigo);
+      const ultimo = eventosDeHoy[eventosDeHoy.length - 1];
+      const estadoTexto = ultimo
+        ? `${NOMBRES_TIPO_EVENTO[ultimo.tipo]} — ${ultimo.horaLegible}`
+        : "Sin marcar hoy";
+      const alertasDeEste = eventosInusuales30d.filter((e) => e.trabajadorCodigo === codigo);
+      const alertaDispositivo = alertasDeEste.length > 0
+        ? `<div style="color:${MARCA.rojo};font-size:0.72rem;font-weight:700;margin-top:2px;">
+             ⚠ dispositivo distinto — última vez: ${alertasDeEste[alertasDeEste.length - 1].fechaLegible}, ${alertasDeEste[alertasDeEste.length - 1].horaLegible}
+             (${alertasDeEste.length} en los últimos 30 días)
+             <a href="/mi-panel/${slug}/empleados/${codigo}/restablecer-dispositivo?key=${claveUsada}" style="font-weight:600;">— era su celular nuevo, olvidar</a>
+           </div>`
+        : "";
+      const horasHoy = formatoHoras(calcularMsTrabajados(eventosDeHoy));
+      const horasSemana = formatoHoras(calcularMsTrabajados(eventosDeSemana));
+      return `<tr style="${t.activo === false ? "opacity:0.5;" : ""}">
+        <td>${t.nombre}</td>
+        <td><code style="background:${MARCA.crema};padding:3px 8px;border-radius:6px;font-weight:700;letter-spacing:0.05em;">${codigo}</code></td>
+        <td>${estadoTexto}${alertaDispositivo}</td>
+        <td>${horasHoy}</td>
+        <td>${horasSemana}</td>
+        <td>${t.activo === false
+          ? `<a href="/mi-panel/${slug}/empleados/${codigo}/reactivar?key=${claveUsada}">Reactivar</a>`
+          : `<a href="/mi-panel/${slug}/empleados/${codigo}/desactivar?key=${claveUsada}" style="color:${MARCA.rojo};">Desactivar</a>`}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const filasHoy = eventosHoy
+    .slice()
+    .reverse()
+    .map((e) => {
+      const nombre = (trabajadores[e.trabajadorCodigo] && trabajadores[e.trabajadorCodigo].nombre) || "(trabajador eliminado)";
+      const marca = e.dispositivoInusual
+        ? `<span style="color:${MARCA.rojo};">⚠ ${e.horaLegible} (dispositivo distinto)</span>`
+        : e.horaLegible;
+      return `<tr><td>${nombre}</td><td>${NOMBRES_TIPO_EVENTO[e.tipo] || e.tipo}</td><td>${marca}</td></tr>`;
+    })
+    .join("");
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Empleados — ${negocio.nombre}</title>
+        <style>
+          ${ESTILO_BASE}
+          table{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden;border:1px solid ${MARCA.borde};margin-bottom:24px;}
+          th,td{padding:10px 14px;text-align:left;border-bottom:1px solid ${MARCA.borde};font-size:0.85rem;}
+          th{background:${MARCA.verdeOscuro};color:#fff;font-size:0.7rem;text-transform:uppercase;}
+          a{color:${MARCA.verde};font-weight:600;text-decoration:none;font-size:0.82rem;}
+          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px;max-width:420px;margin-bottom:28px;}
+          input{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;}
+          button{width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:12px;font-weight:700;cursor:pointer;}
+          .tarjeta-info{background:${MARCA.verdeClaro};border-radius:10px;padding:14px 16px;font-size:0.85rem;color:${MARCA.verdeOscuro};margin-bottom:24px;}
+        </style>
+      </head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/mi-panel/${slug}?key=${claveUsada}" style="color:#CFE3D8;">&larr; Volver al panel</a></div>
+        <div class="content">
+          <div class="eyebrow">Plan Pro</div>
+          <h1 class="titulo-pagina">Empleados — ${negocio.nombre}</h1>
+          <div class="subtitulo">Entradas, salidas y descansos, con un código por trabajador.</div>
+
+          <div class="tarjeta-info">
+            La tarjeta física de asistencia debe tener grabado: <b>${req.protocol}://${req.get("host")}/asistencia/${slug}</b> —
+            tus trabajadores la tocan con su celular y marcan con su código.
+          </div>
+
+          <div class="form-card">
+            <h3 style="margin-top:0;">Agregar trabajador</h3>
+            <form method="POST" action="/mi-panel/${slug}/empleados/agregar?key=${claveUsada}">
+              <input type="text" name="nombre" required placeholder="Nombre del trabajador">
+              <button type="submit">Generar código</button>
+            </form>
+          </div>
+
+          <table>
+            <tr><th>Nombre</th><th>Código</th><th>Hoy</th><th>Horas hoy</th><th>Horas semana</th><th>Acción</th></tr>
+            ${filasTrabajadores || `<tr><td colspan="6">Todavía no has agregado ningún trabajador.</td></tr>`}
+          </table>
+
+          <h3>Actividad de hoy</h3>
+          <table>
+            <tr><th>Trabajador</th><th>Marca</th><th>Hora</th></tr>
+            ${filasHoy || `<tr><td colspan="3">Sin marcas todavía hoy.</td></tr>`}
+          </table>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.post("/mi-panel/:slug/empleados/agregar", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  const claveUsada = claveEfectiva(req, slug);
+  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  if (!esPro(negocio)) return res.status(402).send("Exclusivo del Plan Pro.");
+
+  const nombre = (req.body.nombre || "").trim();
+  if (!nombre) return res.status(400).send("Falta el nombre del trabajador.");
+
+  const trabajadores = { ...(negocio.trabajadores || {}) };
+  const codigo = generarCodigoTrabajador(trabajadores);
+  trabajadores[codigo] = { nombre, activo: true, creado: new Date().toISOString() };
+  guardarCambiosNegocio(slug, negocio, { trabajadores });
+
+  res.send(`
+    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>${ESTILO_BASE}
+      .ok-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:420px;text-align:center;}
+      .codigo-grande{font-size:2.4rem;font-weight:800;letter-spacing:0.1em;color:${MARCA.verdeOscuro};
+                      background:${MARCA.verdeClaro};border-radius:12px;padding:16px;margin:16px 0;}
+    </style></head>
+    <body>
+      <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
+      <div class="content">
+        <div class="eyebrow">Listo</div>
+        <h1 class="titulo-pagina">Código generado</h1>
+        <div class="ok-card">
+          <p>Dale este código a <b>${nombre}</b> — lo usa cada vez que marque entrada, salida o descanso:</p>
+          <div class="codigo-grande">${codigo}</div>
+          <a href="/mi-panel/${slug}/empleados?key=${claveUsada}" style="color:${MARCA.verde};font-weight:700;">&larr; Volver a empleados</a>
+        </div>
+      </div>
+    </body></html>
+  `);
+});
+
+app.get("/mi-panel/:slug/empleados/:codigo/desactivar", (req, res) => {
+  const { slug, codigo } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  const claveUsada = claveEfectiva(req, slug);
+  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  const trabajadores = { ...(negocio.trabajadores || {}) };
+  if (!trabajadores[codigo]) return res.status(404).send("Ese trabajador no existe.");
+  trabajadores[codigo] = { ...trabajadores[codigo], activo: false };
+  guardarCambiosNegocio(slug, negocio, { trabajadores });
+  res.redirect(`/mi-panel/${slug}/empleados?key=${claveUsada}`);
+});
+
+app.get("/mi-panel/:slug/empleados/:codigo/reactivar", (req, res) => {
+  const { slug, codigo } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  const claveUsada = claveEfectiva(req, slug);
+  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  const trabajadores = { ...(negocio.trabajadores || {}) };
+  if (!trabajadores[codigo]) return res.status(404).send("Ese trabajador no existe.");
+  trabajadores[codigo] = { ...trabajadores[codigo], activo: true };
+  guardarCambiosNegocio(slug, negocio, { trabajadores });
+  res.redirect(`/mi-panel/${slug}/empleados?key=${claveUsada}`);
+});
+
+// El dueño "olvida" el celular registrado de un trabajador — útil si cambió
+// de celular de verdad. La próxima vez que marque, ese nuevo celular queda
+// registrado como el de confianza.
+app.get("/mi-panel/:slug/empleados/:codigo/restablecer-dispositivo", (req, res) => {
+  const { slug, codigo } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  const claveUsada = claveEfectiva(req, slug);
+  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  const trabajadores = { ...(negocio.trabajadores || {}) };
+  if (!trabajadores[codigo]) return res.status(404).send("Ese trabajador no existe.");
+  const { dispositivoToken, ...resto } = trabajadores[codigo];
+  trabajadores[codigo] = resto;
+  guardarCambiosNegocio(slug, negocio, { trabajadores });
+  res.redirect(`/mi-panel/${slug}/empleados?key=${claveUsada}`);
+});
+
+// Lo que graba el chip NFC de la tarjeta de asistencia — pantalla con teclado
+// numérico para que el trabajador escriba su código.
+app.get("/asistencia/:slug", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!esPro(negocio)) return res.status(402).send("Este negocio no tiene activa la tarjeta de asistencia.");
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Marcar asistencia — ${negocio.nombre}</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:${MARCA.verdeOscuro};margin:0;
+               min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .box{background:#fff;border-radius:18px;padding:32px 26px;max-width:360px;width:100%;text-align:center;}
+          h1{font-size:1.1rem;color:${MARCA.texto};margin:14px 0 4px;}
+          p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0 0 20px;}
+          #pantalla{font-size:1.6rem;letter-spacing:0.2em;font-weight:800;color:${MARCA.verdeOscuro};
+                     background:${MARCA.crema};border-radius:12px;padding:14px;margin-bottom:16px;min-height:1.4em;}
+          .teclado{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+          .tecla{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};border:none;border-radius:10px;
+                 padding:18px 0;font-size:1.3rem;font-weight:700;cursor:pointer;}
+          .tecla:active{transform:scale(0.94);}
+          .tecla.borrar{background:#FBEFE9;color:#993C1D;}
+          .tecla.entrar{background:${MARCA.verdeOscuro};color:#fff;grid-column:span 3;}
+          #error{color:#C0392B;font-size:0.82rem;min-height:1.2em;margin-top:8px;}
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <div>${logoSvg(MARCA.verdeOscuro, 30)}</div>
+          <h1>${negocio.nombre}</h1>
+          <p>Escribe tu código para marcar</p>
+          <div id="pantalla">····</div>
+          <div id="error"></div>
+          <div class="teclado">
+            ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button class="tecla" onclick="tocar('${n}')">${n}</button>`).join("")}
+            <button class="tecla borrar" onclick="borrar()">&larr;</button>
+            <button class="tecla" onclick="tocar('0')">0</button>
+            <button class="tecla entrar" onclick="enviar()">Entrar</button>
+          </div>
+        </div>
+        <script>
+          let codigo = '';
+          function pintar() {
+            document.getElementById('pantalla').textContent = codigo.padEnd(6, '·');
+          }
+          function tocar(n) {
+            if (codigo.length < 6) { codigo += n; pintar(); }
+            if (codigo.length === 6) setTimeout(enviar, 150);
+          }
+          function borrar() {
+            codigo = codigo.slice(0, -1);
+            pintar();
+            document.getElementById('error').textContent = '';
+          }
+          function enviar() {
+            if (codigo.length !== 6) {
+              document.getElementById('error').textContent = 'Escribe los 6 dígitos.';
+              return;
+            }
+            window.location.href = '/asistencia/${slug}/verificar?codigo=' + codigo;
+          }
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+app.get("/asistencia/:slug/verificar", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!esPro(negocio)) return res.status(402).send("Este negocio no tiene activa la tarjeta de asistencia.");
+
+  const codigo = (req.query.codigo || "").trim();
+  const trabajadores = negocio.trabajadores || {};
+  const trabajador = trabajadores[codigo];
+
+  if (!trabajador || trabajador.activo === false) {
+    return res.send(`
+      <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>body{font-family:-apple-system,sans-serif;background:${MARCA.verdeOscuro};display:flex;align-items:center;
+      justify-content:center;min-height:100vh;margin:0;padding:24px;}
+      .box{background:#fff;border-radius:18px;padding:32px;max-width:360px;text-align:center;}</style></head>
+      <body><div class="box"><h2>Código no reconocido</h2><p>Verifica que lo escribiste bien, o pídele al dueño del negocio que te confirme tu código.</p>
+      <a href="/asistencia/${slug}" style="color:${MARCA.verde};font-weight:700;">&larr; Intentar de nuevo</a></div></body></html>
+    `);
+  }
+
+  const datos = leerDatos();
+  const asistencia = (datos[slug] && datos[slug].asistencia) || [];
+  const zona = zonaDe(negocio);
+  const hoyStr = new Date().toLocaleDateString("es-CO", { timeZone: zona });
+  const eventosHoy = asistencia.filter(
+    (e) => e.trabajadorCodigo === codigo && new Date(e.fechaISO).toLocaleDateString("es-CO", { timeZone: zona }) === hoyStr
+  );
+  const { siguiente } = estadoTrabajadorHoy(eventosHoy);
+
+  let botones = "";
+  if (siguiente === "entrada") {
+    botones = `<a href="/asistencia/${slug}/marcar?codigo=${codigo}&tipo=entrada" class="boton">Marcar entrada</a>`;
+  } else if (siguiente === "descanso_o_salida") {
+    botones = `
+      <a href="/asistencia/${slug}/marcar?codigo=${codigo}&tipo=inicio_descanso" class="boton secundario">Iniciar descanso</a>
+      <a href="/asistencia/${slug}/marcar?codigo=${codigo}&tipo=salida" class="boton">Marcar salida</a>`;
+  } else if (siguiente === "fin_descanso") {
+    botones = `<a href="/asistencia/${slug}/marcar?codigo=${codigo}&tipo=fin_descanso" class="boton">Terminar descanso</a>`;
+  } else {
+    botones = `<p style="color:${MARCA.textoSuave};">Ya marcaste salida hoy — ¡buen trabajo!</p>`;
+  }
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:${MARCA.verdeOscuro};margin:0;
+               min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .box{background:#fff;border-radius:18px;padding:32px 26px;max-width:360px;width:100%;text-align:center;}
+          h1{font-size:1.2rem;color:${MARCA.texto};margin:6px 0 20px;}
+          .boton{display:block;background:${MARCA.verdeOscuro};color:#fff;text-decoration:none;font-weight:700;
+                 padding:15px;border-radius:12px;margin-bottom:10px;font-size:0.95rem;}
+          .boton.secundario{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};}
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <h1>Hola, ${trabajador.nombre} 👋</h1>
+          ${botones}
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.get("/asistencia/:slug/marcar", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!esPro(negocio)) return res.status(402).send("Este negocio no tiene activa la tarjeta de asistencia.");
+
+  const codigo = (req.query.codigo || "").trim();
+  const tipo = req.query.tipo;
+  const trabajadores = negocio.trabajadores || {};
+  const trabajador = trabajadores[codigo];
+  if (!trabajador || trabajador.activo === false) {
+    return res.status(404).send("Código no reconocido.");
+  }
+  if (!NOMBRES_TIPO_EVENTO[tipo]) {
+    return res.status(400).send("Tipo de marca inválido.");
+  }
+
+  // Detección suave de "buddy punching": la primera vez que un código marca,
+  // registramos el celular (una cookie, nada invasivo). Si luego el mismo
+  // código marca desde OTRO celular, no lo bloqueamos — pero lo marcamos en
+  // rojo en el panel para que el dueño lo revise. El dueño puede "olvidar"
+  // el dispositivo registrado si el trabajador cambió de celular de verdad.
+  let dispositivoToken = leerCookie(req, "tapin_dispositivo");
+  if (!dispositivoToken) {
+    dispositivoToken = generarToken();
+    res.setHeader("Set-Cookie", `tapin_dispositivo=${dispositivoToken}; Max-Age=${60 * 60 * 24 * 365}; Path=/; HttpOnly; SameSite=Lax`);
+  }
+  let dispositivoInusual = false;
+  const trabajadoresActualizados = { ...trabajadores };
+  if (!trabajador.dispositivoToken) {
+    // Primera vez que marca este código — queda registrado como su celular de confianza.
+    trabajadoresActualizados[codigo] = { ...trabajador, dispositivoToken };
+    guardarCambiosNegocio(slug, negocio, { trabajadores: trabajadoresActualizados });
+  } else if (trabajador.dispositivoToken !== dispositivoToken) {
+    dispositivoInusual = true;
+  }
+
+  const datos = leerDatos();
+  if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
+  if (!datos[slug].asistencia) datos[slug].asistencia = [];
+  const zona = zonaDe(negocio);
+  const ahora = new Date();
+  datos[slug].asistencia.push({
+    trabajadorCodigo: codigo,
+    tipo,
+    fechaISO: ahora.toISOString(),
+    fechaLegible: ahora.toLocaleDateString("es-CO", { timeZone: zona, day: "numeric", month: "short" }),
+    horaLegible: ahora.toLocaleTimeString("es-CO", { timeZone: zona, hour: "2-digit", minute: "2-digit" }),
+    dispositivoInusual,
+  });
+  guardarDatos(datos);
+
+  res.send(`
+    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>body{font-family:-apple-system,sans-serif;background:${MARCA.verdeOscuro};display:flex;align-items:center;
+    justify-content:center;min-height:100vh;margin:0;padding:24px;}
+    .box{background:#fff;border-radius:18px;padding:36px 28px;max-width:360px;text-align:center;}
+    .check{font-size:2.5rem;margin-bottom:10px;}</style></head>
+    <body><div class="box">
+      <div class="check">✓</div>
+      <h2>${NOMBRES_TIPO_EVENTO[tipo]} registrada</h2>
+      <p style="color:${MARCA.textoSuave};">${trabajador.nombre} — ${ahora.toLocaleTimeString("es-CO", { timeZone: zona, hour: "2-digit", minute: "2-digit" })}</p>
+    </div></body></html>
   `);
 });
 
@@ -3869,12 +4362,16 @@ app.get("/conoce", (req, res) => {
             <div class="plan pro">
               <div class="plan-badge">RECOMENDADO</div>
               <div class="plan-nombre">Mensualidad Pro</div>
-              <div class="plan-precio">$59.900 <span>COP / mes</span></div>
+              <div class="plan-precio">$79.900 <span>COP / mes</span></div>
               <p style="font-size:0.74rem;color:${MARCA.textoSuave};margin:-8px 0 14px;">
-                $89.900 COP/mes por tarjeta si tienes más de 3 locales con Tapin
+                Con varios locales, el precio por local sube: $109.900 (4-9 locales) · $129.900 (10-24) · $149.900 (25-49) · $169.900 (50+)
+              </p>
+              <p style="font-size:0.68rem;color:${MARCA.textoSuave};margin:-10px 0 14px;">
+                Es porque un negocio con varias sedes saca mucho más valor comparando entre ellas — se refleja en el precio.
               </p>
               <ul>
                 <li><span class="check">✓</span> Todo lo del pago único, más:</li>
+                <li><span class="check">✓</span> Tarjeta de asistencia de empleados (entradas, salidas y descansos)</li>
                 <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
                 <li><span class="check">✓</span> Alerta instantánea por correo ante retroalimentación negativa</li>
                 <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
@@ -5074,14 +5571,28 @@ app.get("/admin/entrar", (req, res) => {
 // y el envío). El Plan Pro (mensual) necesita una integración distinta — ver nota
 // al final del archivo README sobre pagos recurrentes.
 const PRECIO_BASICO_COP = 119900;
-const PRECIO_PRO_COP = 59900;
+const PRECIO_PRO_COP = 79900;
+// Mientras más locales activos en Plan Pro tenga el mismo negocio, más paga
+// por cada uno — al contrario que las tarjetas: un negocio grande saca más
+// valor de comparar entre sus propias sedes, así que tiene sentido que pague
+// más por local, no menos. Ya anunciado en /conoce.
+const ESCALONES_PRO = [
+  { minimo: 50, precio: 169900 },
+  { minimo: 25, precio: 149900 },
+  { minimo: 10, precio: 129900 },
+  { minimo: 4, precio: 109900 },
+  { minimo: 1, precio: PRECIO_PRO_COP },
+];
 
-// Descuento por volumen — Plan B (Moderado). El precio por tarjeta baja según
-// cuántas se pidan de una vez, pero nunca por debajo de un margen saludable.
+// Descuento por volumen — Plan D (Redondos: 10/20/30/35/40%). El precio por
+// tarjeta baja según cuántas se pidan de una vez, pero nunca por debajo de
+// un margen saludable.
 const ESCALONES_DESCUENTO = [
-  { minimo: 25, precio: 93500, descuento: "22%" },
-  { minimo: 10, precio: 101900, descuento: "15%" },
-  { minimo: 4, precio: 110300, descuento: "8%" },
+  { minimo: 100, precio: 71900, descuento: "40%" },
+  { minimo: 50, precio: 77900, descuento: "35%" },
+  { minimo: 25, precio: 83900, descuento: "30%" },
+  { minimo: 10, precio: 95900, descuento: "20%" },
+  { minimo: 4, precio: 107900, descuento: "10%" },
   { minimo: 1, precio: PRECIO_BASICO_COP, descuento: null },
 ];
 function precioTarjetaPorCantidad(cantidad) {
@@ -5523,7 +6034,17 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
   }
 
   const moneda = "COP";
-  const montoCentavos = PRECIO_PRO_COP * 100;
+  // El precio de este local depende de cuántos locales en Pro va a tener el
+  // negocio DESPUÉS de esta mejora (los que ya tiene + este nuevo).
+  const todosNegociosUpgrade = todosLosNegocios();
+  const correoUpgrade = (negocio.email || "").trim().toLowerCase();
+  const localesProExistentes = Object.values(todosNegociosUpgrade).filter(
+    (n) => esPro(n) && (n.email || "").trim().toLowerCase() === correoUpgrade
+  ).length;
+  const totalLocalesTrasUpgrade = localesProExistentes + 1;
+  const escalonUpgrade = ESCALONES_PRO.find((e) => totalLocalesTrasUpgrade >= e.minimo) || ESCALONES_PRO[ESCALONES_PRO.length - 1];
+  const precioProAplicable = escalonUpgrade.precio;
+  const montoCentavos = precioProAplicable * 100;
   const referencia = `tapin-upgrade-${slug}-${Date.now()}`;
   const firma = firmaIntegridadWompi(referencia, montoCentavos, moneda);
   const redirectUrl = `${req.protocol}://${req.get("host")}/mejorar-a-pro/${slug}/confirmar?key=${req.query.key}`;
@@ -5561,7 +6082,8 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
             <li>Recomendaciones automáticas</li>
             <li>Alertas instantáneas y exportes</li>
           </ul>
-          <div class="monto">$${PRECIO_PRO_COP.toLocaleString("es-CO")} COP<span style="font-size:0.9rem;font-weight:600;color:${MARCA.textoSuave};">/mes</span></div>
+          <div class="monto">$${precioProAplicable.toLocaleString("es-CO")} COP<span style="font-size:0.9rem;font-weight:600;color:${MARCA.textoSuave};">/mes</span></div>
+          ${totalLocalesTrasUpgrade >= 4 ? `<p style="font-size:0.78rem;color:${MARCA.oro};">Esta es tu ${totalLocalesTrasUpgrade}ª tarjeta en Plan Pro — aplica la tarifa de ${totalLocalesTrasUpgrade} o más locales.</p>` : ""}
 
           <form action="https://checkout.wompi.co/p/" method="GET">
             <input type="hidden" name="public-key" value="${process.env.WOMPI_PUBLIC_KEY}" />
@@ -5601,7 +6123,7 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
       const data = await resp.json();
       estado = data?.data?.status || "desconocido";
       const referenciaOk = (data?.data?.reference || "").startsWith(`tapin-upgrade-${slug}-`);
-      const montoOk = data?.data?.amount_in_cents === PRECIO_PRO_COP * 100;
+      const montoOk = ESCALONES_PRO.some((e) => data?.data?.amount_in_cents === e.precio * 100);
       if (estado === "APPROVED" && referenciaOk && montoOk) {
         guardarCambiosNegocio(slug, negocio, { plan: "pro" });
       }
@@ -5697,6 +6219,7 @@ app.get("/suscripcion/:slug", (req, res) => {
 
   const sus = negocio.suscripcion;
   const activa = !!(sus && sus.activa && sus.paymentSourceId);
+  const precioProAplicable = precioProSegunLocales(negocio.email, todosLosNegocios());
 
   res.send(`
     <html>
@@ -5721,10 +6244,10 @@ app.get("/suscripcion/:slug", (req, res) => {
           <div class="logo">${logoSvg(MARCA.verdeOscuro, 34)}</div>
           <h1>Suscripción Plan Pro — ${negocio.nombre}</h1>
           ${activa
-            ? `<div class="estado">Tarjeta registrada. Se cobra automáticamente $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP cada mes.</div>
+            ? `<div class="estado">Tarjeta registrada. Se cobra automáticamente $${precioProAplicable.toLocaleString("es-CO")} COP cada mes.</div>
                <p>Próximo cobro: ${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "pendiente"}</p>
                <p>¿Cambiaste de tarjeta? Registra una nueva abajo y reemplazará la anterior.</p>`
-            : `<p>Registra tu tarjeta una sola vez. <b>No se te cobra nada en este paso</b> — solo queda guardada para el cobro automático de $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes.</p>`
+            : `<p>Registra tu tarjeta una sola vez. <b>No se te cobra nada en este paso</b> — solo queda guardada para el cobro automático de $${precioProAplicable.toLocaleString("es-CO")} COP/mes.</p>`
           }
           <form method="POST" action="/suscripcion/${slug}/registrar?key=${req.query.key}">
             <script
@@ -5800,6 +6323,18 @@ app.post("/suscripcion/:slug/registrar", async (req, res) => {
 // próximo cobro ya llegó. Visítala con un cron diario o mensual (igual que
 // /notificar/:slug) — solo cobra a quien realmente le toque ese día:
 // https://tu-dominio.com/cobrar-suscripciones?key=TU_CLAVE
+// Cuenta cuántos negocios Pro activos tiene el mismo correo, y devuelve el
+// precio que le corresponde a CADA local, según la tabla de escalones.
+function precioProSegunLocales(email, todosNegocios) {
+  if (!email) return PRECIO_PRO_COP;
+  const correo = email.trim().toLowerCase();
+  const totalLocalesPro = Object.values(todosNegocios).filter(
+    (n) => esPro(n) && (n.email || "").trim().toLowerCase() === correo
+  ).length;
+  const escalon = ESCALONES_PRO.find((e) => totalLocalesPro >= e.minimo);
+  return (escalon || ESCALONES_PRO[ESCALONES_PRO.length - 1]).precio;
+}
+
 app.get("/cobrar-suscripciones", async (req, res) => {
   if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
   if (!process.env.WOMPI_PRIVATE_KEY) {
@@ -5818,8 +6353,9 @@ app.get("/cobrar-suscripciones", async (req, res) => {
     if (!sus || !sus.activa || !sus.paymentSourceId) continue;
     if (sus.proximoCobro && new Date(sus.proximoCobro) > hoy) continue; // todavía no toca
 
+    const precioAplicable = precioProSegunLocales(negocio.email, negocios);
     const referencia = `tapin-sub-${slug}-${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, "0")}`;
-    const montoCentavos = PRECIO_PRO_COP * 100;
+    const montoCentavos = precioAplicable * 100;
     const firma = firmaIntegridadWompi(referencia, montoCentavos, "COP");
 
     try {
@@ -5843,7 +6379,7 @@ app.get("/cobrar-suscripciones", async (req, res) => {
         guardarCambiosNegocio(slug, negocio, {
           suscripcion: { ...sus, ultimoCobro: new Date().toISOString(), proximoCobro: sumarUnMes(sus.proximoCobro), ultimoError: null },
         });
-        resultado.push({ slug, estado });
+        resultado.push({ slug, estado, precioAplicado: precioAplicable });
       } else {
         // No reintentamos solos ni desactivamos el plan automáticamente —
         // solo avisamos, para que decidas manualmente si le das un plazo o no.
