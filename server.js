@@ -638,6 +638,71 @@ function percentilCategoria(negocio, slug, todosNegocios, datos) {
   return Math.round((debajoOigual / valores.length) * 100);
 }
 
+// Idea 1/11: compara el mes calendario actual contra el mes calendario
+// anterior (no "últimos 30 días" — mes de verdad, del 1 al 1).
+function compararMesAnterior(eventos, negocio) {
+  const zona = zonaDe(negocio);
+  const ahora = new Date();
+  const inicioMesActual = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+  const inicioMesAnterior = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1);
+
+  let mesActual = 0, mesAnterior = 0;
+  for (const e of eventos) {
+    const fecha = new Date(e.fechaISO);
+    if (fecha >= inicioMesActual) mesActual++;
+    else if (fecha >= inicioMesAnterior && fecha < inicioMesActual) mesAnterior++;
+  }
+  if (mesAnterior === 0) return { mesActual, mesAnterior, disponible: mesAnterior > 0 };
+  const cambioPct = Math.round(((mesActual - mesAnterior) / mesAnterior) * 100);
+  return { mesActual, mesAnterior, cambioPct, disponible: true };
+}
+
+// Idea 21: mismo mes calendario, pero contra el año pasado — solo funciona
+// cuando ya hay un año de historia, así que casi siempre da null por ahora.
+function compararAnioAnterior(eventos, negocio) {
+  const ahora = new Date();
+  const inicioMesActual = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+  const inicioMesAnioPasado = new Date(ahora.getFullYear() - 1, ahora.getMonth(), 1);
+  const finMesAnioPasado = new Date(ahora.getFullYear() - 1, ahora.getMonth() + 1, 1);
+
+  let mesActual = 0, mesAnioPasado = 0;
+  for (const e of eventos) {
+    const fecha = new Date(e.fechaISO);
+    if (fecha >= inicioMesActual) mesActual++;
+    else if (fecha >= inicioMesAnioPasado && fecha < finMesAnioPasado) mesAnioPasado++;
+  }
+  if (mesAnioPasado === 0) return null; // no hay suficiente historia todavía
+  const cambioPct = Math.round(((mesActual - mesAnioPasado) / mesAnioPasado) * 100);
+  return { mesActual, mesAnioPasado, cambioPct };
+}
+
+// Idea 4: calendario tipo mapa de calor del mes actual — cuadrito por día,
+// más oscuro entre más toques tuvo ese día.
+function calendarioMes(eventos, negocio) {
+  const zona = zonaDe(negocio);
+  const ahora = new Date();
+  const anio = ahora.getFullYear(), mes = ahora.getMonth();
+  const diasEnMes = new Date(anio, mes + 1, 0).getDate();
+  const conteo = new Array(diasEnMes + 1).fill(0);
+  for (const e of eventos) {
+    const fecha = new Date(e.fechaISO);
+    if (fecha.getFullYear() === anio && fecha.getMonth() === mes) {
+      conteo[fecha.getDate()]++;
+    }
+  }
+  const max = Math.max(1, ...conteo);
+  return { dias: conteo.slice(1), max, primerDiaSemana: new Date(anio, mes, 1).getDay() };
+}
+
+// Idea 20: progreso hacia la meta mensual que el negocio se puso.
+function progresoMeta(eventos, metaMensual) {
+  if (!metaMensual || metaMensual <= 0) return null;
+  const ahora = new Date();
+  const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+  const toquesMes = eventos.filter((e) => new Date(e.fechaISO) >= inicioMes).length;
+  return { toquesMes, metaMensual, pct: Math.min(100, Math.round((toquesMes / metaMensual) * 100)) };
+}
+
 function barraSemana(dias7) {
   const max = Math.max(1, ...dias7);
   const nombresDias = [];
@@ -730,8 +795,10 @@ function guardarQueja(slug, comentario, negocio, telefono = "") {
 
   // Alerta instantánea (solo Pro): el dueño se entera de la queja apenas
   // llega, no hasta el reporte mensual. No bloquea la respuesta al cliente
-  // si el correo falla — es un "fire and forget" a propósito.
-  if (esPro(negocio) && negocio.email) {
+  // si el correo falla — es un "fire and forget" a propósito. Respeta la
+  // preferencia de alertas si el negocio la desactivó en Configuración.
+  const quiereAlertas = !negocio.alertas || negocio.alertas.quejas !== false;
+  if (esPro(negocio) && negocio.email && quiereAlertas) {
     enviarEmail(
       negocio.email,
       `⚠️ Nueva queja privada en ${negocio.nombre}`,
@@ -934,6 +1001,7 @@ app.get("/calificar/:slug", (req, res) => {
           negocioNombre: negocio.nombre,
           valor,
           fecha: new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" }),
+          fechaISO: new Date().toISOString(),
         });
         guardarClientes(clientes);
       }
@@ -2160,6 +2228,14 @@ app.get("/quejas/:slug", (req, res) => {
         <td data-label="Comentario">${q.comentario}</td>
         <td data-label="Teléfono">${q.telefono ? `<a href="tel:${q.telefono}">${q.telefono}</a>` : "—"}</td>
         <td data-label="Estado"><span style="background:${fondos[estado]};color:${colores[estado]};padding:4px 10px;border-radius:100px;font-size:0.74rem;font-weight:700;">${estado}</span></td>
+        <td data-label="Nota">
+          <form method="POST" action="/quejas/${slug}/nota?key=${req.query.key}" style="display:flex;gap:4px;">
+            <input type="hidden" name="i" value="${i}">
+            <input type="text" name="nota" value="${(q.nota || "").replace(/"/g, "&quot;")}" placeholder="Ej: la llamé, le di descuento"
+                   style="font-size:0.78rem;padding:6px 8px;border:1px solid ${MARCA.borde};border-radius:6px;width:150px;">
+            <button type="submit" style="font-size:0.72rem;padding:6px 10px;background:${MARCA.crema};border:1px solid ${MARCA.borde};border-radius:6px;cursor:pointer;">Guardar</button>
+          </form>
+        </td>
         <td data-label="Acción">
           ${estado !== "contactado" ? `<a href="/quejas/${slug}/estado?key=${req.query.key}&i=${i}&estado=contactado" style="margin-right:8px;">Marcar contactado</a>` : ""}
           ${estado !== "resuelto" ? `<a href="/quejas/${slug}/estado?key=${req.query.key}&i=${i}&estado=resuelto">Marcar resuelto</a>` : ""}
@@ -2208,8 +2284,8 @@ app.get("/quejas/:slug", (req, res) => {
           <div class="metric"><div class="metric-num">${resueltas}</div><div class="metric-lbl">Resueltas</div></div>
           <div class="metric"><div class="metric-num">${tasaRecuperacion}%</div><div class="metric-lbl">Tasa de recuperación</div></div>
         </div>
-        <table><thead><tr><th>Fecha</th><th>Comentario</th><th>Teléfono</th><th>Estado</th><th>Acción</th></tr></thead>
-        <tbody>${filas || "<tr><td colspan='5'>Sin retroalimentación registrada todavía.</td></tr>"}</tbody>
+        <table><thead><tr><th>Fecha</th><th>Comentario</th><th>Teléfono</th><th>Estado</th><th>Nota</th><th>Acción</th></tr></thead>
+        <tbody>${filas || "<tr><td colspan='6'>Sin retroalimentación registrada todavía.</td></tr>"}</tbody>
         </table>
       </div>
     </body></html>
@@ -2233,6 +2309,24 @@ app.get("/quejas/:slug/estado", (req, res) => {
   const datos = leerDatos();
   if (datos[slug] && datos[slug].quejas && datos[slug].quejas[i]) {
     datos[slug].quejas[i].estado = nuevoEstado;
+    guardarDatos(datos);
+  }
+  res.redirect(`/quejas/${slug}?key=${req.query.key}`);
+});
+
+// Idea 12: nota rápida por queja — memoria de qué se hizo, no solo el estado.
+app.post("/quejas/:slug/nota", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!autorizadoProNegocio(req, negocio)) {
+    return res.status(401).send("No autorizado.");
+  }
+  const i = parseInt(req.body.i, 10);
+  const nota = (req.body.nota || "").trim();
+  const datos = leerDatos();
+  if (datos[slug] && datos[slug].quejas && datos[slug].quejas[i]) {
+    datos[slug].quejas[i].nota = nota;
     guardarDatos(datos);
   }
   res.redirect(`/quejas/${slug}?key=${req.query.key}`);
@@ -2354,15 +2448,15 @@ app.get("/mi-panel/:slug", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
-  // Acepta la clave por la URL (?key=...) o por la cookie de sesión que se
-  // guarda la primera vez — así los links dentro del panel siguen funcionando
-  // igual (usan req.query.key normalmente), pero una vez entraste una vez,
-  // no dependes de que la clave siga viajando en la URL.
+  // Acepta la clave completa, la clave de solo lectura (idea 5), o la cookie
+  // de sesión que se guarda la primera vez.
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  const autorizado = claveUsada === negocio.claveAcceso ||
+    (negocio.claveSoloLectura && claveUsada === negocio.claveSoloLectura);
+  if (!negocio.claveAcceso || !autorizado) {
     return res.status(401).send("No autorizado. Verifica el enlace que te dio Tapin, debe incluir tu clave personal (?key=...).");
   }
-  if (req.query.key) ponerCookieSesion(res, slug, req.query.key);
+  if (req.query.key && claveUsada === negocio.claveAcceso) ponerCookieSesion(res, slug, req.query.key);
   req.query.key = claveUsada;
 
   const datos = leerDatos();
@@ -2403,7 +2497,7 @@ app.get("/mi-panel/:slug", (req, res) => {
 
   // Ideas 5-9: solo tienen sentido para negocios Pro (van en esa sección del panel).
   const diaFlojo = esPro(negocio) ? diaMasFlojo(eventos, negocio) : null;
-  const caida = esPro(negocio) ? alertaCaidaPropia(eventos, r.semana) : null;
+  const caida = esPro(negocio) && !negocio.pausado ? alertaCaidaPropia(eventos, r.semana) : null;
   const clientesRecurrentes = esPro(negocio) ? contarClientesRecurrentes(slug) : 0;
   const percentil = esPro(negocio) ? percentilCategoria(negocio, slug, todosNegocios, datos) : null;
 
@@ -2416,6 +2510,13 @@ app.get("/mi-panel/:slug", (req, res) => {
     if (totalCalificado > 0) partes.push(`${pctPositivas}% positivas`);
     resumenFrase = partes.join(" · ");
   }
+
+  // Ideas 1, 4, 20, 21: comparación mensual, calendario, meta y año anterior.
+  const comparativoMes = compararMesAnterior(eventos, negocio);
+  const calendario = calendarioMes(eventos, negocio);
+  const meta = progresoMeta(eventos, negocio.metaMensual);
+  const comparativoAnio = compararAnioAnterior(eventos, negocio);
+  const soloLectura = req.query.key === negocio.claveSoloLectura && negocio.claveSoloLectura;
 
   res.send(`
     <html>
@@ -2516,8 +2617,11 @@ app.get("/mi-panel/:slug", (req, res) => {
                            color:${esPro(negocio) ? MARCA.verdeOscuro : MARCA.textoSuave};">
                 ${esPro(negocio) ? "Plan Pro" : "Plan Básico"}
               </span>
+              ${negocio.pausado ? `<span style="display:inline-block;margin-left:6px;padding:5px 14px;border-radius:100px;font-size:0.72rem;font-weight:700;background:#FBEFE9;color:#993C1D;">Pausado</span>` : ""}
+              ${soloLectura ? `<span style="display:inline-block;margin-left:6px;padding:5px 14px;border-radius:100px;font-size:0.72rem;font-weight:700;background:#F3F1EC;color:${MARCA.textoSuave};">Solo lectura</span>` : ""}
             </div>
-            <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;">
+            ${!soloLectura ? `
+            <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
               <a href="/mi-panel/${slug}/editar?key=${req.query.key}"
                  style="font-size:0.76rem;font-weight:600;color:${MARCA.texto};background:#fff;
                         border:1px solid ${MARCA.borde};border-radius:100px;padding:7px 14px;text-decoration:none;">
@@ -2528,7 +2632,13 @@ app.get("/mi-panel/:slug", (req, res) => {
                         border:1px solid ${MARCA.borde};border-radius:100px;padding:7px 14px;text-decoration:none;">
                 Cambiar mi clave
               </a>
+              <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}"
+                 style="font-size:0.76rem;font-weight:600;color:${MARCA.texto};background:#fff;
+                        border:1px solid ${MARCA.borde};border-radius:100px;padding:7px 14px;text-decoration:none;">
+                Configuración
+              </a>
             </div>
+            ` : ""}
           </div>
 
           ${otrasSedes.length > 0 ? `
@@ -2563,6 +2673,59 @@ app.get("/mi-panel/:slug", (req, res) => {
               <div class="sparkline sparkline-grande">${barraSemana(r.dias7)}</div>
             </div>
             <div class="ultimo-toque">Último toque: <b>${ultimoTexto}</b></div>
+          </div>
+
+          ${meta ? `
+          <div class="seccion">
+            <div class="card-titulo">Meta del mes</div>
+            <div class="chart-card" style="margin-top:0;">
+              <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:6px;">
+                <span>${meta.toquesMes} de ${meta.metaMensual} toques</span><b>${meta.pct}%</b>
+              </div>
+              <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                <div style="height:100%;border-radius:100px;background:${meta.pct >= 100 ? MARCA.oro : MARCA.verde};width:${meta.pct}%;"></div>
+              </div>
+            </div>
+          </div>
+          ` : ""}
+
+          ${comparativoMes.disponible ? `
+          <div class="seccion">
+            <div class="card-titulo">Este mes vs. el anterior</div>
+            <div class="chart-card" style="margin-top:0;display:flex;gap:20px;align-items:center;">
+              <div style="text-align:center;flex:1;">
+                <div style="font-size:1.4rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
+                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
+              </div>
+              <div style="text-align:center;flex:1;">
+                <div style="font-size:1.4rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
+                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
+              </div>
+              <div style="text-align:center;flex:1;">
+                <div style="font-size:1.1rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
+                  ${comparativoMes.cambioPct >= 0 ? "+" : ""}${comparativoMes.cambioPct}%
+                </div>
+                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
+              </div>
+            </div>
+            ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:10px;">Vs. el mismo mes del año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
+          </div>
+          ` : ""}
+
+          <div class="seccion">
+            <div class="card-titulo">Calendario del mes</div>
+            <div class="chart-card" style="margin-top:0;">
+              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">
+                ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
+                ${calendario.dias.map((v, i) => {
+                  const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
+                  return `<div title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:5px;
+                          background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
+                          display:flex;align-items:center;justify-content:center;font-size:0.6rem;
+                          color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
+                }).join("")}
+              </div>
+            </div>
           </div>
 
           ${r.total === 0 ? `
@@ -2928,6 +3091,7 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
   }
   guardarCambiosNegocio(slug, negocio, { claveAcceso: claveNueva });
   ponerCookieSesion(res, slug, claveNueva);
+  registrarAuditoria(slug, negocio, "Cambiaste tu clave de acceso");
 
   res.send(`
     <html>
@@ -2951,9 +3115,160 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
   `);
 });
 
-// ---------- Fidelización (tarjeta física aparte, incluida en Plan Pro) ----------
-// El negocio decide TODO: cada cuántas visitas, y qué se gana — funciona
-// igual sin importar la categoría porque el premio es texto libre.
+// ---------- Configuración (ideas 3, 5, 12->no, 13, 14, 20, 22) ----------
+// Un solo lugar para todos los ajustes, para no llenar el panel principal
+// de botones — mantiene lo del día a día simple, y lo de configurar aparte.
+app.get("/mi-panel/:slug/configuracion", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  const claveUsada = claveEfectiva(req, slug);
+  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado. La configuración solo la puede tocar la clave completa, no la de solo lectura.");
+  }
+  req.query.key = claveUsada;
+
+  const alertas = negocio.alertas || { quejas: true, reporteMensual: true };
+  const datos = leerDatos();
+  const auditoria = ((datos[slug] && datos[slug].auditoria) || []).slice().reverse().slice(0, 15);
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Configuración — ${negocio.nombre}</title>
+        <style>
+          ${ESTILO_BASE}
+          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px;max-width:460px;margin-bottom:22px;}
+          .form-card h3{margin:0 0 4px;font-size:0.95rem;}
+          .form-card p.nota{color:${MARCA.textoSuave};font-size:0.78rem;margin:0 0 14px;}
+          input[type=number], input[type=text]{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;
+                font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;}
+          label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin-bottom:6px;}
+          .fila-check{display:flex;align-items:center;gap:10px;margin-bottom:12px;cursor:pointer;}
+          .fila-check input{width:auto;margin:0;}
+          button{background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:11px 18px;font-weight:700;cursor:pointer;font-size:0.88rem;}
+          button.secundario{background:#fff;color:${MARCA.texto};border:1px solid ${MARCA.borde};}
+          button.peligro{background:#fff;color:${MARCA.rojo};border:1px solid #F0D0C8;}
+          .codigo-caja{background:${MARCA.crema};border-radius:8px;padding:10px 12px;font-size:0.82rem;word-break:break-all;margin:10px 0;}
+          .linea-audit{display:flex;justify-content:space-between;font-size:0.8rem;padding:8px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.textoSuave};}
+          .linea-audit b{color:${MARCA.texto};font-weight:600;}
+        </style>
+      </head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/mi-panel/${slug}?key=${claveUsada}" style="color:#CFE3D8;">&larr; Volver al panel</a></div>
+        <div class="content">
+          <div class="eyebrow">Ajustes</div>
+          <h1 class="titulo-pagina">Configuración — ${negocio.nombre}</h1>
+
+          <div class="form-card">
+            <h3>Meta mensual</h3>
+            <p class="nota">Te ponemos una barra de progreso en el panel hacia esta meta.</p>
+            <form method="POST" action="/mi-panel/${slug}/configuracion/meta?key=${claveUsada}">
+              <label>¿Cuántos toques quieres este mes?</label>
+              <input type="number" name="metaMensual" min="1" value="${negocio.metaMensual || ""}" placeholder="Ej: 150">
+              <button type="submit">Guardar meta</button>
+            </form>
+          </div>
+
+          ${esPro(negocio) ? `
+          <div class="form-card">
+            <h3>Alertas por correo</h3>
+            <p class="nota">Elige cuáles quieres recibir — todas están activadas por defecto.</p>
+            <form method="POST" action="/mi-panel/${slug}/configuracion/alertas?key=${claveUsada}">
+              <label class="fila-check"><input type="checkbox" name="quejas" ${alertas.quejas !== false ? "checked" : ""}> Alerta instantánea cuando llega una queja</label>
+              <label class="fila-check"><input type="checkbox" name="reporteMensual" ${alertas.reporteMensual !== false ? "checked" : ""}> Reporte mensual automático</label>
+              <label>WhatsApp para alertas (opcional)</label>
+              <input type="text" name="whatsapp" value="${negocio.whatsappAlertas || ""}" placeholder="Ej: 3001234567">
+              <p class="nota" style="margin:-6px 0 12px;">Por ahora solo guardamos el número — el envío automático por WhatsApp llega en una próxima actualización.</p>
+              <button type="submit">Guardar preferencias</button>
+            </form>
+          </div>
+          ` : ""}
+
+          <div class="form-card">
+            <h3>Pausar negocio</h3>
+            <p class="nota">${negocio.pausado
+              ? "Tu negocio está pausado — no vamos a marcar caídas raras en tus estadísticas mientras tanto."
+              : "Útil para vacaciones o remodelación, sin desactivar la tarjeta ni perder tu historial."}</p>
+            <form method="POST" action="/mi-panel/${slug}/configuracion/pausar?key=${claveUsada}">
+              <input type="hidden" name="pausar" value="${negocio.pausado ? "no" : "si"}">
+              <button type="submit" class="${negocio.pausado ? "secundario" : "peligro"}">${negocio.pausado ? "Reanudar negocio" : "Pausar negocio"}</button>
+            </form>
+          </div>
+
+          <div class="form-card">
+            <h3>Acceso de solo lectura</h3>
+            <p class="nota">Comparte este link con un encargado — puede ver el panel, pero no cambiar nada (ni clave, ni configuración, ni negocio).</p>
+            ${negocio.claveSoloLectura
+              ? `<div class="codigo-caja">${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${negocio.claveSoloLectura}</div>
+                 <form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
+                   <button type="submit" class="secundario">Generar uno nuevo (invalida el anterior)</button>
+                 </form>`
+              : `<form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
+                   <button type="submit">Generar acceso de solo lectura</button>
+                 </form>`}
+          </div>
+
+          <div class="form-card">
+            <h3>Historial de cambios de tu cuenta</h3>
+            <p class="nota">Solo tuyo, para tener orden — no es visible para nadie más.</p>
+            ${auditoria.length
+              ? auditoria.map((a) => `<div class="linea-audit"><b>${a.texto}</b><span>${a.fechaLegible}</span></div>`).join("")
+              : `<p class="nota" style="margin:0;">Todavía no hay cambios registrados.</p>`}
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.post("/mi-panel/:slug/configuracion/meta", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
+  const metaMensual = parseInt(req.body.metaMensual, 10) || null;
+  guardarCambiosNegocio(slug, negocio, { metaMensual });
+  registrarAuditoria(slug, negocio, metaMensual ? `Configuraste una meta mensual de ${metaMensual} toques` : "Quitaste tu meta mensual");
+  res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
+});
+
+app.post("/mi-panel/:slug/configuracion/alertas", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
+  const alertas = { quejas: req.body.quejas === "on", reporteMensual: req.body.reporteMensual === "on" };
+  const whatsappAlertas = (req.body.whatsapp || "").trim();
+  guardarCambiosNegocio(slug, negocio, { alertas, whatsappAlertas });
+  res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
+});
+
+app.post("/mi-panel/:slug/configuracion/pausar", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
+  const pausado = req.body.pausar === "si";
+  guardarCambiosNegocio(slug, negocio, { pausado });
+  registrarAuditoria(slug, negocio, pausado ? "Pausaste tu negocio" : "Reanudaste tu negocio");
+  res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
+});
+
+app.post("/mi-panel/:slug/configuracion/solo-lectura", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
+  const claveSoloLectura = generarToken();
+  guardarCambiosNegocio(slug, negocio, { claveSoloLectura });
+  registrarAuditoria(slug, negocio, "Generaste un nuevo acceso de solo lectura");
+  res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
+});
+
+
 
 function normalizarIdentificador(valor) {
   return (valor || "").trim().toLowerCase();
@@ -3035,6 +3350,8 @@ app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
             La tarjeta física de fidelización debe tener grabado: <b>${req.protocol}://${req.get("host")}/fidelidad/${slug}</b>
           </div>
 
+          <a href="/mi-panel/${slug}/fidelizacion/exportar.csv?key=${claveUsada}" style="display:inline-block;margin-bottom:22px;">Exportar clientes a CSV →</a>
+
           <div class="form-card">
             <h3 style="margin-top:0;">Configuración</h3>
             <form method="POST" action="/mi-panel/${slug}/fidelizacion?key=${claveUsada}">
@@ -3072,6 +3389,30 @@ app.post("/mi-panel/:slug/fidelizacion", (req, res) => {
 
   guardarCambiosNegocio(slug, negocio, { fidelizacion: { metaSellos, premio } });
   res.redirect(`/mi-panel/${slug}/fidelizacion?key=${claveUsada}`);
+});
+
+// Idea 2: exportar la lista de clientes de fidelización a CSV, para que el
+// negocio les pueda escribir por su cuenta (WhatsApp, email marketing, etc.).
+app.get("/mi-panel/:slug/fidelizacion/exportar.csv", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  const claveUsada = claveEfectiva(req, slug);
+  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  const fid = negocio.fidelizacion || { metaSellos: 10 };
+  const datos = leerDatos();
+  const clientesFid = (datos[slug] && datos[slug].fidelizacion) || {};
+
+  let csv = "Nombre,Identificador,Sellos,Meta,Premio disponible\n";
+  for (const [id, c] of Object.entries(clientesFid)) {
+    const listo = c.sellos >= fid.metaSellos ? "Sí" : "No";
+    csv += `"${(c.nombre || id).replace(/"/g, '""')}","${id}",${c.sellos || 0},${fid.metaSellos},${listo}\n`;
+  }
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="fidelizacion-${slug}.csv"`);
+  res.send("\uFEFF" + csv); // BOM para que Excel abra bien los acentos
 });
 
 app.get("/mi-panel/:slug/fidelizacion/:id/canjear", (req, res) => {
@@ -3795,6 +4136,9 @@ async function enviarReporteMensualNegocio(slug, negocio, baseUrl) {
   if (!negocio.email) {
     return { ok: false, motivo: "Este negocio no tiene 'email' configurado." };
   }
+  if (negocio.alertas && negocio.alertas.reporteMensual === false) {
+    return { ok: false, motivo: "El negocio desactivó el reporte mensual en su configuración." };
+  }
 
   const datos = leerDatos();
   const eventos = (datos[slug] && datos[slug].eventos) || [];
@@ -3963,6 +4307,45 @@ app.get("/enviar-reportes-mensuales", async (req, res) => {
     fallidos: resultado.filter((r) => !r.ok).length,
     detalle: resultado,
   });
+});
+
+// Idea 14/23: revisa que el link de Google de cada negocio siga respondiendo
+// (a veces Google cambia o borra fichas). Corre por cron, igual que los
+// otros procesos automáticos — no bloquea nada, solo te avisa por correo si
+// algo quedó roto, para arreglarlo antes de que un cliente se tope con el error.
+// Visítalo así: https://tu-dominio.com/verificar-links-google?key=TU_CLAVE
+app.get("/verificar-links-google", async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const negocios = todosLosNegocios();
+  const rotos = [];
+
+  for (const slug in negocios) {
+    const negocio = negocios[slug];
+    if (!negocio.googleUrl) continue;
+    try {
+      const resp = await fetch(negocio.googleUrl, { method: "GET", redirect: "follow" });
+      if (!resp.ok) {
+        rotos.push({ slug, nombre: negocio.nombre, url: negocio.googleUrl, estado: resp.status });
+      }
+    } catch (err) {
+      rotos.push({ slug, nombre: negocio.nombre, url: negocio.googleUrl, estado: "sin respuesta" });
+    }
+  }
+
+  if (rotos.length > 0 && process.env.EMAIL_USER) {
+    const filas = rotos
+      .map((r) => `<li><b>${r.nombre}</b> (${r.slug}) — estado: ${r.estado}<br><span style="font-size:0.8rem;color:#888;">${r.url}</span></li>`)
+      .join("");
+    await enviarEmail(
+      process.env.EMAIL_USER,
+      `⚠ ${rotos.length} link${rotos.length > 1 ? "s" : ""} de Google roto${rotos.length > 1 ? "s" : ""} en Tapin`,
+      `<p>Estos negocios tienen un link de Google que no está respondiendo bien:</p><ul>${filas}</ul>`
+    ).catch((err) => console.error("[verificar-links-google] Error enviando correo:", err.message));
+  }
+
+  res.json({ ok: true, revisados: Object.keys(negocios).length, rotos: rotos.length, detalle: rotos });
 });
 
 // ---------- Historial de reportes mensuales guardados ----------
@@ -5021,12 +5404,13 @@ app.get("/cuenta", (req, res) => {
       </svg>`;
   };
 
-  const fidelizacionesHtml = misFidelizaciones
+  const fidelizacionesHtml = fidelizacionesConCambio
     .map((f, i) => {
       const icono = svgCategoria(f.categoria, MARCA.verdeOscuro);
       const faltan = Math.max(0, f.meta - f.sellos);
       return `
         <div class="fid-card ${f.listo ? "fid-lista" : ""}" onclick="alternarFid(${i})">
+          ${f.cambio ? `<div style="font-size:0.68rem;font-weight:700;color:${MARCA.verdeOscuro};margin-bottom:6px;">● Beneficio actualizado</div>` : ""}
           <div class="fid-fila">
             <div class="fid-anillo-wrap">
               ${anilloProgreso(f.sellos, f.meta, f.listo)}
@@ -5054,35 +5438,112 @@ app.get("/cuenta", (req, res) => {
     .map((slug) => {
       const n = todos[slug];
       const icono = svgCategoria(n.categoria, MARCA.verdeOscuro);
+      const aviso = favoritosConAviso.find((f) => f.slug === slug);
+      let textoAviso = "";
+      if (aviso && aviso.nunca) textoAviso = "Todavía no lo has calificado";
+      else if (aviso && aviso.diasSinVisitar !== null && aviso.diasSinVisitar >= 30) textoAviso = `Hace ${aviso.diasSinVisitar} días no lo calificas`;
       return `
         <div class="fav-card">
           <div class="fav-icono">${icono}</div>
           <div class="fav-info">
             <div class="fav-nombre">${n.nombre}</div>
             <div class="fav-cat">${n.categoria || "negocio"} ${n.direccion ? "· " + n.direccion : ""}</div>
+            ${textoAviso ? `<div class="fav-aviso">${textoAviso}</div>` : ""}
           </div>
           <div class="fav-acciones">
+            <a href="#" onclick="compartir('${(n.nombre || "").replace(/'/g, "")}','${n.googleUrl}');return false;" title="Compartir">⤴</a>
             <a href="${n.googleUrl}" target="_blank" title="Ver en Google">↗</a>
             <a href="#" onclick="quitar('${slug}');return false;" class="quitar" title="Quitar de favoritos">✕</a>
           </div>
         </div>`;
     }).join("");
 
+  const recomendadosHtml = recomendados
+    .map((slug) => {
+      const n = todos[slug];
+      return `<div class="reco-card">
+        <div class="reco-nombre">${n.nombre}</div>
+        <div class="reco-cat">${n.categoria || "negocio"}</div>
+        <a href="/descubre">Ver en el mapa →</a>
+      </div>`;
+    }).join("");
+
+  const insigniasHtml = insignias
+    .map((ins) => `<div class="insignia"><span>${ins.icono}</span>${ins.texto}</div>`)
+    .join("");
+
+  // Idea 9: mini-mapa — solo los favoritos que tengan ubicación configurada.
+  const favoritosConMapa = favoritos
+    .filter((slug) => todos[slug].lat != null && todos[slug].lng != null)
+    .map((slug) => ({ nombre: todos[slug].nombre, lat: todos[slug].lat, lng: todos[slug].lng }));
+
+  // Idea 25: lista de favoritos compartible públicamente (opt-in).
+  const compartirActivo = !!cliente.compartirFavoritos;
+
+
+
   const historialHtml = historial
     .map((h, i) => {
       const color = h.valor >= 4 ? MARCA.verde : h.valor === 3 ? MARCA.oro : MARCA.rojo;
+      const indiceOriginal = historial.length - 1 - i; // historial ya está invertido; esto lo devuelve al índice real
       return `
-        <div class="linea-item">
+        <div class="linea-item" data-nombre="${(h.negocioNombre || "").toLowerCase()}">
           <div class="linea-punto" style="background:${color};"></div>
           <div class="linea-contenido">
             <div class="linea-top">
               <b>${h.negocioNombre}</b>
               <span class="linea-estrellas" style="color:${MARCA.oro};">${"★".repeat(h.valor)}${"☆".repeat(5 - h.valor)}</span>
             </div>
-            <div class="linea-fecha">${h.fecha}</div>
+            <div class="linea-fecha">${h.fecha}
+              <a href="#" onclick="borrarHistorial(${indiceOriginal});return false;" style="color:${MARCA.rojo};font-weight:600;margin-left:8px;">Borrar</a>
+            </div>
           </div>
         </div>`;
     }).join("");
+
+  // Idea 15: insignias simples — solo reconocimiento personal, sin competir con nadie.
+  const negociosDistintos = new Set(historial.map((h) => h.slug || h.negocioNombre)).size;
+  const insignias = [];
+  if (historial.length >= 1) insignias.push({ texto: "Primera reseña", icono: "★" });
+  if (historial.length >= 5) insignias.push({ texto: "5+ reseñas dejadas", icono: "★" });
+  if (historial.length >= 20) insignias.push({ texto: "20+ reseñas dejadas", icono: "★" });
+  if (favoritos.length >= 3) insignias.push({ texto: "3+ negocios favoritos", icono: "♥" });
+  if (misFidelizaciones.some((f) => f.listo)) insignias.push({ texto: "Beneficio ganado", icono: "✓" });
+
+  // Idea 24: favoritos donde hace tiempo no deja reseña (o nunca) — recordatorio suave.
+  const HOY_MS = Date.now();
+  const favoritosConAviso = favoritos.map((slug) => {
+    const ultimaVisita = historial.find((h) => h.slug === slug);
+    let diasSinVisitar = null;
+    if (ultimaVisita && ultimaVisita.fechaISO) {
+      diasSinVisitar = Math.floor((HOY_MS - new Date(ultimaVisita.fechaISO).getTime()) / 86400000);
+    }
+    return { slug, diasSinVisitar, nunca: !ultimaVisita };
+  });
+
+  // Idea 17: recomienda negocios de la misma categoría que tus favoritos, que todavía no tienes guardados.
+  const categoriasFavoritas = new Set(favoritos.map((slug) => todos[slug].categoria).filter(Boolean));
+  const recomendados = Object.keys(todos)
+    .filter((slug) => !favoritos.includes(slug) && categoriasFavoritas.has(todos[slug].categoria))
+    .slice(0, 3);
+
+  // Idea 8: avisa si el beneficio de fidelización de algún negocio cambió desde la última vez que lo vio.
+  const vistosAntes = cliente.fidelizacionVista || {};
+  const fidelizacionesConCambio = misFidelizaciones.map((f) => {
+    const antes = vistosAntes[f.slug];
+    const cambio = antes && (antes.premio !== f.premio || antes.meta !== f.meta);
+    return { ...f, cambio: !!cambio };
+  });
+  // Actualiza lo que "ya vio" para la próxima carga (no bloquea la respuesta).
+  if (misFidelizaciones.length > 0) {
+    const clientes = leerClientes();
+    if (clientes[cliente.id]) {
+      const nuevaVista = { ...vistosAntes };
+      misFidelizaciones.forEach((f) => { nuevaVista[f.slug] = { premio: f.premio, meta: f.meta }; });
+      clientes[cliente.id].fidelizacionVista = nuevaVista;
+      guardarClientes(clientes);
+    }
+  }
 
   res.send(`
     <html>
@@ -5156,14 +5617,64 @@ app.get("/cuenta", (req, res) => {
           .fid-detalle-linea{display:flex;justify-content:space-between;font-size:0.78rem;color:${MARCA.textoSuave};padding:3px 0;}
           .fid-detalle-linea b{color:${MARCA.texto};}
           .fid-detalle-nota{font-size:0.74rem;color:#8A6300;margin-top:8px;font-weight:600;}
+
+          .top-acciones{display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;}
+          .icono-toggle{width:34px;height:34px;border-radius:50%;background:#fff;border:1px solid ${MARCA.borde};
+                        display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.95rem;}
+
+          .insignias-fila{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:26px;}
+          .insignia{background:#fff;border:1px solid ${MARCA.borde};border-radius:100px;padding:6px 14px;
+                    font-size:0.76rem;font-weight:600;color:${MARCA.texto};display:flex;align-items:center;gap:6px;}
+          .insignia span{color:${MARCA.oro};}
+
+          .fav-aviso{font-size:0.7rem;color:${MARCA.oro};font-weight:600;margin-top:3px;}
+
+          .buscar-caja{margin-bottom:14px;}
+          .buscar-caja input{width:100%;box-sizing:border-box;padding:10px 14px;border:1px solid ${MARCA.borde};
+                              border-radius:10px;font-size:0.85rem;}
+
+          .reco-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:26px;}
+          .reco-card{background:#fff;border:1px dashed ${MARCA.borde};border-radius:12px;padding:14px;}
+          .reco-nombre{font-weight:700;font-size:0.85rem;}
+          .reco-cat{color:${MARCA.textoSuave};font-size:0.72rem;text-transform:capitalize;margin-bottom:6px;}
+          .reco-card a{font-size:0.76rem;color:${MARCA.verde};font-weight:700;text-decoration:none;}
+
+          #mini-mapa{height:180px;border-radius:14px;margin-bottom:26px;border:1px solid ${MARCA.borde};}
+
+          .compartir-caja{background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;padding:16px;
+                          margin-bottom:26px;font-size:0.82rem;}
+          .compartir-caja label{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;}
+          .compartir-caja input{width:auto;}
+          .compartir-link{margin-top:8px;font-size:0.78rem;color:${MARCA.verde};word-break:break-all;}
+
+          /* Idea 18: modo oscuro — solo afecta esta página, no el resto del sitio. */
+          body.modo-oscuro{background:#15201B;}
+          body.modo-oscuro .hero-cuenta{background:linear-gradient(135deg,#0A2A1E,#0F3325);}
+          body.modo-oscuro .seccion-titulo{color:#E9EDE9;}
+          body.modo-oscuro .fav-card, body.modo-oscuro .fid-card, body.modo-oscuro .linea-contenido,
+          body.modo-oscuro .reco-card, body.modo-oscuro .compartir-caja, body.modo-oscuro .insignia,
+          body.modo-oscuro .icono-toggle, body.modo-oscuro .vacio-msg, body.modo-oscuro .buscar-caja input{
+            background:#1E2B24;border-color:#324137;color:#D8E0DA;}
+          body.modo-oscuro .fav-nombre, body.modo-oscuro .fid-nombre, body.modo-oscuro .linea-top b,
+          body.modo-oscuro .reco-nombre{color:#F2F5F2;}
+          body.modo-oscuro .hero-stat{background:rgba(255,255,255,0.08);}
+
+          /* Idea 26: accesibilidad — texto más grande y más contraste. */
+          body.accesible{font-size:112%;}
+          body.accesible .fav-cat, body.accesible .linea-fecha, body.accesible .fid-progreso{color:${MARCA.texto} !important;}
         </style>
       </head>
-      <body>
+      <body id="body-cuenta">
         <div class="topbar">
           <div>${logoSvg("#FFFFFF", 30)}</div>
           <a class="back" href="/cliente/salir">Cerrar sesión</a>
         </div>
         <div class="content">
+          <div class="top-acciones">
+            <div class="icono-toggle" id="btn-oscuro" onclick="alternarOscuro()" title="Modo oscuro">◐</div>
+            <div class="icono-toggle" id="btn-accesible" onclick="alternarAccesible()" title="Texto más grande">A+</div>
+          </div>
+
           <div class="hero-cuenta">
             <div class="hero-saludo">Hola, ${cliente.nombre.split(" ")[0]}</div>
             <div class="hero-email">${cliente.email}</div>
@@ -5174,17 +5685,37 @@ app.get("/cuenta", (req, res) => {
             </div>
           </div>
 
+          ${insigniasHtml ? `<div class="insignias-fila">${insigniasHtml}</div>` : ""}
+
           ${misFidelizaciones.length > 0 ? `
           <div class="seccion-titulo">Fidelización</div>
           <div class="fid-grid">${fidelizacionesHtml}</div>
           ` : ""}
 
           <div class="seccion-titulo">Tus negocios favoritos</div>
+          ${favoritosConMapa.length > 0 ? `<div id="mini-mapa"></div>` : ""}
           ${favoritosHtml || `<div class="vacio-msg">Todavía no has guardado ningún negocio.<br><a href="/descubre">Explora el mapa de negocios →</a></div>`}
 
+          ${recomendadosHtml ? `
+          <div class="seccion-titulo">Basado en tus favoritos</div>
+          <div class="reco-grid">${recomendadosHtml}</div>
+          ` : ""}
+
+          ${favoritos.length > 0 ? `
+          <div class="compartir-caja">
+            <label><input type="checkbox" id="check-compartir" ${compartirActivo ? "checked" : ""} onchange="alternarCompartir(this.checked)"> Hacer pública mi lista de favoritos (link para compartir)</label>
+            ${compartirActivo ? `<div class="compartir-link">${req.protocol}://${req.get("host")}/perfil/${cliente.id}</div>` : ""}
+          </div>
+          ` : ""}
+
           <div class="seccion-titulo">Tu historial de reseñas</div>
-          ${historial.length ? `<div class="linea">${historialHtml}</div>` : `<div class="vacio-msg">Todavía no has calificado ningún negocio con Tapin.</div>`}
+          ${historial.length ? `
+          <div class="buscar-caja"><input type="text" id="buscar-historial" placeholder="Buscar en tu historial..." oninput="filtrarHistorial(this.value)"></div>
+          <div class="linea" id="lista-historial">${historialHtml}</div>
+          ` : `<div class="vacio-msg">Todavía no has calificado ningún negocio con Tapin.</div>`}
         </div>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <script>
           async function quitar(slug) {
             await fetch('/favoritos/' + slug + '/quitar', { method: 'POST' });
@@ -5193,9 +5724,139 @@ app.get("/cuenta", (req, res) => {
           function alternarFid(i) {
             document.getElementById('fid-detalle-' + i).parentElement.classList.toggle('abierta');
           }
+
+          // Idea 7: borrar una entrada de tu historial personal.
+          async function borrarHistorial(i) {
+            if (!confirm('¿Borrar esta reseña de tu historial? Esto no borra tu reseña real en Google, solo tu registro en Tapin.')) return;
+            await fetch('/historial/' + i + '/borrar', { method: 'POST' });
+            location.reload();
+          }
+
+          // Idea 6: buscar dentro de tu historial, sin recargar la página.
+          function filtrarHistorial(texto) {
+            const t = texto.toLowerCase();
+            document.querySelectorAll('#lista-historial .linea-item').forEach((el) => {
+              el.style.display = el.dataset.nombre.includes(t) ? '' : 'none';
+            });
+          }
+
+          // Idea 10: compartir un favorito (usa el share nativo del celular si existe).
+          function compartir(nombre, url) {
+            if (navigator.share) {
+              navigator.share({ title: nombre, text: 'Mira este lugar en Tapin: ' + nombre, url: url });
+            } else {
+              navigator.clipboard.writeText(url);
+              alert('Link copiado — pégalo donde quieras compartirlo.');
+            }
+          }
+
+          // Idea 25: activar/desactivar la lista pública de favoritos.
+          async function alternarCompartir(activo) {
+            await fetch('/cuenta/compartir-favoritos', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ activo }),
+            });
+            location.reload();
+          }
+
+          // Idea 18: modo oscuro, guardado en este mismo navegador.
+          function alternarOscuro() {
+            document.body.classList.toggle('modo-oscuro');
+            localStorage.setItem('tapin_oscuro', document.body.classList.contains('modo-oscuro') ? '1' : '0');
+          }
+          if (localStorage.getItem('tapin_oscuro') === '1') document.body.classList.add('modo-oscuro');
+
+          // Idea 26: accesibilidad — texto más grande, guardado en este navegador.
+          function alternarAccesible() {
+            document.body.classList.toggle('accesible');
+            localStorage.setItem('tapin_accesible', document.body.classList.contains('accesible') ? '1' : '0');
+          }
+          if (localStorage.getItem('tapin_accesible') === '1') document.body.classList.add('accesible');
+
+          // Idea 9: mini-mapa de tus favoritos con ubicación configurada.
+          const favoritosMapa = ${JSON.stringify(favoritosConMapa)};
+          if (favoritosMapa.length > 0) {
+            const centro = favoritosMapa[0];
+            const mm = L.map('mini-mapa', { zoomControl: false, dragging: true, scrollWheelZoom: false })
+              .setView([centro.lat, centro.lng], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '' }).addTo(mm);
+            favoritosMapa.forEach((p) => L.marker([p.lat, p.lng]).addTo(mm).bindPopup(p.nombre));
+          }
         </script>
       </body>
     </html>
+  `);
+});
+
+// Idea 7: borra una entrada de TU historial personal en Tapin (el registro
+// interno que ves en tu cuenta) — no borra ni modifica la reseña real que
+// quedó publicada en Google, eso Tapin no lo puede tocar.
+app.post("/historial/:i/borrar", (req, res) => {
+  const cliente = clienteActual(req);
+  if (!cliente) return res.status(401).json({ ok: false });
+  const i = parseInt(req.params.i, 10);
+  const clientes = leerClientes();
+  if (clientes[cliente.id] && clientes[cliente.id].historial && clientes[cliente.id].historial[i]) {
+    clientes[cliente.id].historial.splice(i, 1);
+    guardarClientes(clientes);
+  }
+  res.json({ ok: true });
+});
+
+// Idea 25: activa o desactiva que tu lista de favoritos sea visible en un link público.
+app.post("/cuenta/compartir-favoritos", (req, res) => {
+  const cliente = clienteActual(req);
+  if (!cliente) return res.status(401).json({ ok: false });
+  const clientes = leerClientes();
+  if (clientes[cliente.id]) {
+    clientes[cliente.id].compartirFavoritos = !!req.body.activo;
+    guardarClientes(clientes);
+  }
+  res.json({ ok: true });
+});
+
+// Página pública (solo si el cliente activó "compartir mi lista") con sus
+// favoritos — para mandarle el link a un amigo.
+app.get("/perfil/:clienteId", (req, res) => {
+  const clientes = leerClientes();
+  const cliente = clientes[req.params.clienteId];
+  if (!cliente || !cliente.compartirFavoritos) {
+    return res.status(404).send("Este perfil no existe o no está compartido públicamente.");
+  }
+  const todos = todosLosNegocios();
+  const favoritos = (cliente.favoritos || []).filter((slug) => todos[slug]);
+
+  const filas = favoritos
+    .map((slug) => {
+      const n = todos[slug];
+      return `<div class="fav-card">
+        <div class="fav-info">
+          <div class="fav-nombre">${n.nombre}</div>
+          <div class="fav-cat">${n.categoria || "negocio"} ${n.direccion ? "· " + n.direccion : ""}</div>
+        </div>
+        <a href="${n.googleUrl}" target="_blank" style="color:${MARCA.verde};font-weight:700;font-size:0.8rem;">Ver en Google →</a>
+      </div>`;
+    }).join("");
+
+  res.send(`
+    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Favoritos de ${cliente.nombre.split(" ")[0]} — Tapin</title>
+    <style>
+      ${ESTILO_BASE}
+      .fav-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px;
+                display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:10px;}
+      .fav-nombre{font-weight:700;font-size:0.95rem;}
+      .fav-cat{color:${MARCA.textoSuave};font-size:0.78rem;text-transform:capitalize;}
+    </style></head>
+    <body>
+      <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
+      <div class="content">
+        <div class="eyebrow">Lista pública</div>
+        <h1 class="titulo-pagina">Favoritos de ${cliente.nombre.split(" ")[0]}</h1>
+        <div class="subtitulo">Negocios recomendados en Tapin</div>
+        ${filas || "<p>Todavía no tiene negocios favoritos guardados.</p>"}
+      </div>
+    </body></html>
   `);
 });
 
@@ -6211,6 +6872,7 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
       const montoOk = ESCALONES_PRO.some((e) => data?.data?.amount_in_cents === e.precio * 100);
       if (estado === "APPROVED" && referenciaOk && montoOk) {
         guardarCambiosNegocio(slug, negocio, { plan: "pro" });
+        registrarAuditoria(slug, negocio, "Mejoraste a Plan Pro");
       }
     } catch (err) {
       console.error("[mejorar-a-pro] Error consultando transacción:", err.message);
@@ -6284,6 +6946,19 @@ function guardarCambiosNegocio(slug, negocio, cambios) {
   codigos[slug].activado = true;
   codigos[slug].negocio = { ...negocio, ...cambios };
   guardarCodigos(codigos);
+}
+
+// Idea 22: registro simple de cambios importantes en tu propia cuenta — no
+// es auditoría de nadie más, solo tu propio historial para tener orden.
+function registrarAuditoria(slug, negocio, texto) {
+  const datos = leerDatos();
+  if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
+  if (!datos[slug].auditoria) datos[slug].auditoria = [];
+  datos[slug].auditoria.push({
+    texto,
+    fechaLegible: new Date().toLocaleString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+  });
+  guardarDatos(datos);
 }
 
 // Página donde el dueño de un negocio Pro registra su tarjeta una sola vez,
