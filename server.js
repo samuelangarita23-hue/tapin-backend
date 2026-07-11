@@ -4969,8 +4969,16 @@ app.get("/cuenta", (req, res) => {
   if (!cliente) return res.redirect("/cliente");
 
   const todos = todosLosNegocios();
-  const iconosCategoria = {
-    restaurante: "🍽", peluqueria: "💇", tienda: "🛍", clinica: "🩺", otro: "📍",
+  const svgCategoria = (tipo, color) => {
+    const trazos = {
+      restaurante: '<path d="M6 2v8M4 2v4a2 2 0 004 0V2M6 10v10M16 2c-2 2-2 5-2 7 0 1.5 1 2 2 2s2-.5 2-2c0-2 0-5-2-7zM16 21v-8"/>',
+      peluqueria: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.5 8.5L20 20M8.5 15.5L20 4"/>',
+      tienda: '<path d="M4 8l1-5h14l1 5M4 8h16M4 8v11a1 1 0 001 1h14a1 1 0 001-1V8M9 12a3 3 0 006 0"/>',
+      clinica: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 8v8M8 12h8"/>',
+      otro: '<path d="M12 21s-7-6.5-7-11a7 7 0 0114 0c0 4.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+    };
+    return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.7"
+                 stroke-linecap="round" stroke-linejoin="round">${trazos[tipo] || trazos.otro}</svg>`;
   };
 
   const favoritos = (cliente.favoritos || []).filter((slug) => todos[slug]);
@@ -5015,7 +5023,7 @@ app.get("/cuenta", (req, res) => {
 
   const fidelizacionesHtml = misFidelizaciones
     .map((f, i) => {
-      const icono = iconosCategoria[f.categoria] || iconosCategoria.otro;
+      const icono = svgCategoria(f.categoria, MARCA.verdeOscuro);
       const faltan = Math.max(0, f.meta - f.sellos);
       return `
         <div class="fid-card ${f.listo ? "fid-lista" : ""}" onclick="alternarFid(${i})">
@@ -5045,7 +5053,7 @@ app.get("/cuenta", (req, res) => {
   const favoritosHtml = favoritos
     .map((slug) => {
       const n = todos[slug];
-      const icono = iconosCategoria[n.categoria] || iconosCategoria.otro;
+      const icono = svgCategoria(n.categoria, MARCA.verdeOscuro);
       return `
         <div class="fav-card">
           <div class="fav-icono">${icono}</div>
@@ -5157,7 +5165,7 @@ app.get("/cuenta", (req, res) => {
         </div>
         <div class="content">
           <div class="hero-cuenta">
-            <div class="hero-saludo">Hola, ${cliente.nombre.split(" ")[0]} 👋</div>
+            <div class="hero-saludo">Hola, ${cliente.nombre.split(" ")[0]}</div>
             <div class="hero-email">${cliente.email}</div>
             <div class="hero-stats">
               <div class="hero-stat"><div class="hero-stat-num">${favoritos.length}</div><div class="hero-stat-lbl">Favoritos</div></div>
@@ -5171,11 +5179,11 @@ app.get("/cuenta", (req, res) => {
           <div class="fid-grid">${fidelizacionesHtml}</div>
           ` : ""}
 
-          <div class="seccion-titulo">⭐ Tus negocios favoritos</div>
-          ${favoritosHtml || `<div class="vacio-msg"><span class="vacio-icono">🗺️</span>Todavía no has guardado ningún negocio.<br><a href="/descubre">Explora el mapa de negocios →</a></div>`}
+          <div class="seccion-titulo">Tus negocios favoritos</div>
+          ${favoritosHtml || `<div class="vacio-msg">Todavía no has guardado ningún negocio.<br><a href="/descubre">Explora el mapa de negocios →</a></div>`}
 
-          <div class="seccion-titulo">📝 Tu historial de reseñas</div>
-          ${historial.length ? `<div class="linea">${historialHtml}</div>` : `<div class="vacio-msg"><span class="vacio-icono">✨</span>Todavía no has calificado ningún negocio con Tapin.</div>`}
+          <div class="seccion-titulo">Tu historial de reseñas</div>
+          ${historial.length ? `<div class="linea">${historialHtml}</div>` : `<div class="vacio-msg">Todavía no has calificado ningún negocio con Tapin.</div>`}
         </div>
         <script>
           async function quitar(slug) {
