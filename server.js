@@ -5001,31 +5001,42 @@ app.get("/cuenta", (req, res) => {
 
   const anilloProgreso = (sellos, meta, listo) => {
     const pct = Math.min(1, sellos / meta);
-    const radio = 30;
+    const radio = 23;
     const circunferencia = 2 * Math.PI * radio;
     const offset = circunferencia * (1 - pct);
     const color = listo ? MARCA.oro : MARCA.verde;
     return `
-      <svg width="72" height="72" viewBox="0 0 72 72" style="transform:rotate(-90deg);flex-shrink:0;">
-        <circle cx="36" cy="36" r="${radio}" fill="none" stroke="${MARCA.borde}" stroke-width="6"/>
-        <circle cx="36" cy="36" r="${radio}" fill="none" stroke="${color}" stroke-width="6"
+      <svg width="56" height="56" viewBox="0 0 56 56" style="transform:rotate(-90deg);flex-shrink:0;">
+        <circle cx="28" cy="28" r="${radio}" fill="none" stroke="${MARCA.borde}" stroke-width="5"/>
+        <circle cx="28" cy="28" r="${radio}" fill="none" stroke="${color}" stroke-width="5"
                 stroke-dasharray="${circunferencia}" stroke-dashoffset="${offset}" stroke-linecap="round"/>
       </svg>`;
   };
 
   const fidelizacionesHtml = misFidelizaciones
-    .map((f) => {
+    .map((f, i) => {
       const icono = iconosCategoria[f.categoria] || iconosCategoria.otro;
+      const faltan = Math.max(0, f.meta - f.sellos);
       return `
-        <div class="fid-card ${f.listo ? "fid-lista" : ""}">
-          <div class="fid-anillo-wrap">
-            ${anilloProgreso(f.sellos, f.meta, f.listo)}
-            <div class="fid-anillo-centro">${f.listo ? "🎉" : icono}</div>
+        <div class="fid-card ${f.listo ? "fid-lista" : ""}" onclick="alternarFid(${i})">
+          <div class="fid-fila">
+            <div class="fid-anillo-wrap">
+              ${anilloProgreso(f.sellos, f.meta, f.listo)}
+              <div class="fid-anillo-centro">${icono}</div>
+            </div>
+            <div class="fid-info">
+              <div class="fid-nombre">${f.nombre}</div>
+              <div class="fid-progreso">${f.sellos} de ${f.meta} visitas registradas</div>
+              ${f.listo
+                ? `<div class="fid-estado fid-estado-listo">Beneficio disponible</div>`
+                : `<div class="fid-estado">Faltan ${faltan} para tu beneficio</div>`}
+            </div>
+            <div class="fid-flecha" id="fid-flecha-${i}">⌄</div>
           </div>
-          <div class="fid-info">
-            <div class="fid-nombre">${f.nombre}</div>
-            <div class="fid-progreso">${f.sellos} / ${f.meta} sellos</div>
-            <div class="fid-premio">${f.listo ? `¡Listo! Reclama: ${f.premio}` : `Ganas: ${f.premio}`}</div>
+          <div class="fid-detalle" id="fid-detalle-${i}">
+            <div class="fid-detalle-linea"><span>Beneficio</span><b>${f.premio}</b></div>
+            <div class="fid-detalle-linea"><span>Progreso</span><b>${f.sellos} / ${f.meta}</b></div>
+            ${f.listo ? `<div class="fid-detalle-nota">Muéstrale esta pantalla al negocio para reclamarlo.</div>` : ""}
           </div>
         </div>`;
     })
@@ -5117,18 +5128,26 @@ app.get("/cuenta", (req, res) => {
           .vacio-msg .vacio-icono{font-size:1.8rem;margin-bottom:8px;display:block;}
           .vacio-msg a{color:${MARCA.verde};font-weight:700;}
 
-          .fid-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
-          .fid-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:16px;
-                    display:flex;align-items:center;gap:14px;transition:transform .15s,box-shadow .15s;}
-          .fid-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(11,61,44,0.1);}
-          .fid-card.fid-lista{background:linear-gradient(135deg, #FFF8E8, #fff);border-color:${MARCA.oro};}
-          .fid-anillo-wrap{position:relative;width:72px;height:72px;flex-shrink:0;}
-          .fid-anillo-centro{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.4rem;}
-          .fid-info{min-width:0;}
-          .fid-nombre{font-weight:800;font-size:0.92rem;}
-          .fid-progreso{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:1px;}
-          .fid-premio{font-size:0.76rem;color:${MARCA.verdeOscuro};font-weight:700;margin-top:4px;}
-          .fid-card.fid-lista .fid-premio{color:#8A6300;}
+          .fid-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;}
+          .fid-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px;
+                    cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+          .fid-card:hover{box-shadow:0 4px 16px rgba(11,61,44,0.07);}
+          .fid-card.fid-lista{border-color:${MARCA.oro};border-width:1.5px;}
+          .fid-fila{display:flex;align-items:center;gap:14px;}
+          .fid-anillo-wrap{position:relative;width:56px;height:56px;flex-shrink:0;}
+          .fid-anillo-centro{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.1rem;}
+          .fid-info{min-width:0;flex:1;}
+          .fid-nombre{font-weight:700;font-size:0.9rem;color:${MARCA.texto};}
+          .fid-progreso{font-size:0.74rem;color:${MARCA.textoSuave};margin-top:1px;}
+          .fid-estado{font-size:0.72rem;color:${MARCA.verdeOscuro};font-weight:600;margin-top:4px;}
+          .fid-estado-listo{color:#8A6300;}
+          .fid-flecha{color:${MARCA.textoSuave};font-size:0.9rem;transition:transform .2s;flex-shrink:0;}
+          .fid-card.abierta .fid-flecha{transform:rotate(180deg);}
+          .fid-detalle{max-height:0;overflow:hidden;transition:max-height .25s ease;}
+          .fid-card.abierta .fid-detalle{max-height:120px;margin-top:14px;padding-top:14px;border-top:1px solid ${MARCA.borde};}
+          .fid-detalle-linea{display:flex;justify-content:space-between;font-size:0.78rem;color:${MARCA.textoSuave};padding:3px 0;}
+          .fid-detalle-linea b{color:${MARCA.texto};}
+          .fid-detalle-nota{font-size:0.74rem;color:#8A6300;margin-top:8px;font-weight:600;}
         </style>
       </head>
       <body>
@@ -5148,7 +5167,7 @@ app.get("/cuenta", (req, res) => {
           </div>
 
           ${misFidelizaciones.length > 0 ? `
-          <div class="seccion-titulo">🎁 Tus premios en camino</div>
+          <div class="seccion-titulo">Fidelización</div>
           <div class="fid-grid">${fidelizacionesHtml}</div>
           ` : ""}
 
@@ -5162,6 +5181,9 @@ app.get("/cuenta", (req, res) => {
           async function quitar(slug) {
             await fetch('/favoritos/' + slug + '/quitar', { method: 'POST' });
             location.reload();
+          }
+          function alternarFid(i) {
+            document.getElementById('fid-detalle-' + i).parentElement.classList.toggle('abierta');
           }
         </script>
       </body>
