@@ -6139,8 +6139,8 @@ app.get("/", (req, res) => {
           <div class="hero-izq">
             <div class="forma-organica"></div>
             <div class="forma-organica-2"></div>
-            <div class="logo-hero">${logoSvg("#FFFFFF", 58)}</div>
-            <p class="tagline">Descubre negocios locales.<br>Confía en lo que encuentras.</p>
+            <div class="logo-hero">${logoSvg("#FFFFFF", 58)}<span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Tapin</span></div>
+            <h1 class="tagline">Tapin — Descubre negocios locales.<br>Confía en lo que encuentras.</h1>
 
             <div class="enlaces-generales">
               <a class="enlace-general" href="/conoce">Conoce Tapin</a>
