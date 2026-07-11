@@ -987,6 +987,7 @@ app.get("/calificar/:slug", (req, res) => {
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const valor = parseInt(req.query.valor, 10);
+  let selloSumado = null; // se usa más abajo para avisarle al cliente si aplica
 
   // Si el cliente tiene sesión iniciada, guardamos esta calificación en su
   // historial personal — funciona sin importar si el negocio es Pro o básico.
@@ -1004,6 +1005,12 @@ app.get("/calificar/:slug", (req, res) => {
           fechaISO: new Date().toISOString(),
         });
         guardarClientes(clientes);
+      }
+      // Idea: la fidelización ya no necesita una tarjeta física aparte — con
+      // solo calificar (cualquier estrella, no solo positivas) desde la
+      // misma tarjeta de reseñas, si tiene sesión iniciada, ya suma el sello.
+      if (esPro(negocio) && negocio.fidelizacion) {
+        selloSumado = sumarSelloFidelizacion(slug, negocio, cliente.email, cliente.nombre);
       }
     }
   }
@@ -1049,12 +1056,17 @@ app.get("/calificar/:slug", (req, res) => {
                   padding:10px 14px;font-size:0.85rem;font-weight:600;text-decoration:none;}
             .chip:active{transform:scale(0.96);}
             .saltar{display:block;color:#999;font-size:0.82rem;text-decoration:underline;}
+            .sello-aviso{background:#FBF6E9;border-radius:10px;padding:10px 14px;font-size:0.8rem;
+                        color:#7A5A00;margin-bottom:16px;}
           </style>
         </head>
         <body>
           <div class="box">
             <h1>¡Qué bueno! 🎉</h1>
             <p>¿Qué fue lo que más te gustó? (toca una, opcional)</p>
+            ${selloSumado ? `<div class="sello-aviso">${selloSumado.listo
+              ? `¡Beneficio desbloqueado! Ya tienes: ${selloSumado.fid.premio}`
+              : `+1 sello de fidelización — llevas ${selloSumado.actual.sellos} de ${selloSumado.fid.metaSellos}`}</div>` : ""}
             <div class="chips">${chips}</div>
             <a class="saltar" href="${negocio.googleUrl}">Saltar e ir directo a Google &rarr;</a>
           </div>
@@ -1132,13 +1144,24 @@ app.get("/calificar/:slug/rapido", (req, res) => {
   const motivo = req.query.motivo || "(sin detalle)";
   guardarQueja(slug, motivo, negocio, "");
 
+  // La fidelización premia la VISITA, no solo las reseñas positivas — si el
+  // cliente tiene sesión iniciada, suma su sello igual que en una calificación buena.
+  let selloSumado = null;
+  if (esPro(negocio) && negocio.fidelizacion) {
+    const cliente = clienteActual(req);
+    if (cliente) selloSumado = sumarSelloFidelizacion(slug, negocio, cliente.email, cliente.nombre);
+  }
+
   res.send(`
     <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <style>body{font-family:-apple-system,sans-serif;background:#F8F4EC;display:flex;align-items:center;
     justify-content:center;min-height:100vh;margin:0;padding:24px;text-align:center;color:#16201C;}
     .box{background:#fff;border-radius:18px;padding:36px 28px;max-width:380px;box-shadow:0 10px 30px rgba(0,0,0,0.08);}
+    .sello-aviso{background:#FBF6E9;border-radius:10px;padding:10px 14px;font-size:0.8rem;color:#7A5A00;margin-top:14px;}
     </style></head>
-    <body><div class="box"><h2>Gracias por avisarnos</h2><p>El negocio ya recibió tu comentario y lo va a revisar.</p></div></body></html>
+    <body><div class="box"><h2>Gracias por avisarnos</h2><p>El negocio ya recibió tu comentario y lo va a revisar.</p>
+    ${selloSumado ? `<div class="sello-aviso">${selloSumado.listo ? `¡Beneficio desbloqueado! Ya tienes: ${selloSumado.fid.premio}` : `+1 sello de fidelización — llevas ${selloSumado.actual.sellos} de ${selloSumado.fid.metaSellos}`}</div>` : ""}
+    </div></body></html>
   `);
 });
 
@@ -1150,6 +1173,12 @@ app.post("/calificar/:slug", async (req, res) => {
   const comentario = req.body.comentario || "(sin comentario)";
   const telefono = req.body.telefono || "";
   guardarQueja(slug, comentario, negocio, telefono);
+
+  let selloSumado = null;
+  if (esPro(negocio) && negocio.fidelizacion) {
+    const cliente = clienteActual(req);
+    if (cliente) selloSumado = sumarSelloFidelizacion(slug, negocio, cliente.email, cliente.nombre);
+  }
 
   // Alerta inmediata por correo — solo Plan Pro. El negocio básico igual evita
   // que la queja se publique en Google, pero no recibe el aviso instantáneo.
@@ -1177,8 +1206,11 @@ app.post("/calificar/:slug", async (req, res) => {
     <style>body{font-family:-apple-system,sans-serif;background:#F8F4EC;display:flex;align-items:center;
     justify-content:center;min-height:100vh;margin:0;padding:24px;text-align:center;color:#16201C;}
     .box{background:#fff;border-radius:18px;padding:36px 28px;max-width:380px;box-shadow:0 10px 30px rgba(0,0,0,0.08);}
+    .sello-aviso{background:#FBF6E9;border-radius:10px;padding:10px 14px;font-size:0.8rem;color:#7A5A00;margin-top:14px;}
     </style></head>
-    <body><div class="box"><h2>Gracias por avisarnos 🙏</h2><p>El negocio ya recibió tu comentario y lo va a revisar.</p></div></body></html>
+    <body><div class="box"><h2>Gracias por avisarnos 🙏</h2><p>El negocio ya recibió tu comentario y lo va a revisar.</p>
+    ${selloSumado ? `<div class="sello-aviso">${selloSumado.listo ? `¡Beneficio desbloqueado! Ya tienes: ${selloSumado.fid.premio}` : `+1 sello de fidelización — llevas ${selloSumado.actual.sellos} de ${selloSumado.fid.metaSellos}`}</div>` : ""}
+    </div></body></html>
   `);
 });
 
@@ -2868,7 +2900,6 @@ app.get("/mi-panel/:slug", (req, res) => {
               <a href="/quejas/${slug}?key=${req.query.key}" class="btn-herramienta">Retroalimentación privada</a>
               <a href="/contenido/${slug}?key=${req.query.key}" class="btn-herramienta">Generador de contenido</a>
               <a href="/reportes-guardados/${slug}?key=${req.query.key}" class="btn-herramienta">Reportes guardados</a>
-              <a href="/mi-panel/${slug}/fidelizacion?key=${req.query.key}" class="btn-herramienta">Fidelización</a>
             </div>
           </div>
 
@@ -3274,6 +3305,27 @@ function normalizarIdentificador(valor) {
   return (valor || "").trim().toLowerCase();
 }
 
+// Suma un sello de fidelización — reutilizable desde cualquier punto donde
+// identifiquemos al cliente (ya no depende de tocar una tarjeta física
+// aparte; se dispara automáticamente al calificar con la tarjeta de reseñas).
+function sumarSelloFidelizacion(slug, negocio, identificador, nombre) {
+  const fid = negocio.fidelizacion;
+  if (!fid) return null;
+  const id = normalizarIdentificador(identificador);
+  if (!id) return null;
+
+  const datos = leerDatos();
+  if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
+  if (!datos[slug].fidelizacion) datos[slug].fidelizacion = {};
+  const actual = datos[slug].fidelizacion[id] || { sellos: 0, nombre: nombre || id };
+  actual.sellos = (actual.sellos || 0) + 1;
+  if (nombre) actual.nombre = nombre;
+  datos[slug].fidelizacion[id] = actual;
+  guardarDatos(datos);
+
+  return { actual, fid, listo: actual.sellos >= fid.metaSellos };
+}
+
 app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
@@ -3347,7 +3399,7 @@ app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
           </div>
 
           <div class="tarjeta-info">
-            La tarjeta física de fidelización debe tener grabado: <b>${req.protocol}://${req.get("host")}/fidelidad/${slug}</b>
+            No necesitas otra tarjeta — funciona con la misma tarjeta de reseñas. Cuando un cliente con cuenta en Tapin califica tu negocio (cualquier estrella), le suma un sello automáticamente.
           </div>
 
           <a href="/mi-panel/${slug}/fidelizacion/exportar.csv?key=${claveUsada}" style="display:inline-block;margin-bottom:22px;">Exportar clientes a CSV →</a>
@@ -5370,6 +5422,31 @@ app.get("/cuenta", (req, res) => {
     ? (historial.reduce((s, h) => s + h.valor, 0) / historial.length).toFixed(1)
     : null;
 
+  // Idea 15: insignias simples — solo reconocimiento personal, sin competir con nadie.
+  const negociosDistintos = new Set(historial.map((h) => h.slug || h.negocioNombre)).size;
+  const insignias = [];
+  if (historial.length >= 1) insignias.push({ texto: "Primera reseña", icono: "★" });
+  if (historial.length >= 5) insignias.push({ texto: "5+ reseñas dejadas", icono: "★" });
+  if (historial.length >= 20) insignias.push({ texto: "20+ reseñas dejadas", icono: "★" });
+  if (favoritos.length >= 3) insignias.push({ texto: "3+ negocios favoritos", icono: "♥" });
+
+  // Idea 24: favoritos donde hace tiempo no deja reseña (o nunca) — recordatorio suave.
+  const HOY_MS = Date.now();
+  const favoritosConAviso = favoritos.map((slug) => {
+    const ultimaVisita = historial.find((h) => h.slug === slug);
+    let diasSinVisitar = null;
+    if (ultimaVisita && ultimaVisita.fechaISO) {
+      diasSinVisitar = Math.floor((HOY_MS - new Date(ultimaVisita.fechaISO).getTime()) / 86400000);
+    }
+    return { slug, diasSinVisitar, nunca: !ultimaVisita };
+  });
+
+  // Idea 17: recomienda negocios de la misma categoría que tus favoritos, que todavía no tienes guardados.
+  const categoriasFavoritas = new Set(favoritos.map((slug) => todos[slug].categoria).filter(Boolean));
+  const recomendados = Object.keys(todos)
+    .filter((slug) => !favoritos.includes(slug) && categoriasFavoritas.has(todos[slug].categoria))
+    .slice(0, 3);
+
   // Zona de fidelización: recorre todos los negocios que tengan el programa
   // activo y ve si este cliente (por su correo) ya tiene sellos ahí.
   const datosGlobales = leerDatos();
@@ -5389,6 +5466,26 @@ app.get("/cuenta", (req, res) => {
     })
     .filter(Boolean)
     .sort((a, b) => (b.sellos / b.meta) - (a.sellos / a.meta));
+
+  if (misFidelizaciones.some((f) => f.listo)) insignias.push({ texto: "Beneficio ganado", icono: "✓" });
+
+  // Idea 8: avisa si el beneficio de fidelización de algún negocio cambió desde la última vez que lo vio.
+  const vistosAntes = cliente.fidelizacionVista || {};
+  const fidelizacionesConCambio = misFidelizaciones.map((f) => {
+    const antes = vistosAntes[f.slug];
+    const cambio = antes && (antes.premio !== f.premio || antes.meta !== f.meta);
+    return { ...f, cambio: !!cambio };
+  });
+  // Actualiza lo que "ya vio" para la próxima carga (no bloquea la respuesta).
+  if (misFidelizaciones.length > 0) {
+    const clientes = leerClientes();
+    if (clientes[cliente.id]) {
+      const nuevaVista = { ...vistosAntes };
+      misFidelizaciones.forEach((f) => { nuevaVista[f.slug] = { premio: f.premio, meta: f.meta }; });
+      clientes[cliente.id].fidelizacionVista = nuevaVista;
+      guardarClientes(clientes);
+    }
+  }
 
   const anilloProgreso = (sellos, meta, listo) => {
     const pct = Math.min(1, sellos / meta);
@@ -5500,50 +5597,6 @@ app.get("/cuenta", (req, res) => {
           </div>
         </div>`;
     }).join("");
-
-  // Idea 15: insignias simples — solo reconocimiento personal, sin competir con nadie.
-  const negociosDistintos = new Set(historial.map((h) => h.slug || h.negocioNombre)).size;
-  const insignias = [];
-  if (historial.length >= 1) insignias.push({ texto: "Primera reseña", icono: "★" });
-  if (historial.length >= 5) insignias.push({ texto: "5+ reseñas dejadas", icono: "★" });
-  if (historial.length >= 20) insignias.push({ texto: "20+ reseñas dejadas", icono: "★" });
-  if (favoritos.length >= 3) insignias.push({ texto: "3+ negocios favoritos", icono: "♥" });
-  if (misFidelizaciones.some((f) => f.listo)) insignias.push({ texto: "Beneficio ganado", icono: "✓" });
-
-  // Idea 24: favoritos donde hace tiempo no deja reseña (o nunca) — recordatorio suave.
-  const HOY_MS = Date.now();
-  const favoritosConAviso = favoritos.map((slug) => {
-    const ultimaVisita = historial.find((h) => h.slug === slug);
-    let diasSinVisitar = null;
-    if (ultimaVisita && ultimaVisita.fechaISO) {
-      diasSinVisitar = Math.floor((HOY_MS - new Date(ultimaVisita.fechaISO).getTime()) / 86400000);
-    }
-    return { slug, diasSinVisitar, nunca: !ultimaVisita };
-  });
-
-  // Idea 17: recomienda negocios de la misma categoría que tus favoritos, que todavía no tienes guardados.
-  const categoriasFavoritas = new Set(favoritos.map((slug) => todos[slug].categoria).filter(Boolean));
-  const recomendados = Object.keys(todos)
-    .filter((slug) => !favoritos.includes(slug) && categoriasFavoritas.has(todos[slug].categoria))
-    .slice(0, 3);
-
-  // Idea 8: avisa si el beneficio de fidelización de algún negocio cambió desde la última vez que lo vio.
-  const vistosAntes = cliente.fidelizacionVista || {};
-  const fidelizacionesConCambio = misFidelizaciones.map((f) => {
-    const antes = vistosAntes[f.slug];
-    const cambio = antes && (antes.premio !== f.premio || antes.meta !== f.meta);
-    return { ...f, cambio: !!cambio };
-  });
-  // Actualiza lo que "ya vio" para la próxima carga (no bloquea la respuesta).
-  if (misFidelizaciones.length > 0) {
-    const clientes = leerClientes();
-    if (clientes[cliente.id]) {
-      const nuevaVista = { ...vistosAntes };
-      misFidelizaciones.forEach((f) => { nuevaVista[f.slug] = { premio: f.premio, meta: f.meta }; });
-      clientes[cliente.id].fidelizacionVista = nuevaVista;
-      guardarClientes(clientes);
-    }
-  }
 
   res.send(`
     <html>
