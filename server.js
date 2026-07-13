@@ -419,7 +419,13 @@ function obtenerNegocio(slug) {
 // Si el negocio no tiene plan "pro", estas simplemente no se disparan — sin
 // importar si el código las soporta técnicamente.
 function esPro(negocio) {
-  return !!negocio && negocio.plan === "pro";
+  if (!negocio || negocio.plan !== "pro") return false;
+  // Si pagó el plan anual, sigue siendo Pro solo hasta que se cumpla el año —
+  // después de esa fecha, deja de contar como Pro hasta que renueve.
+  if (negocio.billingType === "anual" && negocio.proAnualHasta) {
+    return new Date(negocio.proAnualHasta) > new Date();
+  }
+  return true;
 }
 
 // Valida que un link realmente sea de Google Maps/Reseñas, para no dejar
@@ -4470,6 +4476,46 @@ app.get("/enviar-resumenes-quejas", async (req, res) => {
   res.json({ ok: true, procesados: resultado.length, detalle: resultado });
 });
 
+// Avisa por correo a los negocios con Plan Pro anual cuando les quedan 7 días
+// para vencer — para que renueven a tiempo y no se les caiga el plan sin
+// darse cuenta. Visítala con un cron diario, solo manda un correo por negocio
+// (usa "avisoVencimientoEnviado" para no repetirlo cada día que corra el cron).
+app.get("/avisar-vencimiento-anual", async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
+
+  const negocios = todosLosNegocios();
+  const ahora = new Date();
+  const EN_7_DIAS = new Date(ahora.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const resultado = [];
+
+  for (const slug in negocios) {
+    const negocio = negocios[slug];
+    if (negocio.plan !== "pro" || negocio.billingType !== "anual" || !negocio.proAnualHasta) continue;
+    const vence = new Date(negocio.proAnualHasta);
+    if (vence > EN_7_DIAS || vence < ahora) continue; // todavía falta más de 7 días, o ya venció (no insistir)
+    if (negocio.avisoVencimientoEnviado === negocio.proAnualHasta) continue; // ya se avisó para esta fecha de vencimiento
+
+    if (negocio.email) {
+      try {
+        await enviarEmail(
+          negocio.email,
+          `Tu Plan Pro anual vence pronto — ${negocio.nombre}`,
+          `<p>Tu Plan Pro anual de <b>${negocio.nombre}</b> vence el <b>${vence.toLocaleDateString("es-CO")}</b>.</p>
+           <p>Para no perder el acceso a las funciones Pro, renueva desde tu panel antes de esa fecha.</p>
+           <p><a href="${req.protocol}://${req.get("host")}/mejorar-a-pro/${slug}?key=${negocio.claveAcceso}&plan=anual">Renovar mi Plan Pro anual</a></p>`
+        );
+        guardarCambiosNegocio(slug, negocio, { avisoVencimientoEnviado: negocio.proAnualHasta });
+        resultado.push({ slug, avisado: true });
+      } catch (err) {
+        console.error("[avisar-vencimiento-anual] Error:", err.message);
+        resultado.push({ slug, avisado: false, motivo: "error de envío" });
+      }
+    }
+  }
+
+  res.json({ ok: true, revisados: resultado.length, detalle: resultado });
+});
+
 // ---------- Historial de reportes mensuales guardados ----------
 // Lista los PDFs de reportes que se han guardado en disco para un negocio,
 // con link de descarga para cada mes. Accesible por el admin o por el propio
@@ -4749,7 +4795,7 @@ app.get("/conoce", (req, res) => {
               <div class="plan-anual">
                 <div class="plan-anual-izq">
                   <div class="plan-anual-etiqueta">Pago anual</div>
-                  <div class="plan-anual-precio">$650.000 <span>COP / año</span></div>
+                  <div class="plan-anual-precio">$649.900 <span>COP / año</span></div>
                 </div>
                 <div class="plan-anual-badge">10% más barato</div>
               </div>
@@ -6488,6 +6534,7 @@ app.get("/admin/entrar", (req, res) => {
 // al final del archivo README sobre pagos recurrentes.
 const PRECIO_BASICO_COP = 119900;
 const PRECIO_PRO_COP = 59900;
+const PRECIO_PRO_ANUAL_COP = 649900; // pago único, cubre 12 meses (~10% más barato que mes a mes)
 // Mientras más locales activos en Plan Pro tenga el mismo negocio, más paga
 // por cada uno — al contrario que las tarjetas: un negocio grande saca más
 // valor de comparar entre sus propias sedes, así que tiene sentido que pague
@@ -6942,7 +6989,10 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
   if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
     return res.status(401).send("No autorizado.");
   }
-  if (esPro(negocio)) {
+  // Si ya es Pro, normalmente lo mandamos a su panel — pero si está pidiendo
+  // renovar el anual explícitamente (?plan=anual), lo dejamos pasar, para que
+  // pueda renovar antes de que venza sin tener que esperar a quedarse sin Pro.
+  if (esPro(negocio) && req.query.plan !== "anual") {
     return res.redirect(`/mi-panel/${slug}?key=${req.query.key}`);
   }
   if (!process.env.WOMPI_PUBLIC_KEY) {
@@ -6950,8 +7000,11 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
   }
 
   const moneda = "COP";
-  // El precio de este local depende de cuántos locales en Pro va a tener el
-  // negocio DESPUÉS de esta mejora (los que ya tiene + este nuevo).
+  const esAnual = req.query.plan === "anual";
+
+  // El precio MENSUAL depende de cuántas tarjetas en Pro va a tener el
+  // negocio DESPUÉS de esta mejora (los que ya tiene + este nuevo). El
+  // ANUAL es un precio fijo, pago único, sin importar cuántas tarjetas tenga.
   const todosNegociosUpgrade = todosLosNegocios();
   const correoUpgrade = (negocio.email || "").trim().toLowerCase();
   const localesProExistentes = Object.values(todosNegociosUpgrade).filter(
@@ -6959,9 +7012,9 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
   ).length;
   const totalLocalesTrasUpgrade = localesProExistentes + 1;
   const escalonUpgrade = ESCALONES_PRO.find((e) => totalLocalesTrasUpgrade >= e.minimo) || ESCALONES_PRO[ESCALONES_PRO.length - 1];
-  const precioProAplicable = escalonUpgrade.precio;
+  const precioProAplicable = esAnual ? PRECIO_PRO_ANUAL_COP : escalonUpgrade.precio;
   const montoCentavos = precioProAplicable * 100;
-  const referencia = `tapin-upgrade-${slug}-${Date.now()}`;
+  const referencia = `tapin-upgrade-${esAnual ? "anual-" : ""}${slug}-${Date.now()}`;
   const firma = firmaIntegridadWompi(referencia, montoCentavos, moneda);
   const redirectUrl = `${req.protocol}://${req.get("host")}/mejorar-a-pro/${slug}/confirmar?key=${req.query.key}`;
 
@@ -6984,13 +7037,27 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
           button{width:100%;background:${MARCA.verde};color:#fff;border:none;padding:14px;border-radius:10px;
                  font-weight:700;font-size:0.95rem;cursor:pointer;margin-top:6px;}
           .volver{display:inline-block;margin-top:16px;font-size:0.8rem;color:${MARCA.textoSuave};}
+          .toggle-plan{display:flex;background:${MARCA.crema};border-radius:10px;padding:4px;margin:16px 0;}
+          .toggle-plan a{flex:1;text-align:center;padding:9px 0;border-radius:8px;font-size:0.82rem;font-weight:700;
+                         text-decoration:none;color:${MARCA.textoSuave};}
+          .toggle-plan a.activo{background:${MARCA.verdeOscuro};color:#fff;}
+          .ahorro-badge{display:inline-block;background:${MARCA.oro};color:#fff;font-size:0.68rem;font-weight:800;
+                        padding:3px 10px;border-radius:100px;margin-left:6px;vertical-align:middle;}
         </style>
       </head>
       <body>
         <div class="box">
           <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
           <h1>Mejora ${negocio.nombre} a Plan Pro</h1>
-          <p>Pagas el primer mes ahora y queda activo de inmediato. Los meses siguientes se cobran automáticamente a la tarjeta que registres después de este pago.</p>
+
+          <div class="toggle-plan">
+            <a href="/mejorar-a-pro/${slug}?key=${req.query.key}" class="${!esAnual ? "activo" : ""}">Mensual</a>
+            <a href="/mejorar-a-pro/${slug}?key=${req.query.key}&plan=anual" class="${esAnual ? "activo" : ""}">Anual</a>
+          </div>
+
+          ${esAnual
+            ? `<p>Pagas una sola vez y quedas activo los próximos 12 meses — sin cobros automáticos ni tarjeta que registrar.</p>`
+            : `<p>Pagas el primer mes ahora y queda activo de inmediato. Los meses siguientes se cobran automáticamente a la tarjeta que registres después de este pago.</p>`}
           <ul>
             <li>Gráfica de horas pico</li>
             <li>Reputación: positivas vs. quejas privadas</li>
@@ -6998,8 +7065,11 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
             <li>Recomendaciones automáticas</li>
             <li>Alertas instantáneas y exportes</li>
           </ul>
-          <div class="monto">$${precioProAplicable.toLocaleString("es-CO")} COP<span style="font-size:0.9rem;font-weight:600;color:${MARCA.textoSuave};">/mes</span></div>
-          ${totalLocalesTrasUpgrade >= 4 ? `<p style="font-size:0.78rem;color:${MARCA.oro};">Esta es tu ${totalLocalesTrasUpgrade}ª tarjeta en Plan Pro — aplica la tarifa de ${totalLocalesTrasUpgrade} o más tarjetas.</p>` : ""}
+          <div class="monto">
+            $${precioProAplicable.toLocaleString("es-CO")} COP<span style="font-size:0.9rem;font-weight:600;color:${MARCA.textoSuave};">${esAnual ? "/año" : "/mes"}</span>
+            ${esAnual ? `<span class="ahorro-badge">10% más barato</span>` : ""}
+          </div>
+          ${!esAnual && totalLocalesTrasUpgrade >= 4 ? `<p style="font-size:0.78rem;color:${MARCA.oro};">Esta es tu ${totalLocalesTrasUpgrade}ª tarjeta en Plan Pro — aplica la tarifa de ${totalLocalesTrasUpgrade} o más tarjetas.</p>` : ""}
 
           <form action="https://checkout.wompi.co/p/" method="GET">
             <input type="hidden" name="public-key" value="${process.env.WOMPI_PUBLIC_KEY}" />
@@ -7038,11 +7108,26 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
       const resp = await fetch(`${base}/transactions/${transaccionId}`);
       const data = await resp.json();
       estado = data?.data?.status || "desconocido";
-      const referenciaOk = (data?.data?.reference || "").startsWith(`tapin-upgrade-${slug}-`);
-      const montoOk = ESCALONES_PRO.some((e) => data?.data?.amount_in_cents === e.precio * 100);
+      const referenciaRecibida = data?.data?.reference || "";
+      const esAnual = referenciaRecibida.startsWith(`tapin-upgrade-anual-${slug}-`);
+      const referenciaOk = esAnual || referenciaRecibida.startsWith(`tapin-upgrade-${slug}-`);
+      const montoOk = esAnual
+        ? data?.data?.amount_in_cents === PRECIO_PRO_ANUAL_COP * 100
+        : ESCALONES_PRO.some((e) => data?.data?.amount_in_cents === e.precio * 100);
       if (estado === "APPROVED" && referenciaOk && montoOk) {
-        guardarCambiosNegocio(slug, negocio, { plan: "pro" });
-        registrarAuditoria(slug, negocio, "Mejoraste a Plan Pro");
+        if (esAnual) {
+          const unAnioDespues = new Date();
+          unAnioDespues.setFullYear(unAnioDespues.getFullYear() + 1);
+          guardarCambiosNegocio(slug, negocio, {
+            plan: "pro",
+            billingType: "anual",
+            proAnualHasta: unAnioDespues.toISOString(),
+          });
+          registrarAuditoria(slug, negocio, `Mejoraste a Plan Pro anual (vence ${unAnioDespues.toLocaleDateString("es-CO")})`);
+        } else {
+          guardarCambiosNegocio(slug, negocio, { plan: "pro", billingType: "mensual" });
+          registrarAuditoria(slug, negocio, "Mejoraste a Plan Pro");
+        }
       }
     } catch (err) {
       console.error("[mejorar-a-pro] Error consultando transacción:", err.message);
@@ -7074,9 +7159,13 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
         <div class="box">
           <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
           ${yaEsPro
-            ? `<h1>¡Listo! ${negocio.nombre} ya está en Plan Pro.</h1>
-               <p>Ahora registra tu tarjeta para que el cobro de los próximos meses sea automático.</p>
-               <a class="boton" href="/suscripcion/${slug}?key=${req.query.key}">Registrar tarjeta para el cobro mensual</a>`
+            ? (negocioActualizado.billingType === "anual"
+                ? `<h1>¡Listo! ${negocio.nombre} ya está en Plan Pro.</h1>
+                   <p>Pagaste el año completo — queda activo hasta el ${new Date(negocioActualizado.proAnualHasta).toLocaleDateString("es-CO")}, sin cobros automáticos ni tarjeta que registrar.</p>
+                   <a class="boton" href="/mi-panel/${slug}?key=${req.query.key}">Ir a mi panel</a>`
+                : `<h1>¡Listo! ${negocio.nombre} ya está en Plan Pro.</h1>
+                   <p>Ahora registra tu tarjeta para que el cobro de los próximos meses sea automático.</p>
+                   <a class="boton" href="/suscripcion/${slug}?key=${req.query.key}">Registrar tarjeta para el cobro mensual</a>`)
             : estado === "PENDING"
               ? `<h1>Tu pago está siendo procesado</h1><p>En unos minutos se activa el Plan Pro. Te avisamos por correo.</p>`
               : `<h1>No pudimos confirmar el pago</h1><p>Si ya pagaste, espera un momento y recarga esta página. Si el pago falló, puedes intentarlo de nuevo.</p>
