@@ -2223,7 +2223,8 @@ app.get("/historial/:slug", (req, res) => {
       </head>
       <body>
         <p><a href="/stats?key=${req.query.key}">&larr; Volver al panel</a></p>
-        <h1>Historial de toques — ${negocio.nombre}</h1>
+        <h1>Historial de toques</h1>
+        <p>${negocio.nombre}</p>
         <p>Total: <b>${eventos.length}</b> toques registrados</p>
         <table>
           <tr><th>#</th><th>Fecha y hora</th><th>Dispositivo</th></tr>
@@ -2311,8 +2312,8 @@ app.get("/quejas/:slug", (req, res) => {
     <body>
       <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="${volverHref}">&larr; Volver al panel</a></div>
       <div class="content">
-        <div class="eyebrow">Rescate de clientes</div>
-        <h1 class="titulo-pagina">Retroalimentación privada — ${negocio.nombre}</h1>
+        <div class="eyebrow">Rescate de clientes · ${negocio.nombre}</div>
+        <h1 class="titulo-pagina">Retroalimentación privada</h1>
         <div class="subtitulo">Cada reseña negativa se queda aquí en vez de publicarse. El dueño recibe un correo al instante para poder reaccionar.</div>
         <div class="metrics">
           <div class="metric"><div class="metric-num">${quejas.length}</div><div class="metric-lbl">Total recibida</div></div>
@@ -2438,8 +2439,8 @@ app.get("/contenido/:slug", (req, res) => {
       <body>
         <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
         <div class="content">
-          <div class="eyebrow">Marketing automático</div>
-          <h1 class="titulo-pagina">Contenido para redes — ${negocio.nombre}</h1>
+          <div class="eyebrow">Marketing automático · ${negocio.nombre}</div>
+          <h1 class="titulo-pagina">Contenido para redes</h1>
           <div class="subtitulo">Cada vez que un cliente califica bien y elige una frase, se genera automáticamente una tarjeta lista para Instagram/Stories.</div>
           <div class="grid">
             ${tarjetas || "<p>Todavía no hay testimonios. Aparecerán aquí cuando los clientes califiquen positivo y elijan una frase.</p>"}
@@ -3193,8 +3194,8 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
       <body>
         <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/mi-panel/${slug}?key=${claveUsada}" style="color:#CFE3D8;">&larr; Volver al panel</a></div>
         <div class="content">
-          <div class="eyebrow">Ajustes</div>
-          <h1 class="titulo-pagina">Configuración — ${negocio.nombre}</h1>
+          <div class="eyebrow">Ajustes · ${negocio.nombre}</div>
+          <h1 class="titulo-pagina">Configuración</h1>
 
           <div class="form-card">
             <h3>Meta mensual</h3>
@@ -3400,8 +3401,8 @@ app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
       <body>
         <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/mi-panel/${slug}?key=${claveUsada}" style="color:#CFE3D8;">&larr; Volver al panel</a></div>
         <div class="content">
-          <div class="eyebrow">Plan Pro</div>
-          <h1 class="titulo-pagina">Fidelización — ${negocio.nombre}</h1>
+          <div class="eyebrow">Plan Pro · ${negocio.nombre}</div>
+          <h1 class="titulo-pagina">Fidelización</h1>
           <div class="subtitulo">Cada visita suma un sello. Tú decides cada cuántos y qué se ganan.</div>
 
           <div class="metrics">
@@ -4518,8 +4519,8 @@ app.get("/reportes-guardados/:slug", (req, res) => {
       <body>
         <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
         <div class="content">
-          <div class="eyebrow">Historial</div>
-          <h1 class="titulo-pagina">Reportes mensuales — ${negocio.nombre}</h1>
+          <div class="eyebrow">Historial · ${negocio.nombre}</div>
+          <h1 class="titulo-pagina">Reportes mensuales</h1>
           <div class="subtitulo">Cada reporte mensual queda guardado aquí, no solo enviado por correo.</div>
           <table>
             <tr><th>Mes</th><th>Descarga</th></tr>
@@ -4654,18 +4655,24 @@ app.get("/conoce", (req, res) => {
           .plan li{padding:8px 0;border-top:1px solid ${MARCA.borde};font-size:0.88rem;display:flex;gap:8px;}
           .plan li:first-child{border-top:none;}
 
-          .precios-grid{display:flex;gap:20px;flex-wrap:wrap;margin-top:14px;}
-          .precio-card{flex:1;min-width:280px;background:#fff;border-radius:16px;border:1px solid ${MARCA.borde};padding:22px 24px;}
-          .precio-card-titulo{font-size:1rem;font-weight:800;color:${MARCA.texto};margin-bottom:4px;}
-          .precio-card-sub{font-size:0.8rem;color:${MARCA.textoSuave};margin-bottom:16px;line-height:1.5;}
-          .tabla-precios{width:100%;border-collapse:collapse;font-size:0.85rem;}
-          .tabla-precios th{background:${MARCA.verdeOscuro};color:#fff;text-align:left;padding:9px 12px;
-                             font-size:0.7rem;text-transform:uppercase;letter-spacing:0.03em;}
-          .tabla-precios th:first-child{border-radius:8px 0 0 8px;}
-          .tabla-precios th:last-child{border-radius:0 8px 8px 0;}
-          .tabla-precios td{padding:9px 12px;border-bottom:1px solid ${MARCA.borde};}
-          .tabla-precios tr:last-child td{border-bottom:none;font-weight:700;color:${MARCA.verdeOscuro};}
-          .tabla-precios tr:last-child{background:${MARCA.verdeClaro};}
+          .precios-grid{display:flex;gap:24px;flex-wrap:wrap;margin-top:14px;}
+          .precio-card{flex:1;min-width:280px;background:#fff;border-radius:14px;border:1px solid ${MARCA.borde};
+                       padding:0;overflow:hidden;box-shadow:0 1px 3px rgba(11,61,44,0.04);}
+          .precio-card-titulo{font-size:0.78rem;font-weight:700;color:#fff;background:${MARCA.verdeOscuro};
+                               padding:14px 20px;text-transform:uppercase;letter-spacing:0.04em;}
+          .tabla-precios{width:100%;border-collapse:collapse;font-size:0.88rem;}
+          .tabla-precios th{text-align:left;padding:10px 20px;font-size:0.68rem;text-transform:uppercase;
+                             letter-spacing:0.03em;color:${MARCA.textoSuave};font-weight:600;border-bottom:1px solid ${MARCA.borde};}
+          .tabla-precios td{padding:11px 20px;border-bottom:1px solid ${MARCA.borde};color:${MARCA.texto};}
+          .tabla-precios tr:last-child td{border-bottom:none;font-weight:700;color:${MARCA.verdeOscuro};background:${MARCA.verdeClaro};}
+
+          .plan-anual{display:flex;align-items:center;justify-content:space-between;gap:12px;
+                      background:${MARCA.verdeOscuro};border-radius:12px;padding:14px 18px;margin:16px 0;}
+          .plan-anual-etiqueta{font-size:0.66rem;text-transform:uppercase;letter-spacing:0.04em;color:#CFE3D8;}
+          .plan-anual-precio{font-size:1.15rem;font-weight:800;color:#fff;margin-top:2px;}
+          .plan-anual-precio span{font-size:0.72rem;font-weight:500;color:#CFE3D8;}
+          .plan-anual-badge{background:${MARCA.oro};color:#fff;font-size:0.72rem;font-weight:800;
+                             padding:6px 12px;border-radius:100px;white-space:nowrap;}
           .check{color:${MARCA.verde};font-weight:800;flex-shrink:0;}
           .cta{display:block;text-align:center;background:${MARCA.oro};color:#fff;text-decoration:none;
                padding:16px;border-radius:12px;font-weight:700;margin-top:60px;}
@@ -4738,7 +4745,14 @@ app.get("/conoce", (req, res) => {
               <div class="plan-badge">RECOMENDADO</div>
               <div class="plan-nombre">Mensualidad Pro</div>
               <div class="plan-precio">$59.900 <span>COP / mes</span></div>
-              <p style="font-size:0.78rem;color:${MARCA.verde};font-weight:700;margin:-6px 0 14px;">Desde 1 local — ver tabla de precios abajo si tienes varios</p>
+              <p style="font-size:0.78rem;color:${MARCA.verde};font-weight:700;margin:-6px 0 14px;">Desde 1 tarjeta — ver tabla de precios abajo si tienes varias</p>
+              <div class="plan-anual">
+                <div class="plan-anual-izq">
+                  <div class="plan-anual-etiqueta">Pago anual</div>
+                  <div class="plan-anual-precio">$650.000 <span>COP / año</span></div>
+                </div>
+                <div class="plan-anual-badge">10% más barato</div>
+              </div>
               <ul>
                 <li><span class="check">✓</span> Todo lo del pago único, más:</li>
                 <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
@@ -4752,11 +4766,10 @@ app.get("/conoce", (req, res) => {
             </div>
           </div>
 
-          <div class="seccion-titulo">Cómo cambia el precio según la cantidad</div>
+          <div class="seccion-titulo">Precios por cantidad</div>
           <div class="precios-grid">
             <div class="precio-card">
-              <div class="precio-card-titulo">Tarjetas — el precio baja</div>
-              <div class="precio-card-sub">Entre más tarjetas pidas de una vez, menos pagas por cada una.</div>
+              <div class="precio-card-titulo">Compra de tarjetas</div>
               <table class="tabla-precios">
                 <tr><th>Cantidad</th><th>Precio c/u</th><th>Ahorro</th></tr>
                 ${ESCALONES_DESCUENTO.slice().reverse().map((e, i, arr) => {
@@ -4767,10 +4780,9 @@ app.get("/conoce", (req, res) => {
               </table>
             </div>
             <div class="precio-card">
-              <div class="precio-card-titulo">Plan Pro — el precio sube por local</div>
-              <div class="precio-card-sub">Un negocio con varias sedes saca mucho más valor comparando entre ellas — por eso paga un poco más por cada local, no menos.</div>
+              <div class="precio-card-titulo">Suscripción Plan Pro</div>
               <table class="tabla-precios">
-                <tr><th>Locales activos</th><th>Precio/local/mes</th></tr>
+                <tr><th>Tarjetas activas</th><th>Precio c/u / mes</th></tr>
                 ${ESCALONES_PRO.slice().reverse().map((e, i, arr) => {
                   const siguiente = arr[i + 1];
                   const rango = siguiente ? `${e.minimo}-${siguiente.minimo - 1}` : `${e.minimo}+`;
@@ -6987,7 +6999,7 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
             <li>Alertas instantáneas y exportes</li>
           </ul>
           <div class="monto">$${precioProAplicable.toLocaleString("es-CO")} COP<span style="font-size:0.9rem;font-weight:600;color:${MARCA.textoSuave};">/mes</span></div>
-          ${totalLocalesTrasUpgrade >= 4 ? `<p style="font-size:0.78rem;color:${MARCA.oro};">Esta es tu ${totalLocalesTrasUpgrade}ª tarjeta en Plan Pro — aplica la tarifa de ${totalLocalesTrasUpgrade} o más locales.</p>` : ""}
+          ${totalLocalesTrasUpgrade >= 4 ? `<p style="font-size:0.78rem;color:${MARCA.oro};">Esta es tu ${totalLocalesTrasUpgrade}ª tarjeta en Plan Pro — aplica la tarifa de ${totalLocalesTrasUpgrade} o más tarjetas.</p>` : ""}
 
           <form action="https://checkout.wompi.co/p/" method="GET">
             <input type="hidden" name="public-key" value="${process.env.WOMPI_PUBLIC_KEY}" />
@@ -7160,7 +7172,8 @@ app.get("/suscripcion/:slug", (req, res) => {
       <body>
         <div class="box">
           <div class="logo">${logoSvg(MARCA.verdeOscuro, 34)}</div>
-          <h1>Suscripción Plan Pro — ${negocio.nombre}</h1>
+          <h1>Suscripción Plan Pro</h1>
+          <p style="color:${MARCA.textoSuave};font-size:0.85rem;margin-top:-10px;">${negocio.nombre}</p>
           ${activa
             ? `<div class="estado">Tarjeta registrada. Se cobra automáticamente $${precioProAplicable.toLocaleString("es-CO")} COP cada mes.</div>
                <p>Próximo cobro: ${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "pendiente"}</p>
