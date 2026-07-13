@@ -1636,6 +1636,21 @@ app.get("/codigos", (req, res) => {
                 <label>Correo del negocio (opcional — si lo pones, le mandamos los códigos nuevos por correo)</label>
                 <input type="email" name="email" placeholder="dueno@negocio.com" style="width:100%;box-sizing:border-box;">
               </div>
+              <div style="margin-top:16px;padding-top:16px;border-top:1px solid ${MARCA.borde};">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" name="proIncluido" value="si" id="check-admin-pro" style="width:auto;"
+                         onchange="document.getElementById('admin-plan-pro-tipo').style.display=this.checked?'block':'none';">
+                  Marcar como Plan Pro incluido (cortesía, sin cobro)
+                </label>
+                <div id="admin-plan-pro-tipo" style="display:none;margin-top:10px;">
+                  <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;">
+                    <input type="radio" name="planProTipo" value="mensual" checked style="width:auto;"> Mensual
+                  </label>
+                  <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;">
+                    <input type="radio" name="planProTipo" value="anual" style="width:auto;"> Anual (1 año desde la activación)
+                  </label>
+                </div>
+              </div>
             </form>
           </div>
 
@@ -1658,6 +1673,8 @@ app.post("/codigos/generar", async (req, res) => {
   }
   const cantidad = Math.min(200, Math.max(1, parseInt(req.body.cantidad, 10) || 1));
   const email = (req.body.email || "").trim().toLowerCase();
+  const proIncluido = req.body.proIncluido === "si";
+  const planProTipo = req.body.planProTipo === "anual" ? "anual" : "mensual";
   const codigos = leerCodigos();
   const nuevos = [];
 
@@ -1666,7 +1683,12 @@ app.post("/codigos/generar", async (req, res) => {
     do {
       nuevo = generarCodigo();
     } while (codigos[nuevo]); // evita colisiones, aunque son muy improbables
-    codigos[nuevo] = { activado: false, creado: new Date().toISOString() };
+    codigos[nuevo] = {
+      activado: false,
+      creado: new Date().toISOString(),
+      proIncluido,
+      planProTipo: proIncluido ? planProTipo : null,
+    };
     nuevos.push(nuevo);
   }
 
@@ -1794,10 +1816,13 @@ app.get("/activar/:codigo", (req, res) => {
               <input type="hidden" name="categoria" id="input-categoria" value="restaurante">
 
               <label>Plan</label>
-              <select name="plan">
-                <option value="basico">Básico ($119.900 — envío incluido)</option>
-                <option value="pro">Pro ($59.900/mes — alertas, reporte mensual, contenido)</option>
-              </select>
+              ${entrada.proIncluido
+                ? `<div style="background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};padding:12px 14px;border-radius:9px;font-size:0.88rem;font-weight:600;">
+                     ✓ Plan Pro ${entrada.planProTipo === "anual" ? "anual" : "mensual"} — ya incluido con la compra de esta tarjeta
+                   </div>`
+                : `<div style="background:${MARCA.crema};color:${MARCA.textoSuave};padding:12px 14px;border-radius:9px;font-size:0.88rem;">
+                     Plan Básico ($119.900 — pago único). ¿Quieres Pro? Lo puedes agregar después desde tu panel.
+                   </div>`}
 
               <label>País (define la hora local de los reportes)</label>
               <select name="pais" id="input-pais">
@@ -1883,6 +1908,10 @@ app.post("/activar/:codigo", (req, res) => {
   }
   entrada.activado = true;
   entrada.activadoEl = new Date().toISOString();
+  // El plan Pro NO se decide por lo que venga en el formulario (eso se
+  // podría manipular) — se decide por lo que la tarjeta tenga guardado desde
+  // que se pagó el pedido. Si no vino de un pedido con Pro, siempre básico.
+  const planReal = entrada.proIncluido ? "pro" : "basico";
   entrada.negocio = {
     nombre,
     googleUrl,
@@ -1890,11 +1919,19 @@ app.post("/activar/:codigo", (req, res) => {
     pais: pais || "colombia",
     claveAcceso: claveLimpia,
     email: email || "",
-    plan: plan === "pro" ? "pro" : "basico",
+    plan: planReal,
     direccion: direccion || "",
     departamento: departamento || "",
     ciudad: ciudad || "",
   };
+  if (planReal === "pro" && entrada.planProTipo === "anual") {
+    const unAnioDespues = new Date();
+    unAnioDespues.setFullYear(unAnioDespues.getFullYear() + 1);
+    entrada.negocio.billingType = "anual";
+    entrada.negocio.proAnualHasta = unAnioDespues.toISOString();
+  } else if (planReal === "pro") {
+    entrada.negocio.billingType = "mensual";
+  }
 
   guardarCodigos(codigos);
 
@@ -6637,12 +6674,23 @@ app.get("/pedido", (req, res) => {
             <datalist id="lista-ciudades"></datalist>
 
             <label class="pro-opcion" style="cursor:pointer;">
-              <input type="checkbox" name="incluirPro" value="si">
+              <input type="checkbox" name="incluirPro" id="check-incluir-pro" value="si" onchange="document.getElementById('opciones-plan-pro').style.display=this.checked?'block':'none';">
               <span class="txt">
-                <b>Incluir primer mes de Plan Pro (+$${PRECIO_PRO_COP.toLocaleString("es-CO")} COP)</b>
+                <b>Incluir Plan Pro</b>
                 Rescate de reseñas negativas en tiempo real, reportes mensuales y más. Se cobra junto con tu tarjeta en este mismo pago.
               </span>
             </label>
+
+            <div id="opciones-plan-pro" style="display:none;margin:-6px 0 16px;padding-left:4px;">
+              <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:0.86rem;margin-bottom:8px;cursor:pointer;">
+                <input type="radio" name="planProTipo" value="mensual" checked style="width:auto;margin:0;">
+                Mensual — $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP (primer mes; luego se cobra cada mes aparte)
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:0.86rem;cursor:pointer;">
+                <input type="radio" name="planProTipo" value="anual" style="width:auto;margin:0;">
+                Anual — $${PRECIO_PRO_ANUAL_COP.toLocaleString("es-CO")} COP (año completo, un solo pago, sin cobros después)
+              </label>
+            </div>
 
             <button type="submit">Continuar al pago</button>
           </form>
@@ -6713,7 +6761,7 @@ app.get("/pedido", (req, res) => {
 });
 
 app.post("/pedido", (req, res) => {
-  const { nombreNegocio, email, telefono, direccion, ciudad, departamento, incluirPro, cantidad } = req.body;
+  const { nombreNegocio, email, telefono, direccion, ciudad, departamento, incluirPro, planProTipo, cantidad } = req.body;
   if (!nombreNegocio || !email || !telefono || !direccion || !ciudad || !departamento) {
     return res.status(400).send("Faltan datos del pedido.");
   }
@@ -6721,7 +6769,9 @@ app.post("/pedido", (req, res) => {
   const cantidadLimpia = Math.min(500, Math.max(1, parseInt(cantidad, 10) || 1));
   const escalon = precioTarjetaPorCantidad(cantidadLimpia);
   const proIncluido = incluirPro === "si";
-  const monto = escalon.precio * cantidadLimpia + (proIncluido ? PRECIO_PRO_COP : 0);
+  const tipoProElegido = planProTipo === "anual" ? "anual" : "mensual";
+  const precioProElegido = tipoProElegido === "anual" ? PRECIO_PRO_ANUAL_COP : PRECIO_PRO_COP;
+  const monto = escalon.precio * cantidadLimpia + (proIncluido ? precioProElegido : 0);
 
   const pedidos = leerPedidos();
   const id = generarToken();
@@ -6731,6 +6781,7 @@ app.post("/pedido", (req, res) => {
     precioUnidad: escalon.precio,
     descuentoAplicado: escalon.descuento,
     proIncluido,
+    planProTipo: proIncluido ? tipoProElegido : null,
     monto,
     estado: "pendiente", // pendiente | aprobado | rechazado
     creado: new Date().toISOString(),
@@ -6792,7 +6843,7 @@ app.get("/pagar/:id", (req, res) => {
               × $${(pedido.precioUnidad || PRECIO_BASICO_COP).toLocaleString("es-CO")} COP c/u
             </div>
             ${pedido.descuentoAplicado ? `<div style="color:#7A5A00;">✓ Descuento por volumen aplicado: ${pedido.descuentoAplicado} off por tarjeta</div>` : ""}
-            ${pedido.proIncluido ? `<div><b>Primer mes Plan Pro:</b> $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP</div>` : ""}
+            ${pedido.proIncluido ? `<div><b>Plan Pro ${pedido.planProTipo === "anual" ? "anual" : "primer mes"}:</b> $${(pedido.planProTipo === "anual" ? PRECIO_PRO_ANUAL_COP : PRECIO_PRO_COP).toLocaleString("es-CO")} COP</div>` : ""}
           </div>
           <div class="monto">$${pedido.monto.toLocaleString("es-CO")} COP</div>
 
@@ -6923,7 +6974,12 @@ app.get("/pago-confirmado", async (req, res) => {
           do {
             nuevo = generarCodigo();
           } while (codigos[nuevo]);
-          codigos[nuevo] = { activado: false, creado: new Date().toISOString() };
+          codigos[nuevo] = {
+            activado: false,
+            creado: new Date().toISOString(),
+            proIncluido: pedido.proIncluido || false,
+            planProTipo: pedido.planProTipo || null,
+          };
           nuevosCodigos.push(nuevo);
         }
         guardarCodigos(codigos);
