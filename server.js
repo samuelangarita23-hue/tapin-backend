@@ -4644,7 +4644,7 @@ app.get("/conoce", (req, res) => {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Conoce Tapin</title>
+        <title>Cómo conseguir más reseñas en Google — Tarjeta NFC Tapin | Colombia</title>
         <style>
           *{box-sizing:border-box;}
           body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
@@ -4729,7 +4729,7 @@ app.get("/conoce", (req, res) => {
         <div class="hero">
           <div>${logoSvg("#FFFFFF", 34)}</div>
           <h1>Así funciona Tapin</h1>
-          <p>Una tarjeta NFC que convierte cada visita en una reseña de Google — o en información privada que solo tú ves.</p>
+          <p>Tarjeta NFC para negocios en Colombia que convierte cada visita en una reseña de Google en segundos — la forma más simple de aumentar las reseñas de Google de tu negocio y cuidar tu reputación online, sin arriesgarte a que una calificación negativa se publique.</p>
 
           <div class="tarjeta-wrap">
             <div class="tarjeta-nfc">
@@ -4839,7 +4839,7 @@ app.get("/conoce", (req, res) => {
           </div>
 
           <div class="nota">
-            <b>Sobre la retroalimentación:</b> cuando un cliente no tiene una buena experiencia, esa información nunca se convierte en una reseña pública negativa. Se queda contigo, en privado, como una oportunidad para mejorar o para contactar directamente a ese cliente — no como un golpe a tu reputación en línea.
+            <b>Sobre la retroalimentación:</b> cuando un cliente no tiene una buena experiencia, esa información nunca se convierte en una reseña pública negativa. Se queda contigo, en privado, como una oportunidad para mejorar o para contactar directamente a ese cliente. Así es como Tapin ayuda a evitar reseñas negativas públicas, sin dejar de escuchar a cada cliente — la forma más simple de hacer que tus clientes dejen reseñas sin arriesgar tu reputación en línea.
           </div>
 
           <a class="cta" href="/pedido">Pedir mi tarjeta Tapin →</a>
@@ -6141,10 +6141,10 @@ app.get("/", (req, res) => {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Tapin — Convierte cada visita en una reseña de Google</title>
-        <meta name="description" content="Tapin es una tarjeta NFC que tus clientes tocan con el celular para dejarte una reseña en Google en segundos. Las calificaciones negativas se quedan contigo, en privado.">
+        <meta name="description" content="Tapin: tarjeta NFC para negocios en Colombia que aumenta las reseñas de Google en segundos. Gestión de reputación online — las calificaciones negativas se quedan en privado, nunca se publican.">
         <meta name="google-site-verification" content="H7LUjIzom1urhBIS-T8yWBsUl1T2-o6NBbVAiEZf-Nw" />
         <meta property="og:title" content="Tapin — Convierte cada visita en una reseña de Google">
-        <meta property="og:description" content="Tarjeta NFC para negocios: un toque y tus clientes te dejan reseña en Google. Lo negativo se queda en privado, nunca se publica.">
+        <meta property="og:description" content="Tarjeta NFC para negocios en Colombia: aumenta tus reseñas de Google y protege tu reputación online. Lo negativo se queda en privado, nunca se publica.">
         <meta property="og:type" content="website">
         <meta property="og:url" content="https://tapincol.com">
         <meta property="og:locale" content="es_CO">
@@ -6305,7 +6305,7 @@ app.get("/", (req, res) => {
             <div class="forma-organica"></div>
             <div class="forma-organica-2"></div>
             <div class="logo-hero">${logoSvg("#FFFFFF", 58)}<span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Tapin</span></div>
-            <h1 class="tagline">Tapin — Descubre negocios locales.<br>Confía en lo que encuentras.</h1>
+            <h1 class="tagline">Tapin — Tarjeta NFC para reseñas de Google en Colombia.<br>Descubre negocios locales, confía en lo que encuentras.</h1>
 
             <div class="enlaces-generales">
               <a class="enlace-general" href="/conoce">Conoce Tapin</a>
