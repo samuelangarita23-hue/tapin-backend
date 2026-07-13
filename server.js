@@ -5282,8 +5282,9 @@ function renderizarPaginaNegocios(email) {
 //   GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET — se sacan gratis en
 //   console.cloud.google.com → APIs y servicios → Credenciales → Crear
 //   credenciales → ID de cliente de OAuth → tipo "Aplicación web".
-//   En "URI de redirección autorizados" hay que agregar exactamente:
+//   En "URI de redirección autorizados" hay que agregar (ambos dominios):
 //   https://tapin.page/auth/google/callback
+//   https://tapincol.com/auth/google/callback
 // tipo=negocio (por defecto) o tipo=cliente — decide a quién logueamos al volver.
 app.get("/auth/google/iniciar", (req, res) => {
   if (!process.env.GOOGLE_CLIENT_ID) {
@@ -6141,15 +6142,16 @@ app.get("/", (req, res) => {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Tapin — Convierte cada visita en una reseña de Google</title>
         <meta name="description" content="Tapin es una tarjeta NFC que tus clientes tocan con el celular para dejarte una reseña en Google en segundos. Las calificaciones negativas se quedan contigo, en privado.">
+        <meta name="google-site-verification" content="H7LUjIzom1urhBIS-T8yWBsUl1T2-o6NBbVAiEZf-Nw" />
         <meta property="og:title" content="Tapin — Convierte cada visita en una reseña de Google">
         <meta property="og:description" content="Tarjeta NFC para negocios: un toque y tus clientes te dejan reseña en Google. Lo negativo se queda en privado, nunca se publica.">
         <meta property="og:type" content="website">
-        <meta property="og:url" content="https://tapin.page">
+        <meta property="og:url" content="https://tapincol.com">
         <meta property="og:locale" content="es_CO">
         <meta name="twitter:card" content="summary">
         <meta name="twitter:title" content="Tapin — Convierte cada visita en una reseña de Google">
         <meta name="twitter:description" content="Tarjeta NFC para negocios: un toque y tus clientes te dejan reseña en Google.">
-        <link rel="canonical" href="https://tapin.page">
+        <link rel="canonical" href="https://tapincol.com">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
@@ -7436,14 +7438,14 @@ app.get("/robots.txt", (req, res) => {
     `Disallow: /activar\n` +
     `Disallow: /cuenta\n` +
     `Disallow: /mis-negocios\n` +
-    `Sitemap: https://tapin.page/sitemap.xml\n`
+    `Sitemap: https://tapincol.com/sitemap.xml\n`
   );
 });
 
 app.get("/sitemap.xml", (req, res) => {
   const paginas = ["/", "/conoce", "/descubre", "/cliente", "/mis-negocios", "/pedido", "/privacidad", "/terminos"];
   const urls = paginas
-    .map((p) => `<url><loc>https://tapin.page${p}</loc></url>`)
+    .map((p) => `<url><loc>https://tapincol.com${p}</loc></url>`)
     .join("\n  ");
   res.type("application/xml").send(
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
