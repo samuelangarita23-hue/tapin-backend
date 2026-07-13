@@ -795,9 +795,12 @@ function guardarQueja(slug, comentario, negocio, telefono = "") {
 
   // Alerta instantánea (solo Pro): el dueño se entera de la queja apenas
   // llega, no hasta el reporte mensual. No bloquea la respuesta al cliente
-  // si el correo falla — es un "fire and forget" a propósito. Respeta la
-  // preferencia de alertas si el negocio la desactivó en Configuración.
-  const quiereAlertas = !negocio.alertas || negocio.alertas.quejas !== false;
+  // si el correo falla — es un "fire and forget" a propósito. Solo se manda
+  // al instante si el negocio eligió frecuencia "instantánea" — si eligió
+  // resumen diario o semanal, esta queja se junta con las demás y se manda
+  // agrupada desde /enviar-resumenes-quejas (ver más abajo).
+  const frecuenciaQuejas = (negocio.alertas && negocio.alertas.frecuenciaQuejas) || "instantanea";
+  const quiereAlertas = (!negocio.alertas || negocio.alertas.quejas !== false) && frecuenciaQuejas === "instantanea";
   if (esPro(negocio) && negocio.email && quiereAlertas) {
     enviarEmail(
       negocio.email,
@@ -928,7 +931,7 @@ app.get("/r/:slug", (req, res) => {
     if (codigos[slug] && !codigos[slug].activado) {
       return res.redirect(302, `/mis-negocios?codigo=${slug}`);
     }
-    return res.status(404).send("Negocio no encontrado. Revisa el enlace del QR/NFC.");
+    return res.status(404).send("Negocio no encontrado. Revisa el enlace de la tarjeta NFC.");
   }
 
   registrarToque(slug, req, negocio);
@@ -1631,7 +1634,7 @@ app.get("/codigos", (req, res) => {
           </div>
 
           <table>
-            <tr><th>Código</th><th>Estado</th><th>URL para la tarjeta (NFC/QR)</th><th></th></tr>
+            <tr><th>Código</th><th>Estado</th><th>URL para la tarjeta NFC</th><th></th></tr>
             ${filas || "<tr><td colspan='4'>Todavía no has generado ningún código.</td></tr>"}
           </table>
         </div>
@@ -3208,7 +3211,13 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
             <h3>Alertas por correo</h3>
             <p class="nota">Elige cuáles quieres recibir — todas están activadas por defecto.</p>
             <form method="POST" action="/mi-panel/${slug}/configuracion/alertas?key=${claveUsada}">
-              <label class="fila-check"><input type="checkbox" name="quejas" ${alertas.quejas !== false ? "checked" : ""}> Alerta instantánea cuando llega una queja</label>
+              <label class="fila-check"><input type="checkbox" name="quejas" ${alertas.quejas !== false ? "checked" : ""}> Avisarme cuando llega una queja</label>
+              <label>¿Con qué frecuencia?</label>
+              <select name="frecuenciaQuejas" style="width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;">
+                <option value="instantanea" ${(alertas.frecuenciaQuejas || "instantanea") === "instantanea" ? "selected" : ""}>Al instante — apenas llega cada una</option>
+                <option value="diario" ${alertas.frecuenciaQuejas === "diario" ? "selected" : ""}>Resumen diario — un correo con todas las del día</option>
+                <option value="semanal" ${alertas.frecuenciaQuejas === "semanal" ? "selected" : ""}>Resumen semanal — un correo con todas de la semana</option>
+              </select>
               <label class="fila-check"><input type="checkbox" name="reporteMensual" ${alertas.reporteMensual !== false ? "checked" : ""}> Reporte mensual automático</label>
               <label>WhatsApp para alertas (opcional)</label>
               <input type="text" name="whatsapp" value="${negocio.whatsappAlertas || ""}" placeholder="Ej: 3001234567">
@@ -3271,7 +3280,9 @@ app.post("/mi-panel/:slug/configuracion/alertas", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
-  const alertas = { quejas: req.body.quejas === "on", reporteMensual: req.body.reporteMensual === "on" };
+  const frecuenciaQuejas = ["instantanea", "diario", "semanal"].includes(req.body.frecuenciaQuejas)
+    ? req.body.frecuenciaQuejas : "instantanea";
+  const alertas = { quejas: req.body.quejas === "on", reporteMensual: req.body.reporteMensual === "on", frecuenciaQuejas };
   const whatsappAlertas = (req.body.whatsapp || "").trim();
   guardarCambiosNegocio(slug, negocio, { alertas, whatsappAlertas });
   res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
@@ -4400,6 +4411,64 @@ app.get("/verificar-links-google", async (req, res) => {
   res.json({ ok: true, revisados: Object.keys(negocios).length, rotos: rotos.length, detalle: rotos });
 });
 
+// Manda los resúmenes agrupados de quejas (diario/semanal) a los negocios
+// que eligieron esa frecuencia en vez de "al instante" — visítala con un
+// cron diario (revisa sola si a cada negocio ya le toca según su frecuencia).
+// Visítala así: https://tu-dominio.com/enviar-resumenes-quejas?key=TU_CLAVE
+app.get("/enviar-resumenes-quejas", async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
+
+  const negocios = todosLosNegocios();
+  const datos = leerDatos();
+  const ahora = new Date();
+  const resultado = [];
+
+  for (const slug in negocios) {
+    const negocio = negocios[slug];
+    if (!esPro(negocio) || !negocio.email) continue;
+    const alertas = negocio.alertas || {};
+    if (alertas.quejas === false) continue;
+    const frecuencia = alertas.frecuenciaQuejas;
+    if (frecuencia !== "diario" && frecuencia !== "semanal") continue;
+
+    const horasEspera = frecuencia === "diario" ? 24 : 24 * 7;
+    const ultimoEnvio = negocio.ultimoResumenQuejas ? new Date(negocio.ultimoResumenQuejas) : null;
+    const yaToca = !ultimoEnvio || (ahora - ultimoEnvio) >= horasEspera * 60 * 60 * 1000;
+    if (!yaToca) continue;
+
+    const desde = ultimoEnvio || new Date(ahora.getTime() - horasEspera * 60 * 60 * 1000);
+    const quejas = ((datos[slug] && datos[slug].quejas) || []).filter((q) => new Date(q.fechaISO) >= desde);
+
+    // Se actualiza la fecha de "último resumen" así no haya quejas nuevas —
+    // para que el reloj de "cada cuánto" se mantenga estable, no se recorra.
+    guardarCambiosNegocio(slug, negocio, { ultimoResumenQuejas: ahora.toISOString() });
+
+    if (quejas.length === 0) {
+      resultado.push({ slug, enviado: false, motivo: "sin quejas nuevas" });
+      continue;
+    }
+
+    const filas = quejas
+      .map((q) => `<li style="margin-bottom:10px;"><b>${q.fechaLegible}</b><br>"${q.comentario}"${q.telefono ? `<br>Tel: ${q.telefono}` : ""}</li>`)
+      .join("");
+    try {
+      await enviarEmail(
+        negocio.email,
+        `Resumen ${frecuencia === "diario" ? "diario" : "semanal"} de retroalimentación — ${negocio.nombre}`,
+        `<p>Tuviste <b>${quejas.length}</b> comentario${quejas.length > 1 ? "s" : ""} privado${quejas.length > 1 ? "s" : ""} ${frecuencia === "diario" ? "hoy" : "esta semana"}:</p>
+         <ul>${filas}</ul>
+         <p>Puedes verlas y marcarlas en tu panel Pro.</p>`
+      );
+      resultado.push({ slug, enviado: true, cantidad: quejas.length });
+    } catch (err) {
+      console.error("[enviar-resumenes-quejas] Error:", err.message);
+      resultado.push({ slug, enviado: false, motivo: "error de envío" });
+    }
+  }
+
+  res.json({ ok: true, procesados: resultado.length, detalle: resultado });
+});
+
 // ---------- Historial de reportes mensuales guardados ----------
 // Lista los PDFs de reportes que se han guardado en disco para un negocio,
 // con link de descarga para cada mes. Accesible por el admin o por el propio
@@ -4584,6 +4653,19 @@ app.get("/conoce", (req, res) => {
           .plan ul{list-style:none;padding:0;margin:18px 0 0;}
           .plan li{padding:8px 0;border-top:1px solid ${MARCA.borde};font-size:0.88rem;display:flex;gap:8px;}
           .plan li:first-child{border-top:none;}
+
+          .precios-grid{display:flex;gap:20px;flex-wrap:wrap;margin-top:14px;}
+          .precio-card{flex:1;min-width:280px;background:#fff;border-radius:16px;border:1px solid ${MARCA.borde};padding:22px 24px;}
+          .precio-card-titulo{font-size:1rem;font-weight:800;color:${MARCA.texto};margin-bottom:4px;}
+          .precio-card-sub{font-size:0.8rem;color:${MARCA.textoSuave};margin-bottom:16px;line-height:1.5;}
+          .tabla-precios{width:100%;border-collapse:collapse;font-size:0.85rem;}
+          .tabla-precios th{background:${MARCA.verdeOscuro};color:#fff;text-align:left;padding:9px 12px;
+                             font-size:0.7rem;text-transform:uppercase;letter-spacing:0.03em;}
+          .tabla-precios th:first-child{border-radius:8px 0 0 8px;}
+          .tabla-precios th:last-child{border-radius:0 8px 8px 0;}
+          .tabla-precios td{padding:9px 12px;border-bottom:1px solid ${MARCA.borde};}
+          .tabla-precios tr:last-child td{border-bottom:none;font-weight:700;color:${MARCA.verdeOscuro};}
+          .tabla-precios tr:last-child{background:${MARCA.verdeClaro};}
           .check{color:${MARCA.verde};font-weight:800;flex-shrink:0;}
           .cta{display:block;text-align:center;background:${MARCA.oro};color:#fff;text-decoration:none;
                padding:16px;border-radius:12px;font-weight:700;margin-top:60px;}
@@ -4620,7 +4702,7 @@ app.get("/conoce", (req, res) => {
         <div class="contenido">
           <div class="paso">
             <div class="paso-num">1</div>
-            <div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta (o escaneando el QR), se abre una página simple donde el cliente califica su experiencia.</p></div>
+            <div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta, se abre una página simple donde el cliente califica su experiencia.</p></div>
           </div>
           <div class="paso">
             <div class="paso-num">2</div>
@@ -4656,12 +4738,7 @@ app.get("/conoce", (req, res) => {
               <div class="plan-badge">RECOMENDADO</div>
               <div class="plan-nombre">Mensualidad Pro</div>
               <div class="plan-precio">$59.900 <span>COP / mes</span></div>
-              <p style="font-size:0.74rem;color:${MARCA.textoSuave};margin:-8px 0 14px;">
-                Con varios locales, el precio por local sube: $109.900 (4-9 locales) · $129.900 (10-24) · $149.900 (25-49) · $169.900 (50+)
-              </p>
-              <p style="font-size:0.68rem;color:${MARCA.textoSuave};margin:-10px 0 14px;">
-                Es porque un negocio con varias sedes saca mucho más valor comparando entre ellas — se refleja en el precio.
-              </p>
+              <p style="font-size:0.78rem;color:${MARCA.verde};font-weight:700;margin:-6px 0 14px;">Desde 1 local — ver tabla de precios abajo si tienes varios</p>
               <ul>
                 <li><span class="check">✓</span> Todo lo del pago único, más:</li>
                 <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
@@ -4672,6 +4749,34 @@ app.get("/conoce", (req, res) => {
                 <li><span class="check">✓</span> Generador de contenido para redes sociales</li>
                 <li><span class="check">✓</span> Comparación contra el promedio de tu categoría</li>
               </ul>
+            </div>
+          </div>
+
+          <div class="seccion-titulo">Cómo cambia el precio según la cantidad</div>
+          <div class="precios-grid">
+            <div class="precio-card">
+              <div class="precio-card-titulo">Tarjetas — el precio baja</div>
+              <div class="precio-card-sub">Entre más tarjetas pidas de una vez, menos pagas por cada una.</div>
+              <table class="tabla-precios">
+                <tr><th>Cantidad</th><th>Precio c/u</th><th>Ahorro</th></tr>
+                ${ESCALONES_DESCUENTO.slice().reverse().map((e, i, arr) => {
+                  const siguiente = arr[i + 1];
+                  const rango = siguiente ? `${e.minimo}-${siguiente.minimo - 1}` : `${e.minimo}+`;
+                  return `<tr><td>${rango}</td><td>$${e.precio.toLocaleString("es-CO")}</td><td>${e.descuento || "—"}</td></tr>`;
+                }).join("")}
+              </table>
+            </div>
+            <div class="precio-card">
+              <div class="precio-card-titulo">Plan Pro — el precio sube por local</div>
+              <div class="precio-card-sub">Un negocio con varias sedes saca mucho más valor comparando entre ellas — por eso paga un poco más por cada local, no menos.</div>
+              <table class="tabla-precios">
+                <tr><th>Locales activos</th><th>Precio/local/mes</th></tr>
+                ${ESCALONES_PRO.slice().reverse().map((e, i, arr) => {
+                  const siguiente = arr[i + 1];
+                  const rango = siguiente ? `${e.minimo}-${siguiente.minimo - 1}` : `${e.minimo}+`;
+                  return `<tr><td>${rango}</td><td>$${e.precio.toLocaleString("es-CO")}</td></tr>`;
+                }).join("")}
+              </table>
             </div>
           </div>
 
