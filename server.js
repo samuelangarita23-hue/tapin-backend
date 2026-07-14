@@ -4933,9 +4933,46 @@ app.get("/conoce", (req, res) => {
           .cta{display:block;text-align:center;background:${MARCA.oro};color:#fff;text-decoration:none;
                padding:16px;border-radius:12px;font-weight:700;margin-top:60px;}
           .nota{background:${MARCA.verdeClaro};border-radius:12px;padding:18px 20px;margin-top:40px;font-size:0.86rem;color:${MARCA.verdeOscuro};}
+
+          /* Landing visual: conserva el contenido de Tapin, con una presentación editorial. */
+          @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&display=swap');
+          :root{--ink:#062e1e;--forest:#0d432b;--cream:#fbf6e9;--paper:#fffefd;--muted:#50695b;--line:#dedccc;--gold:#e8a623;}
+          body{font-family:'DM Sans','Segoe UI',sans-serif;background:var(--cream);color:var(--ink);line-height:1.48;}
+          .site-header{height:74px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 max(24px,calc((100vw - 1120px)/2));background:rgba(251,246,233,.94);position:sticky;top:0;z-index:10;backdrop-filter:blur(10px);}
+          .site-brand{display:flex;align-items:center;}
+          .site-nav{display:flex;gap:34px;align-items:center;}
+          .site-nav a{font-size:.88rem;color:var(--ink);text-decoration:none;font-weight:500;}
+          .site-order{background:var(--forest)!important;color:#fff!important;padding:12px 20px;border-radius:999px;font-weight:700!important;}
+          .hero{background:var(--cream);color:var(--ink);padding:92px max(24px,calc((100vw - 1120px)/2)) 84px;text-align:left;min-height:590px;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.8fr);grid-template-rows:auto auto auto auto;column-gap:74px;align-items:center;position:relative;}
+          .hero>div:first-child{grid-column:1;grid-row:1;display:none;}
+          .hero h1{grid-column:1;grid-row:2;font-family:'Playfair Display',Georgia,serif;font-size:clamp(3rem,5.5vw,5.4rem);letter-spacing:-.065em;line-height:.96;max-width:580px;margin:0 0 24px;color:var(--ink);}
+          .hero h1::before{content:'HECHO EN COLOMBIA · SIN APPS · SIN FRICCIÓN';display:block;font-family:'DM Sans',sans-serif;color:#456c58;font-size:.72rem;letter-spacing:.08em;font-weight:700;margin-bottom:28px;}
+          .hero p{grid-column:1;grid-row:3;max-width:520px;color:var(--muted);font-size:1.06rem;line-height:1.65;margin:0;}
+          .tarjeta-wrap{grid-column:2;grid-row:1 / span 4;margin:0;height:420px;justify-content:center;align-self:center;position:relative;}
+          .tarjeta-wrap::before{content:'';position:absolute;width:335px;height:335px;border-radius:50%;background:radial-gradient(circle,#f3d576 0%,rgba(243,213,118,.2) 38%,transparent 72%);filter:blur(8px);}
+          .tarjeta-nfc{z-index:1;width:238px;height:310px;border-radius:30px;box-shadow:0 25px 48px rgba(4,41,25,.26),inset 0 0 0 8px #092e20;animation:flotar 5s ease-in-out infinite;padding:26px;}
+          .tarjeta-logo{top:30px;left:30px;}.tarjeta-nfc-icono{top:30px;right:28px;}.tarjeta-google{font-size:1.85rem}.tarjeta-estrellas{font-size:1.2rem;margin:11px 0}.tarjeta-texto{font-size:.78rem}.tarjeta-mano{width:31px;height:31px;}
+          .contenido{max-width:1120px;padding:96px 0 102px;}
+          .contenido>.paso{display:inline-flex;vertical-align:top;width:calc(33.333% - 18px);min-height:244px;background:var(--paper);border:1px solid #e1e2db;border-radius:24px;padding:34px 28px;margin:0 12px 24px 0;box-shadow:0 12px 22px rgba(9,49,30,.07);flex-direction:column;gap:20px;position:relative;overflow:hidden;}
+          .contenido>.paso:nth-of-type(4){width:calc(33.333% - 18px);}
+          .paso-num{background:#edf1ed;color:var(--forest);font-size:.76rem;width:45px;height:45px;}.paso h3{font-family:'Playfair Display',Georgia,serif;font-size:1.3rem;line-height:1.12;color:var(--ink);}.paso p{font-size:.92rem;color:var(--muted);line-height:1.55;}
+          .seccion-titulo{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2.3rem,4vw,3.7rem);line-height:1.02;letter-spacing:-.055em;text-align:left;margin:102px 0 32px;color:var(--ink);}
+          .planes{gap:24px;align-items:stretch;}.plan{border:1px solid #dde1db;border-radius:28px;padding:38px 40px;box-shadow:0 12px 24px rgba(9,49,30,.06);}.plan.pro{border:1px solid #dde1db;background:linear-gradient(135deg,#fff 40%,#f9f1dd);}.plan-badge{background:var(--forest);top:26px;right:28px;}.plan-nombre{color:#526f5e;}.plan-precio{font-family:'Playfair Display',Georgia,serif;color:var(--ink);font-size:2.8rem;letter-spacing:-.05em;}.plan li{border-color:#e9e9e2;padding:9px 0;}.plan-anual{background:#f4f6ef;border:2px solid var(--forest);color:var(--ink);}.plan-anual-etiqueta,.plan-anual-precio{color:var(--ink);}.plan-anual-precio span{color:var(--muted);}.plan-anual-badge{background:var(--gold);color:var(--ink);}
+          .precios-grid{gap:24px;}.precio-card{border-radius:22px;box-shadow:0 10px 22px rgba(9,49,30,.05);}.precio-card-titulo{background:var(--forest);padding:17px 22px;}.nota{background:#edf2ed;border-radius:20px;padding:24px 28px;color:var(--forest);line-height:1.6;}.cta{background:var(--forest);border-radius:999px;max-width:260px;margin:58px auto 0;padding:15px 22px;box-shadow:0 10px 22px rgba(9,67,43,.16);}
+          .site-footer{border-top:1px solid var(--line);padding:26px max(24px,calc((100vw - 1120px)/2));display:flex;justify-content:space-between;gap:20px;color:#486454;font-size:.84rem;}.site-footer a{color:#345c46;text-decoration:none;}
+          @media(max-width:760px){.site-header{height:64px}.site-nav a:not(.site-order){display:none}.site-order{padding:10px 15px}.hero{display:flex;flex-direction:column;padding:62px 24px 50px;min-height:auto}.hero h1{font-size:3.35rem}.hero p{font-size:1rem}.tarjeta-wrap{height:350px;width:100%;margin-top:34px}.tarjeta-nfc{transform:scale(.86)}.contenido{padding:64px 24px}.contenido>.paso,.contenido>.paso:nth-of-type(4){width:100%;min-height:0;margin-right:0}.seccion-titulo{margin-top:68px}.plan{padding:31px 26px}.site-footer{flex-direction:column;}.site-footer span:last-child{display:flex;gap:18px}.precios-grid{display:block}.precio-card{margin-bottom:20px}}
         </style>
       </head>
       <body>
+        <header class="site-header">
+          <a class="site-brand" href="/" aria-label="Tapin inicio">${logoSvg(MARCA.verdeOscuro, 25)}</a>
+          <nav class="site-nav" aria-label="Navegación principal">
+            <a href="#como-funciona">Cómo funciona</a>
+            <a href="#beneficios">Beneficios</a>
+            <a href="#precios">Precios</a>
+            <a class="site-order" href="/pedido">Pedir tarjeta</a>
+          </nav>
+        </header>
         <div class="hero">
           <div>${logoSvg("#FFFFFF", 34)}</div>
           <h1>Así funciona Tapin</h1>
@@ -4962,7 +4999,7 @@ app.get("/conoce", (req, res) => {
           </div>
         </div>
 
-        <div class="contenido">
+        <main class="contenido" id="como-funciona">
           <div class="paso">
             <div class="paso-num">1</div>
             <div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta, se abre una página simple donde el cliente califica su experiencia.</p></div>
@@ -4984,7 +5021,7 @@ app.get("/conoce", (req, res) => {
             <b>Consejo clave:</b> los datos de Tapin son tan buenos como la cantidad de gente que use la tarjeta. Si solo la usa 1 de cada 10 clientes, lo que ves en tu panel no representa lo que realmente pasa en tu negocio. Anímala con todos — en caja, en la mesa, al despedirte — para que tus estadísticas reflejen la realidad, no solo a los clientes más entusiastas.
           </div>
 
-          <div class="seccion-titulo">Qué incluye cada plan</div>
+          <div class="seccion-titulo" id="beneficios">Qué incluye cada plan</div>
           <div class="planes">
             <div class="plan">
               <div class="plan-nombre">Pago único</div>
@@ -5022,7 +5059,7 @@ app.get("/conoce", (req, res) => {
             </div>
           </div>
 
-          <div class="seccion-titulo">Precios por cantidad</div>
+          <div class="seccion-titulo" id="precios">Precios por cantidad</div>
           <div class="precios-grid">
             <div class="precio-card">
               <div class="precio-card-titulo">Compra de tarjetas</div>
@@ -5053,7 +5090,11 @@ app.get("/conoce", (req, res) => {
           </div>
 
           <a class="cta" href="/pedido">Pedir mi tarjeta Tapin →</a>
-        </div>
+        </main>
+        <footer class="site-footer">
+          <span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span>
+          <span><a href="mailto:hola@tapincol.com">hola@tapincol.com</a><a href="https://wa.me/">WhatsApp</a></span>
+        </footer>
       </body>
     </html>
   `);
