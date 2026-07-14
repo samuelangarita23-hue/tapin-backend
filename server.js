@@ -18,11 +18,6 @@ app.set("trust proxy", 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json()); // necesario para recibir el webhook de Wompi (manda JSON)
 
-// Foto real de la tarjeta usada en la landing pública.
-app.get("/assets/tarjeta-tapin-real.png", (req, res) => {
-  res.sendFile(path.join(__dirname, "tarjeta-tapin-real.png"));
-});
-
 // tapin.page se redirige automáticamente a tapincol.com (el dominio nuevo y
 // principal de aquí en adelante) — así las tarjetas físicas grabadas con
 // tapin.page siguen funcionando para siempre, y todo el tráfico nuevo, SEO
@@ -2289,8 +2284,6 @@ app.get("/stats", (req, res) => {
           .topbar-nav{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:flex-end;}
           .topbar-nav a{color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;white-space:nowrap;}
           .topbar-nav a:hover{color:#fff;text-decoration:underline;}
-          /* Rediseño del panel administrador */
-          .content{max-width:1080px;padding-top:60px;}.seccion{margin-bottom:68px;}.seccion-header{text-align:left;margin-bottom:30px;}.seccion-header h2{font-family:Georgia,serif;font-size:2.4rem;letter-spacing:-.055em;color:${MARCA.verdeOscuro};}.seccion-header p{font-size:1rem;}.resumen-grid{gap:18px;}.resumen-box{position:relative;overflow:hidden;border-radius:22px;padding:29px 18px;text-align:left;box-shadow:0 15px 30px rgba(9,49,30,.08);}.resumen-box::after{content:'';position:absolute;right:-22px;bottom:-38px;width:100px;height:100px;border-radius:50%;background:#e6f1e7;}.resumen-num{font-family:Georgia,serif;font-size:2.8rem;position:relative;z-index:1;}.resumen-lbl{position:relative;z-index:1;}.chart-card{border-radius:24px;padding:30px;box-shadow:0 15px 30px rgba(9,49,30,.07);}.chart-card-titulo{text-align:left;font-size:.9rem;}.card{border-radius:24px;padding:30px;box-shadow:0 14px 28px rgba(9,49,30,.08);transition:transform .22s ease,box-shadow .22s ease;}.card:hover{transform:translateY(-5px);box-shadow:0 22px 40px rgba(9,49,30,.14);}.card-nombre{font-family:Georgia,serif;font-size:1.55rem;color:${MARCA.verdeOscuro};}.card-total{font-family:Georgia,serif;font-size:2.3rem;}.metric{border-radius:16px;background:linear-gradient(135deg,#e9f3eb,#f8f7ec);}.card-actions a{padding:9px 14px;}.pais-header{border-bottom-width:1px;padding-bottom:15px;}.pais-titulo{font-family:Georgia,serif;font-size:1.75rem;}.btn-pais{border-radius:999px;padding:11px 19px;box-shadow:0 5px 12px rgba(9,49,30,.06);}
           @media (max-width:640px){
             .topbar{flex-direction:column;align-items:flex-start;gap:10px;padding:16px 20px;}
             .topbar-nav{justify-content:flex-start;width:100%;}
@@ -2859,8 +2852,6 @@ app.get("/mi-panel/:slug", (req, res) => {
           .btn-reporte-pdf b{font-size:0.92rem;}
           .btn-reporte-pdf span{font-size:0.76rem;color:#CFE3D6;display:block;margin-top:2px;}
           .btn-reporte-pdf .flecha{font-size:1.3rem;flex-shrink:0;}
-          /* Panel de negocio: mismo lenguaje visual de Conoce Tapin */
-          .content{max-width:880px;padding-top:48px;}.seccion{margin-bottom:42px;}.seccion:first-child{padding:34px 30px;background:linear-gradient(135deg,#fffefa,#f0f6ee);border:1px solid #dfe9df;border-radius:26px;box-shadow:0 18px 36px rgba(9,49,30,.08);}.titulo-pagina{font-family:Georgia,serif;font-size:clamp(2.2rem,4.5vw,3.4rem);letter-spacing:-.06em;}.seccion-header h2{font-family:Georgia,serif;font-size:1.9rem;letter-spacing:-.045em;color:${MARCA.verdeOscuro};}.resumen-grid{gap:13px;}.resumen-box{border-radius:19px;padding:22px 10px;box-shadow:0 12px 24px rgba(9,49,30,.07);transition:transform .2s ease,box-shadow .2s ease;}.resumen-box:hover{transform:translateY(-4px);box-shadow:0 18px 30px rgba(9,49,30,.12);}.resumen-num{font-family:Georgia,serif;font-size:2.1rem;}.chart-card{border-radius:20px;padding:23px;box-shadow:0 12px 25px rgba(9,49,30,.07);}.chart-card-titulo{text-align:left;font-weight:700;color:${MARCA.verdeOscuro};}.reco{border-radius:14px;padding:16px 18px;box-shadow:0 7px 16px rgba(9,49,30,.06);}.btn-herramienta{border-radius:15px;padding:16px 14px;transition:transform .2s ease,box-shadow .2s ease;}.btn-herramienta:hover{transform:translateY(-4px);box-shadow:0 14px 25px rgba(9,49,30,.12);}.btn-reporte-pdf{border-radius:20px;padding:19px 22px;box-shadow:0 14px 26px rgba(9,49,30,.16);}@media(max-width:640px){.seccion:first-child{padding:28px 19px}.resumen-num{font-size:1.7rem}}
         </style>
       </head>
       <body>
@@ -6414,122 +6405,32 @@ app.get("/", (req, res) => {
         <meta name="twitter:title" content="Tapin — Convierte cada visita en una reseña de Google">
         <meta name="twitter:description" content="Tarjeta NFC para negocios: un toque y tus clientes te dejan reseña en Google.">
         <link rel="canonical" href="https://tapincol.com">
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&display=swap" rel="stylesheet">
         <style>
           *{box-sizing:border-box;}
-          html, body{height:100%;}
-          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;margin:0;}
+          :root{--ink:#062e1e;--forest:#0d432b;--forest2:#146542;--cream:#fbf6e9;--paper:#fffefd;--muted:#50695b;--line:#dedccc;--gold:#e8a623;--gold2:#f3d576;}
+          body{font-family:'DM Sans','Segoe UI',sans-serif;background:var(--cream);color:var(--ink);margin:0;line-height:1.5;}
+          a{color:inherit;}
 
-          .hero{display:flex;min-height:100vh;}
-          .hero-izq{flex:1;background:
-                       radial-gradient(circle at 15% 85%, #1A4A36 0%, transparent 45%),
-                       radial-gradient(circle at 90% 15%, #0D2E20 0%, transparent 50%),
-                       linear-gradient(160deg, #16473368 0%, ${MARCA.verdeOscuro} 55%, #0A2A1D 100%);
-                     color:#fff;padding:64px 56px;
-                     display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden;}
-          .hero-izq::before{content:"";position:absolute;top:-30%;right:-30%;width:70%;height:70%;
-                             background:radial-gradient(circle, ${MARCA.oro}22 0%, transparent 70%);}
-          .hero-izq::after{content:"";position:absolute;inset:0;opacity:0.5;pointer-events:none;
-                            background-image:radial-gradient(rgba(255,255,255,0.09) 1px, transparent 1px);
-                            background-size:22px 22px;}
-          .forma-organica{position:absolute;bottom:-18%;left:-12%;width:60%;height:60%;
-                           background:${MARCA.oro};opacity:0.08;border-radius:42% 58% 65% 35% / 45% 40% 60% 55%;
-                           filter:blur(2px);}
-          .forma-organica-2{position:absolute;top:8%;left:52%;width:34%;height:34%;
-                             background:#FFFFFF;opacity:0.04;border-radius:60% 40% 55% 45% / 50% 60% 40% 50%;}
-          .logo-hero{font-size:4.2rem;font-weight:800;letter-spacing:-0.03em;margin:0 0 18px;position:relative;z-index:1;}
-          .tagline{font-size:1.3rem;font-weight:400;color:#E4EEE8;line-height:1.5;margin:0 0 44px;max-width:420px;position:relative;z-index:1;}
-          .botones{display:flex;flex-direction:column;gap:12px;max-width:360px;position:relative;z-index:1;}
-          .boton-hero{display:block;background:rgba(255,255,255,0.97);border-radius:14px;padding:18px 22px;
-                       text-decoration:none;transition:transform 0.15s;box-shadow:0 8px 24px rgba(0,0,0,0.2);}
-          .boton-hero:active{transform:scale(0.98);}
-          .boton-hero-titulo{font-size:1rem;font-weight:700;color:${MARCA.texto};}
-          .boton-hero-desc{font-size:0.8rem;color:${MARCA.textoSuave};margin-top:2px;}
-          .boton-hero.oro{background:${MARCA.oro};}
-          .boton-hero.oro .boton-hero-titulo, .boton-hero.oro .boton-hero-desc{color:#fff;}
-          .admin-link{display:inline-block;margin-top:36px;color:rgba(255,255,255,0.35);font-size:0.75rem;
-                      text-decoration:none;position:relative;z-index:1;}
-          .admin-link:hover{color:rgba(255,255,255,0.6);}
+          .site-header{height:76px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 max(24px,calc((100vw - 1120px)/2));background:rgba(251,246,233,.94);position:sticky;top:0;z-index:10;backdrop-filter:blur(10px);}
+          .site-brand{display:flex;align-items:center;}
+          .site-nav{display:flex;gap:32px;align-items:center;}
+          .site-nav a{font-size:.88rem;color:var(--ink);text-decoration:none;font-weight:500;}
+          .site-order{background:var(--forest);color:#fff!important;padding:12px 20px;border-radius:999px;font-weight:700!important;}
 
-          .franja-features{display:flex;gap:36px;margin-top:56px;padding-top:32px;
-                            border-top:1px solid rgba(255,255,255,0.15);position:relative;z-index:1;flex-wrap:wrap;}
-          .feature{display:flex;align-items:center;gap:12px;}
-          .feature-icono{width:38px;height:38px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.4);
-                          display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-          .feature-titulo{font-size:0.85rem;font-weight:700;}
-          .feature-desc{font-size:0.72rem;color:#B9CCC2;}
+          .hero{background:linear-gradient(155deg,var(--forest2) 0%,var(--forest) 45%,#082c1c 100%);color:#fff;padding:80px 24px 60px;text-align:center;position:relative;overflow:hidden;}
+          .hero::before{content:"";position:absolute;top:-20%;left:8%;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(232,166,35,.35),transparent 70%);}
+          .hero::after{content:"";position:absolute;bottom:-25%;right:5%;width:380px;height:380px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.12),transparent 70%);}
+          .hero-kicker{font-size:.72rem;font-weight:800;letter-spacing:.12em;color:var(--gold2);position:relative;z-index:1;}
+          .hero h1{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2.4rem,5vw,4rem);letter-spacing:-.03em;margin:16px auto 14px;max-width:680px;position:relative;z-index:1;line-height:1.05;}
+          .hero p{color:#CFE3D8;font-size:1.08rem;max-width:520px;margin:0 auto;position:relative;z-index:1;}
+          .hero-cta-row{display:flex;gap:14px;justify-content:center;margin-top:30px;position:relative;z-index:1;flex-wrap:wrap;}
+          .hero-cta-row a{border-radius:999px;padding:15px 26px;text-decoration:none;font-weight:700;font-size:.92rem;}
+          .hero-cta-main{background:var(--gold);color:var(--ink);box-shadow:0 14px 26px rgba(232,166,35,.3);}
+          .hero-cta-alt{border:1.5px solid rgba(255,255,255,.5);color:#fff;}
 
-          .enlaces-generales{display:flex;gap:10px;max-width:460px;position:relative;z-index:1;flex-wrap:wrap;}
-          .enlace-general{color:#fff;font-size:0.85rem;font-weight:700;text-decoration:none;
-                           background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.4);
-                           border-radius:10px;padding:11px 18px;}
-          .enlace-general:hover{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.6);}
-
-          .acceso-titulo-seccion{font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
-                                  color:rgba(255,255,255,0.5);margin:34px 0 12px;position:relative;z-index:1;}
-          .acceso-split{display:flex;gap:16px;max-width:560px;position:relative;z-index:1;}
-          .acceso-card{flex:1;display:block;text-decoration:none;border-radius:16px;padding:22px 20px;
-                       transition:transform 0.15s;box-shadow:0 10px 30px rgba(0,0,0,0.22);}
-          .acceso-card:active{transform:scale(0.98);}
-          .acceso-card.cliente{background:rgba(255,255,255,0.97);}
-          .acceso-card.negocio{background:${MARCA.oro};}
-          .acceso-eyebrow{font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;
-                           margin-bottom:10px;}
-          .acceso-card.cliente .acceso-eyebrow{color:${MARCA.verde};}
-          .acceso-card.negocio .acceso-eyebrow{color:rgba(255,255,255,0.85);}
-          .acceso-icono{font-size:1.6rem;margin-bottom:6px;}
-          .acceso-titulo{font-size:1.05rem;font-weight:800;color:${MARCA.texto};}
-          .acceso-card.negocio .acceso-titulo{color:#fff;}
-          .acceso-desc{font-size:0.78rem;color:${MARCA.textoSuave};margin:3px 0 14px;}
-          .acceso-card.negocio .acceso-desc{color:rgba(255,255,255,0.85);}
-          .acceso-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
-          .acceso-lista li{font-size:0.76rem;color:${MARCA.texto};display:flex;align-items:center;gap:6px;}
-          .acceso-card.negocio .acceso-lista li{color:#fff;}
-          @media (max-width: 480px){
-            .acceso-split{flex-direction:column;}
-          }
-
-          .hero-der{flex:1;background:#EEF3EC;position:relative;display:flex;align-items:center;justify-content:center;
-                    padding:40px;overflow:hidden;}
-          .hero-der::before{content:"";position:absolute;top:50%;left:50%;width:520px;height:520px;
-                    transform:translate(-50%,-50%);border-radius:50%;
-                    background:radial-gradient(circle, rgba(201,162,75,0.14), rgba(11,61,44,0.08) 55%, transparent 75%);
-                    pointer-events:none;z-index:0;}
-          #mapa-fondo{position:absolute;top:8%;left:10%;width:80%;height:84%;border-radius:24px;
-                      box-shadow:0 20px 60px rgba(0,0,0,0.18);filter:saturate(0.7) brightness(1.02);}
-          .mock-buscar{position:absolute;top:10%;left:13%;width:74%;background:#fff;border-radius:100px;
-                       padding:14px 20px;font-size:0.85rem;color:#9aa39d;box-shadow:0 6px 18px rgba(0,0,0,0.1);
-                       display:flex;justify-content:space-between;align-items:center;z-index:2;}
-          .mock-card{position:absolute;bottom:8%;right:6%;width:340px;background:#fff;border-radius:18px;
-                     box-shadow:0 20px 50px rgba(0,0,0,0.22);overflow:hidden;z-index:3;}
-          .mock-foto{height:110px;background:linear-gradient(135deg, ${MARCA.verde} 0%, ${MARCA.verdeOscuro} 100%);
-                     position:relative;}
-          .mock-foto::after{content:"";position:absolute;inset:0;
-                             background:repeating-linear-gradient(45deg, rgba(255,255,255,0.06) 0 2px, transparent 2px 14px);}
-          .mock-info{padding:16px 18px 12px;}
-          .mock-nombre{font-weight:700;font-size:1rem;color:${MARCA.texto};}
-          .mock-cat{font-size:0.78rem;color:${MARCA.textoSuave};margin:2px 0 6px;}
-          .mock-estrellas{color:${MARCA.oro};font-size:0.85rem;}
-          .mock-num{color:${MARCA.textoSuave};font-size:0.78rem;margin-left:4px;}
-          .mock-resenas{padding:12px 18px 18px;border-top:1px solid ${MARCA.borde};}
-          .mock-resenas-titulo{font-size:0.78rem;font-weight:700;color:${MARCA.texto};margin-bottom:10px;}
-          .mock-resena{display:flex;gap:10px;margin-bottom:10px;}
-          .mock-avatar{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;
-                       justify-content:center;color:#fff;font-size:0.7rem;font-weight:700;}
-          .mock-resena-cuerpo{flex:1;}
-          .mock-resena-linea1{display:flex;justify-content:space-between;font-size:0.76rem;}
-          .mock-resena-nombre{font-weight:700;color:${MARCA.texto};}
-          .mock-resena-fecha{color:${MARCA.textoSuave};}
-          .mock-resena-texto{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:1px;}
-
-          .tarjeta-flotante{position:absolute;bottom:6%;left:4%;z-index:4;transform:scale(0.68);transform-origin:bottom left;}
-          .tarjeta-nfc{width:210px;height:210px;border-radius:22px;position:relative;
-                       background:#FFFFFF;
-                       box-shadow:0 30px 60px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.04);
-                       animation:flotar 4.5s ease-in-out infinite;
-                       display:flex;flex-direction:column;align-items:center;justify-content:center;
-                       padding:20px;}
+          .tarjeta-wrap{margin:52px auto 8px;height:230px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;}
+          .tarjeta-nfc{width:210px;height:210px;border-radius:22px;position:relative;background:#FFFFFF;box-shadow:0 30px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);animation:flotar 4.5s ease-in-out infinite;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;}
           .tarjeta-logo{position:absolute;top:18px;left:22px;font-size:1.05rem;font-weight:800;letter-spacing:-0.02em;color:${MARCA.texto};}
           .tarjeta-nfc-icono{position:absolute;top:18px;right:20px;width:22px;height:22px;opacity:0.7;}
           .tarjeta-google{font-size:1.6rem;font-weight:700;letter-spacing:-0.01em;margin-top:6px;}
@@ -6542,130 +6443,191 @@ app.get("/", (req, res) => {
           .tarjeta-estrellas{color:${MARCA.oro};font-size:1.05rem;letter-spacing:2px;margin:6px 0 8px;}
           .tarjeta-texto{font-size:0.68rem;color:${MARCA.textoSuave};text-align:center;line-height:1.3;margin-bottom:10px;}
           .tarjeta-mano{width:26px;height:26px;opacity:0.75;}
-          @keyframes flotar {
-            0%   { transform: translateY(0) rotate(-4deg); }
-            50%  { transform: translateY(-16px) rotate(2deg); }
-            100% { transform: translateY(0) rotate(-4deg); }
-          }
+          @keyframes flotar{0%{transform:translateY(0) rotate(-4deg);}50%{transform:translateY(-16px) rotate(2deg);}100%{transform:translateY(0) rotate(-4deg);}}
+          @media (prefers-reduced-motion: reduce){.tarjeta-nfc{animation:none;}}
 
-          /* Teléfono que se acerca y toca la tarjeta — reemplaza el ícono
-             estático de mano por una escena real, con onda de contacto NFC.
-             Posicionado pegado a la tarjeta (no con % grandes) para no
-             recortarse contra el overflow:hidden del contenedor padre. */
-          .escena-tap{position:absolute;bottom:-18px;right:-38px;width:120px;height:170px;z-index:5;pointer-events:none;}
-          .telefono{position:absolute;bottom:0;right:20px;width:68px;height:138px;border-radius:16px;
-                    background:linear-gradient(155deg,#1c2620,#0B3D2C);
-                    box-shadow:0 16px 32px rgba(0,0,0,0.35), inset 0 0 0 3px rgba(255,255,255,0.06);
-                    animation:tocar 4.5s ease-in-out infinite;}
-          .telefono::before{content:"";position:absolute;inset:6px;border-radius:10px;
-                    background:linear-gradient(160deg, rgba(231,240,234,0.16), rgba(231,240,234,0.03));}
-          .telefono::after{content:"";position:absolute;top:11px;left:50%;transform:translateX(-50%);
-                    width:16px;height:3px;border-radius:2px;background:rgba(255,255,255,0.25);}
-          .onda-tap{position:absolute;bottom:20px;right:52px;width:12px;height:12px;border-radius:50%;
-                    background:${MARCA.oro};opacity:0;animation:onda 4.5s ease-in-out infinite;}
-          .onda-tap.d2{animation-delay:0.25s;}
-          @keyframes tocar {
-            0%, 20%   { transform: translate(34px, 8px) rotate(14deg); }
-            42%, 54%  { transform: translate(0, 0) rotate(-2deg); }
-            76%, 100% { transform: translate(34px, 8px) rotate(14deg); }
-          }
-          @keyframes onda {
-            0%, 40%  { opacity: 0; transform: scale(0.4); }
-            48%      { opacity: 0.9; transform: scale(0.6); }
-            68%      { opacity: 0; transform: scale(2.4); }
-            100%     { opacity: 0; transform: scale(0.4); }
-          }
-          @media (prefers-reduced-motion: reduce) {
-            .tarjeta-nfc{ animation:none; }
-            .telefono, .onda-tap{ animation:none; opacity:0; }
-          }
+          .contenido{max-width:1080px;margin:0 auto;padding:90px 24px;}
+          .stats-strip{display:grid;grid-template-columns:repeat(3,1fr);background:var(--paper);border:1px solid var(--line);border-radius:24px;box-shadow:0 12px 26px rgba(9,49,30,.06);margin-bottom:110px;}
+          .stats-strip div{text-align:center;padding:27px 16px;border-right:1px solid var(--line);}
+          .stats-strip div:last-child{border-right:none;}
+          .stats-strip strong{display:block;font-size:2rem;font-family:'Playfair Display',Georgia,serif;color:var(--ink);}
+          .stats-strip span{font-size:.82rem;color:var(--muted);}
 
-          @media (max-width: 980px){
-            .hero{flex-direction:column;}
-            .hero-der{min-height:480px;}
-            .mock-card{width:82%;right:9%;}
-            .logo-hero{font-size:3rem;}
+          .seccion-titulo{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2.2rem,4vw,3.4rem);line-height:1.03;letter-spacing:-.05em;text-align:center;margin:0 0 16px;color:var(--ink);}
+          .seccion-sub{text-align:center;color:var(--muted);max-width:560px;margin:0 auto 50px;font-size:1rem;}
+
+          .pasos{display:flex;flex-wrap:wrap;gap:20px;margin-bottom:110px;}
+          .paso{flex:1;min-width:230px;background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:30px 26px;box-shadow:0 10px 20px rgba(9,49,30,.05);}
+          .paso-num{width:38px;height:38px;border-radius:50%;background:#edf1ed;color:var(--forest);font-size:.8rem;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:18px;}
+          .paso h3{font-family:'Playfair Display',Georgia,serif;font-size:1.25rem;margin:0 0 8px;color:var(--ink);}
+          .paso p{font-size:.88rem;color:var(--muted);line-height:1.55;margin:0;}
+
+          .accesos{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-bottom:110px;}
+          .acceso{border-radius:24px;padding:32px 28px;text-decoration:none;color:var(--ink);position:relative;overflow:hidden;box-shadow:0 14px 28px rgba(9,49,30,.08);transition:transform .2s ease,box-shadow .2s ease;min-height:210px;display:flex;flex-direction:column;}
+          .acceso:hover{transform:translateY(-6px);box-shadow:0 22px 40px rgba(9,49,30,.16);}
+          .acceso-1{background:linear-gradient(135deg,#0a3e29,#146542);color:#fff;}
+          .acceso-2{background:linear-gradient(145deg,#fffef8,#fbf1d8);border:2px solid var(--gold);}
+          .acceso-3{background:var(--paper);border:1px solid var(--line);}
+          .acceso-4{background:linear-gradient(135deg,#f3d576,#e8a623);color:var(--ink);}
+          .acceso-badge{position:absolute;right:18px;top:18px;font-size:.62rem;font-weight:900;letter-spacing:.08em;padding:6px 10px;border-radius:999px;}
+          .acceso-1 .acceso-badge{background:var(--gold);color:var(--ink);}
+          .acceso-2 .acceso-badge{background:var(--forest);color:#fff;}
+          .acceso-icono{font-size:1.4rem;margin-bottom:20px;}
+          .acceso h3{font-family:'Playfair Display',Georgia,serif;font-size:1.5rem;margin:0 0 8px;}
+          .acceso p{font-size:.86rem;line-height:1.5;margin:0;opacity:.85;}
+          .acceso-flecha{margin-top:auto;padding-top:20px;font-weight:800;font-size:.88rem;}
+
+          .planes{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:44px;}
+          .plan{flex:1;min-width:280px;border:1px solid var(--line);border-radius:28px;padding:38px 40px;box-shadow:0 12px 24px rgba(9,49,30,.06);background:var(--paper);position:relative;}
+          .plan.pro{background:linear-gradient(135deg,#fff 40%,#f9f1dd);border:2px solid var(--gold);}
+          .plan-badge{position:absolute;top:26px;right:28px;background:var(--forest);color:#fff;font-size:.66rem;font-weight:800;padding:6px 12px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em;}
+          .plan-nombre{font-size:.8rem;font-weight:700;color:#526f5e;text-transform:uppercase;letter-spacing:.03em;}
+          .plan-precio{font-family:'Playfair Display',Georgia,serif;color:var(--ink);font-size:2.8rem;letter-spacing:-.05em;margin-top:6px;}
+          .plan-precio span{font-family:'DM Sans',sans-serif;font-size:.95rem;font-weight:500;color:var(--muted);}
+          .plan-anual{background:#f4f6ef;border:2px solid var(--forest);border-radius:12px;padding:14px 18px;margin:16px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+          .plan-anual-etiqueta{font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);}
+          .plan-anual-precio{font-weight:800;color:var(--ink);}
+          .plan-anual-badge{background:var(--gold);color:var(--ink);font-size:.68rem;font-weight:800;padding:5px 10px;border-radius:999px;white-space:nowrap;}
+          .plan ul{list-style:none;margin:18px 0 0;padding:0;}
+          .plan li{padding:9px 0;border-top:1px solid #e9e9e2;font-size:.88rem;display:flex;gap:8px;}
+          .plan li:first-child{border-top:none;}
+          .check{color:var(--forest);font-weight:800;}
+
+          .precios-grid{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:60px;}
+          .precio-card{flex:1;min-width:280px;background:var(--paper);border-radius:22px;border:1px solid var(--line);overflow:hidden;box-shadow:0 10px 22px rgba(9,49,30,.05);}
+          .precio-card-titulo{background:var(--forest);color:#fff;padding:17px 22px;font-size:.76rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+          .tabla-precios{width:100%;border-collapse:collapse;font-size:.88rem;}
+          .tabla-precios th{text-align:left;padding:10px 22px;font-size:.68rem;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:600;border-bottom:1px solid #ece9de;}
+          .tabla-precios td{padding:12px 22px;border-bottom:1px solid #ece9de;}
+          .tabla-precios tr:last-child td{border-bottom:none;font-weight:800;color:var(--forest);background:#eef4ea;}
+
+          .nota{background:#edf2ed;border-radius:20px;padding:26px 30px;color:var(--forest);line-height:1.6;font-size:.92rem;margin-bottom:70px;}
+
+          .contacto{text-align:center;padding:20px 0 40px;}
+          .cta{display:inline-block;background:var(--forest);color:#fff;text-decoration:none;padding:16px 30px;border-radius:999px;font-weight:700;box-shadow:0 12px 22px rgba(9,67,43,.18);}
+
+          .site-footer{border-top:1px solid var(--line);padding:26px max(24px,calc((100vw - 1120px)/2));display:flex;justify-content:space-between;gap:20px;color:#486454;font-size:.84rem;}
+          .site-footer a{color:#345c46;text-decoration:none;margin-left:16px;}
+
+          @media(max-width:760px){
+            .site-header{height:64px;}
+            .site-nav a:not(.site-order){display:none;}
+            .site-order{padding:10px 15px;}
+            .hero h1{font-size:2.4rem;}
+            .contenido{padding:60px 20px;}
+            .stats-strip{grid-template-columns:1fr;}
+            .stats-strip div{border-right:none;border-bottom:1px solid var(--line);}
+            .stats-strip div:last-child{border-bottom:none;}
+            .accesos{grid-template-columns:1fr;}
+            .planes,.precios-grid{flex-direction:column;}
+            .site-footer{flex-direction:column;}
+            .site-footer span:last-child{display:flex;gap:16px;margin-top:6px;}
           }
-          @media (max-width: 560px){
-            .hero-izq{padding:44px 26px;}
-            .franja-features{flex-direction:column;gap:16px;}
-            .mock-card{width:88%;right:6%;bottom:5%;}
-            .tarjeta-flotante{transform:scale(0.5);bottom:auto;top:5%;}
-          }
-          /* Rediseño principal: presentación clara de producto y mapa */
-          body{background:#f8f4e9;}.hero{min-height:100vh;padding:20px;gap:20px;background:#f8f4e9;}.hero-izq{border-radius:30px;flex:0 0 47%;padding:60px clamp(30px,5vw,84px);background:radial-gradient(circle at 18% 10%,rgba(116,180,137,.4),transparent 26%),linear-gradient(145deg,#052d1e,#0a4c30 62%,#062f20);box-shadow:0 20px 44px rgba(4,41,25,.16);}.logo-hero{font-family:Georgia,serif;font-size:clamp(3.6rem,5.5vw,6rem);letter-spacing:-.08em;margin-bottom:24px;}.tagline{font-size:1.28rem;line-height:1.62;max-width:440px;margin-bottom:22px;}.botones{flex-direction:row;max-width:none;gap:12px;}.boton-hero{flex:1;border-radius:16px;padding:18px 19px;box-shadow:0 11px 22px rgba(0,0,0,.14);transition:transform .22s ease,box-shadow .22s ease;}.boton-hero:hover{transform:translateY(-5px);box-shadow:0 20px 32px rgba(0,0,0,.22);}.acceso-titulo-seccion{margin-top:32px;}.acceso-split{max-width:none;gap:12px;}.acceso-card{border-radius:20px;padding:21px 20px;box-shadow:0 12px 22px rgba(0,0,0,.12);transition:transform .22s ease,box-shadow .22s ease;}.acceso-card:hover{transform:translateY(-5px);box-shadow:0 19px 32px rgba(0,0,0,.2);}.franja-features{gap:18px;margin-top:38px;padding-top:24px;}.feature{flex:1;}.hero-der{border-radius:30px;overflow:hidden;background:radial-gradient(circle at 80% 10%,#fff8df,transparent 38%),#eef4ec;}.mock-card{border-radius:24px;box-shadow:0 24px 42px rgba(4,41,25,.22);}.mock-buscar{top:6%;box-shadow:0 12px 24px rgba(4,41,25,.16);}.tarjeta-flotante{filter:drop-shadow(0 20px 18px rgba(4,41,25,.27));}
-          .home-tap-scene{height:214px;position:relative;margin:0 0 14px;max-width:430px;}.home-nfc-card{position:absolute;left:14px;bottom:8px;width:155px;height:155px;border-radius:22px;background:#fffdf4;box-shadow:0 18px 30px rgba(0,0,0,.26);color:#123c2c;padding:20px;transform:rotate(-8deg);}.home-card-logo{font-weight:800;font-size:1.05rem;}.home-card-google{font-size:1.42rem;font-weight:800;margin-top:28px;letter-spacing:-.08em;}.home-card-stars{color:#e6a322;font-size:.94rem;letter-spacing:2px;margin-top:5px;}.home-card-copy{font-size:.6rem;color:#62766b;margin-top:7px;}.home-phone{position:absolute;right:35px;top:0;width:135px;height:205px;border:7px solid #051f16;border-radius:25px;background:#071f16;padding:5px;box-shadow:0 22px 30px rgba(0,0,0,.32);transform:rotate(7deg);animation:homeTap 4.2s ease-in-out infinite;}.home-phone:before{content:'';position:absolute;z-index:3;width:50px;height:13px;background:#051f16;border-radius:20px;top:9px;left:50%;transform:translateX(-50%);}.home-phone-screen{height:100%;border-radius:16px;background:linear-gradient(150deg,#fffef6,#f6e7bb);display:flex;align-items:center;justify-content:center;flex-direction:column;color:#23523b;text-align:center;}.home-phone-brand{position:absolute;top:25px;left:14px;font-size:.55rem;font-weight:800;}.home-phone-google{font-size:1.1rem;font-weight:800;letter-spacing:-.08em;}.home-phone-review{margin-top:12px;background:#fff;border-radius:12px;padding:11px 8px;font-size:.56rem;box-shadow:0 7px 13px rgba(4,41,25,.11);}.home-wave{position:absolute;right:142px;top:84px;width:24px;height:24px;border:2px solid #e6ae31;border-radius:50%;animation:homeWave 2s ease-out infinite;}.home-wave:after{content:'';position:absolute;inset:-12px;border:2px solid #e6ae31;border-radius:50%;animation:homeWave 2s .6s ease-out infinite;}@keyframes homeTap{0%,100%{transform:translate(26px,-20px) rotate(10deg)}48%,62%{transform:translate(-2px,17px) rotate(3deg)}}@keyframes homeWave{0%{opacity:0;transform:scale(.4)}40%{opacity:1}100%{opacity:0;transform:scale(1.55)}}
-          /* Escena NFC grande: tarjeta premium y teléfono en aproximación */
-          .home-tap-scene{height:355px;max-width:540px;margin:4px 0 20px;}.home-tap-scene:before{content:'';position:absolute;width:330px;height:330px;border-radius:50%;right:38px;top:15px;background:radial-gradient(circle,rgba(237,190,75,.34),rgba(237,190,75,.08) 45%,transparent 70%);}.home-nfc-card{z-index:2;left:18px;bottom:22px;width:236px;height:236px;border-radius:31px;padding:28px;background:linear-gradient(145deg,#fffef9,#f5edda);box-shadow:0 31px 52px rgba(0,0,0,.35),inset 0 0 0 1px rgba(8,51,33,.12);transform:rotate(-8deg);}.home-nfc-card:before{content:'';position:absolute;right:25px;top:27px;width:24px;height:24px;border:2px solid #587263;border-left-color:transparent;border-bottom-color:transparent;border-radius:50%;transform:rotate(18deg);}.home-nfc-card:after{content:'';position:absolute;left:29px;bottom:27px;width:39px;height:29px;border-radius:6px;background:linear-gradient(135deg,#d7ae43,#f1d47f);}.home-card-logo{font-size:1.38rem;letter-spacing:-.05em;color:#0a3b27;}.home-card-google{font-size:2rem;margin-top:65px;color:#334e42;}.home-card-stars{font-size:1.23rem;margin-top:9px;}.home-card-copy{font-size:.75rem;line-height:1.5;margin-top:10px;}.home-phone{z-index:4;right:20px;top:3px;width:205px;height:324px;border:9px solid #041f15;border-radius:39px;padding:7px;box-shadow:0 35px 50px rgba(0,0,0,.38),0 0 0 2px rgba(255,255,255,.12) inset;}.home-phone:before{width:76px;height:19px;top:13px;}.home-phone-screen{border-radius:25px;background:linear-gradient(150deg,#fffdf3,#f5e9c4);}.home-phone-screen:before{content:'';position:absolute;width:185px;height:185px;border-radius:50%;background:radial-gradient(circle,rgba(225,166,38,.18),transparent 68%);top:45px;left:5px;}.home-phone-brand{top:38px;left:20px;font-size:.72rem;}.home-phone-google{z-index:1;font-size:1.65rem;}.home-phone-review{z-index:1;margin-top:18px;border-radius:18px;padding:18px 12px;font-size:.72rem;line-height:1.5;box-shadow:0 10px 22px rgba(4,41,25,.14);}.home-wave{z-index:5;right:199px;top:145px;width:30px;height:30px;border-width:3px;}.home-wave:after{inset:-17px;border-width:3px;}@keyframes homeTap{0%,100%{transform:translate(42px,-38px) rotate(10deg)}48%,62%{transform:translate(-4px,24px) rotate(3deg)}}
-          /* Sistema visual compartido: crema, verde profundo y oro Tapin */
-          body,.hero{background:#fbf6e9;}.hero{padding:0;gap:0;min-height:100vh;}.hero-izq{flex:0 0 52%;border-radius:0;padding:90px clamp(40px,8vw,150px);background:#fbf6e9;box-shadow:none;color:#082f20;}.forma-organica,.forma-organica-2{display:none;}.logo-hero{filter:brightness(0) saturate(100%) invert(14%) sepia(32%) saturate(1137%) hue-rotate(105deg) brightness(86%) contrast(97%);font-size:3.3rem;margin-bottom:58px;}.tagline{font-family:Georgia,serif;font-size:clamp(3.4rem,6vw,6.6rem);line-height:.92;letter-spacing:-.075em;max-width:650px;color:#062e1e;margin:0 0 30px;}.tagline br{display:none;}.enlaces-generales{gap:12px;margin-bottom:40px;}.enlace-general{color:#063b28;background:#fffdf8;border:1px solid #d8ddcf;border-radius:999px;padding:13px 19px;box-shadow:none;}.enlace-general:hover{background:#0d432b;color:#fff;transform:translateY(-2px);}.acceso-titulo-seccion{color:#55705d;margin-top:0;font-size:.72rem;letter-spacing:.12em;}.acceso-split{gap:18px;max-width:610px;}.acceso-card{border:1px solid #e0e2d8;border-radius:22px;padding:27px 25px;background:#fffefd;box-shadow:0 12px 25px rgba(9,49,30,.07);}.acceso-card.negocio{background:#0d432b;}.acceso-eyebrow{color:#687f70;}.acceso-card.negocio .acceso-eyebrow,.acceso-card.negocio .acceso-desc,.acceso-card.negocio .acceso-lista{color:#d8eadf;}.acceso-titulo{font-family:Georgia,serif;font-size:1.4rem;color:#062e1e;}.acceso-card.negocio .acceso-titulo{color:#fff;}.acceso-icono{margin-bottom:12px;}.acceso-card.negocio .acceso-icono{background:rgba(255,255,255,.1);border-radius:12px;padding:9px;width:max-content;}.admin-link{color:#476b57!important;margin-top:25px!important;}.franja-features{border-color:#d8ddcf;margin-top:42px;padding-top:26px;}.feature-titulo{color:#163f2d;}.feature-desc{color:#668071;}.feature-icono{border-color:#9ab4a4;color:#0d432b;}.feature-icono svg *{stroke:#0d432b!important;}.hero-der{flex:1;border-radius:0;background:#f1f4ed;}.mock-buscar{top:8%;}.mock-card{bottom:9%;right:8%;}.tarjeta-flotante{left:8%;bottom:8%;transform:scale(.85);}.escena-tap{transform:scale(1.35);transform-origin:bottom right;}.home-tap-scene,.home-nfc-card,.home-phone,.home-wave{display:none!important;}
-          /* Inicio sin mapa: el mapa vive en /descubre y aquí queda espacio para los accesos */
-          .hero{display:block;min-height:auto;padding:0 0 72px;}.hero-izq{width:min(100%,1180px);margin:0 auto;padding:54px clamp(28px,6vw,86px) 58px;flex:none;}.hero-der{display:none;}.logo-hero{width:max-content;margin-bottom:34px;}.tagline{font-size:clamp(2.7rem,4.4vw,4.8rem);max-width:760px;line-height:.98;margin-bottom:25px;}.enlaces-generales{margin-bottom:34px;}.acceso-titulo-seccion{font-size:.74rem;margin-bottom:14px;}.acceso-split{max-width:760px;gap:18px;}.acceso-card{padding:28px 27px;min-height:238px;}.acceso-titulo{font-size:1.5rem;}.acceso-desc{font-size:.9rem;line-height:1.5;}.acceso-lista{font-size:.84rem;line-height:1.7;}.franja-features{max-width:760px;margin-top:34px;}.admin-link{display:block;max-width:760px;}.home-tap-scene,.home-nfc-card,.home-phone,.home-wave{display:none!important;}
-          @media(max-width:980px){.hero-izq{padding:46px 30px}.tagline{font-size:3.45rem}.acceso-split{max-width:660px}.franja-features{max-width:660px}}@media(max-width:540px){.hero-izq{padding:36px 24px}.tagline{font-size:2.75rem}.acceso-split{flex-direction:column}.acceso-card{min-height:0}.franja-features{display:none}}
-          /* Landing pública Tapin */
-          .hero{display:none!important}.public-landing{font-family:'Inter','Segoe UI',sans-serif;color:#092f20;background:#fbf6e9;overflow:hidden}.public-nav{height:82px;border-bottom:1px solid #e1dccf;display:flex;align-items:center;justify-content:space-between;padding:0 max(24px,calc((100vw - 1180px)/2));background:rgba(251,246,233,.93);position:sticky;top:0;z-index:10;backdrop-filter:blur(12px)}.public-nav .brand{color:#0c432d;text-decoration:none;font-size:1.55rem;font-weight:800;letter-spacing:-.07em}.public-nav-links{display:flex;align-items:center;gap:30px}.public-nav-links a{color:#183f2d;text-decoration:none;font-size:.9rem;font-weight:600}.public-nav-links .nav-cta{padding:13px 21px;background:#0d432b;color:#fff;border-radius:999px}.landing-wrap{max-width:1080px;margin:0 auto;padding:0 26px}.landing-hero{min-height:650px;display:grid;grid-template-columns:1fr .9fr;gap:72px;align-items:center;padding:74px 0}.kicker{font-size:.72rem;font-weight:800;letter-spacing:.12em;color:#55735f;margin-bottom:22px}.landing-hero h1{font-family:Georgia,serif;font-size:clamp(2.8rem,5vw,5.35rem);line-height:.98;letter-spacing:-.065em;margin:0 0 23px;color:#062e1e}.landing-hero p{max-width:555px;font-size:1.05rem;line-height:1.7;color:#526a5b;margin:0}.hero-precio-badge{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid #dfe1d3;border-radius:999px;padding:11px 20px;margin-top:22px;font-size:.88rem;color:#456352;box-shadow:0 8px 18px rgba(9,49,30,.07)}.hero-precio-badge span:first-child{background:#e7b13a;color:#173926;font-weight:800;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;padding:4px 10px;border-radius:999px}.hero-precio-badge b{color:#062e1e;font-size:1.02rem}.landing-actions{display:flex;gap:12px;margin-top:30px;flex-wrap:wrap}.landing-actions a{border-radius:999px;padding:14px 21px;text-decoration:none;font-weight:700;font-size:.9rem}.action-main{background:#0d432b;color:#fff;box-shadow:0 12px 22px rgba(9,49,30,.18)}.action-alt{border:1px solid #bdcbbb;color:#17422d;background:#fffdf9}.landing-visual{height:395px;position:relative;border-radius:30px;background:radial-gradient(circle at 74% 25%,#f2d77a 0,rgba(242,215,122,.38) 25%,transparent 56%),linear-gradient(135deg,#e8f1e7,#f9f0dd);overflow:hidden}.landing-card{position:absolute;width:242px;height:242px;left:62px;top:78px;border-radius:28px;background:#fffefa;box-shadow:0 28px 45px rgba(4,41,25,.22);padding:27px;transform:rotate(-9deg)}.landing-card b{font-size:1.2rem}.landing-card .google{font-size:1.8rem;font-weight:800;margin-top:64px;color:#315244;letter-spacing:-.08em}.landing-card .stars{color:#d89d28;letter-spacing:3px;margin-top:8px}.landing-card small{display:block;color:#728278;margin-top:9px;line-height:1.4}.landing-badge{position:absolute;right:28px;bottom:36px;background:#0d432b;color:#fff;border-radius:18px;padding:18px 20px;box-shadow:0 14px 26px rgba(4,41,25,.18)}.landing-badge b{font-size:1.15rem;display:block}.landing-badge span{font-size:.73rem;color:#d5e7d9}.stats-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:0;background:#fffefd;border:1px solid #e5e3da;border-radius:24px;box-shadow:0 12px 26px rgba(9,49,30,.06);margin:0 0 118px}.stats-strip div{text-align:center;padding:27px 16px;border-right:1px solid #e5e3da}.stats-strip div:last-child{border:0}.stats-strip strong{display:block;font-size:2rem;color:#082f20}.stats-strip span{font-size:.82rem;color:#64766c}.section{padding:0 0 118px}.section-grid{display:grid;grid-template-columns:1fr 1fr;gap:76px;align-items:center}.section h2{font-family:Georgia,serif;font-size:clamp(2.1rem,4vw,3.8rem);line-height:1.05;letter-spacing:-.055em;margin:0 0 18px}.section p{font-size:1rem;color:#586d60;line-height:1.65}.checks{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:28px}.checks div{font-size:.88rem;color:#234735}.checks b{display:block;margin-bottom:4px}.checks b:before{content:'✓';color:#0d432b;margin-right:9px}.product-panel{background:#fffefd;border:1px solid #e4e3da;border-radius:28px;padding:22px;box-shadow:0 16px 30px rgba(9,49,30,.09)}.product-panel .product-art{height:280px;border-radius:20px;background:linear-gradient(135deg,#174b35,#0b3323);display:flex;align-items:center;justify-content:center}.product-panel .mini-card{width:165px;height:165px;background:#fffef9;border-radius:21px;box-shadow:0 20px 30px rgba(0,0,0,.3);padding:21px;transform:rotate(-7deg);color:#113d2a}.product-panel .mini-card div:nth-child(2){margin-top:42px;font-weight:800;font-size:1.45rem}.product-panel .caption{font-size:.78rem;color:#6a796e;margin:13px 2px 2px}.steps{background:#f2f5ed;border-top:1px solid #e2e5dd;border-bottom:1px solid #e2e5dd;padding:96px 0}.steps-head{text-align:center;max-width:600px;margin:0 auto 42px}.steps-head h2{font-family:Georgia,serif;font-size:3rem;letter-spacing:-.055em;margin:0}.steps-head p{color:#63746b}.steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.step{background:#fffefd;border:1px solid #e1e3dc;border-radius:22px;padding:28px;min-height:205px;box-shadow:0 10px 20px rgba(9,49,30,.05)}.step-num{font-size:.7rem;color:#637c6d;font-weight:800;margin-bottom:34px}.step h3{font-family:Georgia,serif;font-size:1.45rem;margin:0 0 10px}.step p{font-size:.88rem;color:#64756b;line-height:1.55}.landing-contact{text-align:center;padding:104px 0}.landing-contact h2{font-family:Georgia,serif;font-size:3rem;letter-spacing:-.055em;margin:0 0 12px}.landing-contact p{color:#62756b}.landing-footer{border-top:1px solid #dfddcf;padding:28px 0;color:#5b7163;font-size:.84rem;display:flex;justify-content:space-between}.landing-footer a{color:#315a43;text-decoration:none;margin-left:18px}
-          .pricing-section{padding:0 0 110px}.pricing-section .steps-head{margin-bottom:44px}.plan-cards{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:36px}.plan-card{background:#fffefd;border:1px solid #e2e3db;border-radius:24px;padding:34px 32px;position:relative;box-shadow:0 10px 22px rgba(9,49,30,.05)}.plan-card.destacado{border:2px solid #d6b052;background:linear-gradient(145deg,#fffef8,#fbf1d8);box-shadow:0 16px 30px rgba(184,142,33,.13)}.plan-card-badge{position:absolute;right:24px;top:24px;background:#e7b13a;color:#173926;font-size:.64rem;font-weight:900;letter-spacing:.08em;padding:6px 11px;border-radius:999px}.plan-card-nombre{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#63776a}.plan-card-precio{font-family:Georgia,serif;font-size:2.5rem;letter-spacing:-.04em;color:#062e1e;margin-top:8px}.plan-card-precio span{font-family:'Inter','Segoe UI',sans-serif;font-size:.95rem;font-weight:600;color:#63776a;margin-left:4px}.plan-card-sub{font-size:.8rem;color:#0d432b;font-weight:700;margin-top:2px}.plan-card ul{list-style:none;margin:20px 0 0;padding:0}.plan-card li{font-size:.86rem;color:#33493c;padding:9px 0;border-top:1px solid #ecebe1}.plan-card li:first-child{border-top:none}
-          .pricing-tables{display:grid;grid-template-columns:1fr 1fr;gap:20px}.pricing-table-card{background:#fffefd;border:1px solid #e2e3db;border-radius:20px;overflow:hidden;box-shadow:0 8px 18px rgba(9,49,30,.05)}.pricing-table-titulo{background:#0d432b;color:#fff;font-size:.76rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:15px 22px}.pricing-table-card table{width:100%;border-collapse:collapse;font-size:.86rem}.pricing-table-card th{text-align:left;padding:11px 22px;font-size:.66rem;text-transform:uppercase;letter-spacing:.03em;color:#728274;font-weight:700;border-bottom:1px solid #ece9de}.pricing-table-card td{padding:12px 22px;border-bottom:1px solid #ece9de;color:#092f20}.pricing-table-card tr:last-child td{border-bottom:none;font-weight:800;color:#0d432b;background:#eef4ea}
-          @media(max-width:760px){.plan-cards,.pricing-tables{grid-template-columns:1fr}}@media(max-width:760px){.public-nav{height:70px}.public-nav-links a:not(.nav-cta){display:none}.landing-hero,.section-grid{grid-template-columns:1fr;gap:38px;min-height:0;padding:52px 0}.landing-hero h1{font-size:3.15rem}.landing-visual{height:340px}.landing-card{left:35px;top:56px;transform:scale(.85) rotate(-9deg);transform-origin:left top}.stats-strip{grid-template-columns:1fr;margin-bottom:72px}.stats-strip div{border-right:0;border-bottom:1px solid #e5e3da}.checks,.steps-grid{grid-template-columns:1fr}.section{padding-bottom:75px}.steps{padding:72px 0}.steps-head h2,.landing-contact h2{font-size:2.4rem}.landing-footer{flex-direction:column;gap:12px}.landing-footer a{margin:0 14px 0 0}}
-          .access-section{padding:104px 0;background:#fbf6e9}.access-head{text-align:center;max-width:620px;margin:0 auto 38px}.access-head h2{font-family:Georgia,serif;font-size:3rem;letter-spacing:-.055em;margin:0 0 12px}.access-head p{color:#62756b;line-height:1.6}.access-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}.access-choice{display:flex;flex-direction:column;align-items:flex-start;text-decoration:none;background:#fffefd;border:1px solid #e2e3db;border-radius:22px;padding:27px;min-height:230px;color:#092f20;box-shadow:0 10px 22px rgba(9,49,30,.05);transition:transform .2s ease,box-shadow .2s ease}.access-choice:hover{transform:translateY(-5px);box-shadow:0 19px 34px rgba(9,49,30,.12)}.access-choice.highlight{background:#0d432b;color:#fff;border-color:#0d432b}.access-icon{width:45px;height:45px;display:grid;place-items:center;border-radius:14px;background:#edf3ed;color:#0d432b;font-size:1.25rem;margin-bottom:25px}.highlight .access-icon{background:rgba(255,255,255,.13);color:#fff}.access-choice h3{font-family:Georgia,serif;font-size:1.5rem;margin:0 0 8px}.access-choice p{font-size:.86rem;line-height:1.55;color:#61746a;margin:0}.highlight p{color:#d9eadf}.access-arrow{margin-top:auto;padding-top:22px;font-weight:800;font-size:.9rem;color:#0d432b}.highlight .access-arrow{color:#fff}
-          .access-choice{min-height:270px;padding:31px;position:relative}.access-choice:first-child{background:linear-gradient(135deg,#0a3e29,#146542);box-shadow:0 18px 34px rgba(9,67,43,.22)}.access-choice:nth-child(2){border:2px solid #d6b052;background:linear-gradient(145deg,#fffef8,#fbf1d8);box-shadow:0 16px 30px rgba(184,142,33,.13)}.access-choice:first-child:after,.access-choice:nth-child(2):after{content:'RECOMENDADO';position:absolute;right:18px;top:18px;padding:6px 10px;border-radius:999px;background:#e7b13a;color:#173926;font-size:.62rem;font-weight:900;letter-spacing:.08em}.access-choice:nth-child(2):after{content:'CLIENTES';background:#0d432b;color:#fff}.access-choice .access-arrow{display:inline-flex;align-items:center;justify-content:center;min-height:43px;padding:0 15px;border-radius:999px;background:#edf4ed}.access-choice:first-child .access-arrow{background:#fff;color:#0d432b}.access-choice:nth-child(2) .access-arrow{background:#0d432b;color:#fff}.access-choice:first-child:hover,.access-choice:nth-child(2):hover{transform:translateY(-8px) scale(1.015)}@media(max-width:760px){.access-section{padding:74px 0}.access-head h2{font-size:2.4rem}.access-grid{grid-template-columns:1fr}.access-choice{min-height:230px}}
-          /* Misma tarjeta visual de Conoce Tapin */
-          .landing-visual{height:430px}.landing-card{width:238px;height:310px;left:68px;top:57px;border-radius:30px;padding:28px;background:#fffef8;box-shadow:0 25px 48px rgba(4,41,25,.26),inset 0 0 0 8px #092e20;transform:rotate(-6deg);color:#143f2e}.landing-card:before{content:'⌁';position:absolute;right:28px;top:25px;font-size:30px;color:#75877d;transform:rotate(90deg);font-family:Arial}.landing-card b{font-size:1.25rem;letter-spacing:-.05em}.landing-card .google{margin-top:74px;font-size:2rem;background:linear-gradient(90deg,#4285f4 0 17%,#ea4335 17% 34%,#fbbc05 34% 50%,#4285f4 50% 67%,#34a853 67% 84%,#ea4335 84%);-webkit-background-clip:text;background-clip:text;color:transparent}.landing-card .stars{font-size:1.25rem;margin-top:11px}.landing-card small{font-size:.76rem;line-height:1.45;margin-top:12px}.landing-badge{right:24px;bottom:29px}.landing-badge:before{content:'NFC';display:block;font-size:.63rem;color:#cfe4d6;letter-spacing:.1em;margin-bottom:3px}
-          .landing-card-real{width:342px;height:266px;left:42px;top:82px;padding:23px 24px;overflow:hidden;border-radius:18px;transform:rotate(-4deg);background:#fffefa;box-shadow:0 25px 46px rgba(4,41,25,.28),0 0 0 2px rgba(255,255,255,.8) inset;color:#161c18;display:flex;flex-direction:column;align-items:center}.landing-card-real:before{display:none}.landing-card-real .card-top{position:absolute;top:21px;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:0 24px}.landing-card-real .card-top b{font-family:'Inter','Segoe UI',sans-serif;font-size:1.05rem;color:#202020}.card-nfc{font:700 .54rem Arial;border:1.5px solid #222;border-radius:999px;padding:3px 5px;letter-spacing:.02em}.card-google-g{position:relative;width:76px;height:76px;margin-top:40px;border-radius:50%;background:conic-gradient(from -38deg,#4285f4 0 24%,#34a853 24% 43%,#fbbc05 43% 62%,#ea4335 62% 80%,#4285f4 80%);}.card-google-g:before{content:'';position:absolute;inset:17px;border-radius:50%;background:#fffefa}.card-google-g:after{content:'';position:absolute;width:39px;height:17px;background:#4285f4;right:-2px;top:30px;border-radius:0 2px 2px 0;box-shadow:-9px 0 0 #fffefa}.card-stars-real{font-size:1.52rem;letter-spacing:7px;color:#c88713;line-height:1;margin-top:13px}.card-review-copy{font:600 .78rem 'Inter','Segoe UI',sans-serif;margin-top:12px;color:#202020}.card-touch{position:absolute;width:48px;height:48px;bottom:13px;color:#191d1a}.landing-card-real img{display:none}@media(max-width:760px){.landing-card-real{width:278px;height:218px;left:26px;top:72px;padding:18px}.landing-card-real .card-top{top:16px;padding:0 18px}.card-google-g{width:59px;height:59px;margin-top:33px}.card-google-g:before{inset:13px}.card-google-g:after{width:31px;height:13px;top:23px}.card-stars-real{font-size:1.2rem;letter-spacing:5px;margin-top:10px}.card-review-copy{font-size:.64rem;margin-top:8px}.card-touch{transform:scale(.8);bottom:4px}.landing-badge{right:16px;bottom:22px}}
-          /* Producto real: sin ilustración aproximada */
-          .landing-card-real{width:344px;height:280px;left:40px;top:76px;padding:0;background:#fff;border-radius:22px;overflow:hidden;transform:rotate(-4deg);box-shadow:0 28px 50px rgba(4,41,25,.3),0 0 0 6px #fffefd}.landing-card-real:before,.landing-card-real .card-top,.landing-card-real .card-google-g,.landing-card-real .card-stars-real,.landing-card-real .card-review-copy,.landing-card-real .card-touch{display:none!important}.landing-card-real img{display:block!important;width:100%;height:100%;object-fit:cover;object-position:50% 40%;transform:scale(1.2)}@media(max-width:760px){.landing-card-real{width:278px;height:226px;left:26px;top:70px}.landing-card-real img{transform:scale(1.2)}}
-          .product-art{overflow:hidden}.product-art .mini-card{display:none}.product-art img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 40%;transform:scale(1.08)}
         </style>
       </head>
       <body>
-        <main class="public-landing">
-          <header class="public-nav">
-            <a class="brand" href="/">Tapin</a>
-            <nav class="public-nav-links"><a href="#como-funciona">Cómo funciona</a><a href="#beneficios">Beneficios</a><a href="#precios">Precios</a><a class="nav-cta" href="/pedido">Pedir tarjeta</a></nav>
-          </header>
-          <section class="landing-wrap landing-hero">
-            <div>
-              <div class="kicker">HECHO EN COLOMBIA · SIN APPS · SIN FRICCIÓN</div>
-              <h1>Más reseñas.<br>Mejor reputación.</h1>
-              <p>Tapin convierte cada visita a tu negocio en una reseña de Google. El cliente acerca su celular a tu tarjeta y listo: un proceso simple, rápido y profesional.</p>
-              <div class="hero-precio-badge"><span>Desde</span><b>$119.900 COP</b><span>· tarjeta + envío incluido</span></div>
-              <div class="landing-actions"><a class="action-main" href="/pedido">Quiero mi Tapin →</a><a class="action-alt" href="#como-funciona">Ver cómo funciona</a></div>
+        <header class="site-header">
+          <a class="site-brand" href="/" aria-label="Tapin inicio">${logoSvg(MARCA.verdeOscuro, 25)}</a>
+          <nav class="site-nav" aria-label="Navegación principal">
+            <a href="#como-funciona">Cómo funciona</a>
+            <a href="#accesos">Accesos</a>
+            <a href="#precios">Precios</a>
+            <a class="site-order" href="/pedido">Pedir tarjeta</a>
+          </nav>
+        </header>
+
+        <div class="hero">
+          <div class="hero-kicker">HECHO EN COLOMBIA · SIN APPS · SIN FRICCIÓN</div>
+          <h1>Más reseñas. Mejor reputación.</h1>
+          <p>Tapin convierte cada visita a tu negocio en una reseña de Google. El cliente acerca su celular a tu tarjeta y listo.</p>
+          <div class="hero-cta-row">
+            <a class="hero-cta-main" href="/pedido">Pedir mi tarjeta →</a>
+            <a class="hero-cta-alt" href="#como-funciona">Ver cómo funciona</a>
+          </div>
+          <div class="tarjeta-wrap">
+            <div class="tarjeta-nfc">
+              <div class="tarjeta-logo">${logoSvg(MARCA.texto, 16)}</div>
+              <svg class="tarjeta-nfc-icono" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 9C7.5 10.2 8.4 11.9 8.4 13.8C8.4 15.7 7.5 17.4 6 18.6" stroke="${MARCA.textoSuave}" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M9.5 6.5C11.8 8.4 13.2 11 13.2 14C13.2 17 11.8 19.6 9.5 21.5" stroke="${MARCA.textoSuave}" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
+              </svg>
+              <div class="tarjeta-google"><span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span></div>
+              <div class="tarjeta-estrellas">★★★★★</div>
+              <div class="tarjeta-texto">Déjanos una reseña<br>en Google</div>
+              <svg class="tarjeta-mano" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 12V6.5C9 5.67 9.67 5 10.5 5C11.33 5 12 5.67 12 6.5V11" stroke="${MARCA.texto}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M12 11V5.5C12 4.67 12.67 4 13.5 4C14.33 4 15 4.67 15 5.5V11" stroke="${MARCA.texto}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M15 11V6.5C15 5.67 15.67 5 16.5 5C17.33 5 18 5.67 18 6.5V13C18 16.87 14.87 20 11 20C9 20 7.5 19 6.3 17.3L4 13.5C3.6 12.8 3.9 11.9 4.7 11.6C5.3 11.4 6 11.6 6.4 12.1L8 14" stroke="${MARCA.texto}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M20 5C21 6 21.5 7.3 21.5 8.5" stroke="${MARCA.oro}" stroke-width="1.4" stroke-linecap="round"/>
+                <path d="M22 3C23.5 4.5 24.3 6.4 24.3 8.5" stroke="${MARCA.oro}" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>
+              </svg>
             </div>
-            <div class="landing-visual" aria-label="Tarjeta Tapin real para reseñas de Google"><div class="landing-card landing-card-real"><img src="/assets/tarjeta-tapin-real.png" alt="Tarjeta Tapin real para reseñas de Google"></div><div class="landing-badge"><b>Un toque.</b><span>Una reseña en segundos.</span></div></div>
-          </section>
-          <section class="landing-wrap"><div class="stats-strip"><div><strong>Sin apps</strong><span>Funciona desde cualquier celular</span></div><div><strong>1 toque</strong><span>Para abrir tu enlace de reseñas</span></div><div><strong>En segundos</strong><span>Listo para usar al recibirlo</span></div></div></section>
-          <section class="landing-wrap pricing-section" id="precios">
-            <div class="steps-head"><div class="kicker">PLANES Y PRECIOS</div><h2>Lo que cuesta, sin letra pequeña.</h2><p>Pago único para empezar, o Plan Pro si quieres retroalimentación privada, reportes y más.</p></div>
-            <div class="plan-cards">
-              <div class="plan-card">
-                <div class="plan-card-nombre">Pago único</div>
-                <div class="plan-card-precio">$${PRECIO_BASICO_COP.toLocaleString("es-CO")}<span>COP</span></div>
-                <div class="plan-card-sub">Envío incluido</div>
+          </div>
+        </div>
+
+        <div class="contenido">
+          <div class="stats-strip">
+            <div><strong>Sin apps</strong><span>Funciona desde cualquier celular</span></div>
+            <div><strong>1 toque</strong><span>Para abrir tu enlace de reseñas</span></div>
+            <div><strong>En segundos</strong><span>Listo para usar al recibirlo</span></div>
+          </div>
+
+          <div id="como-funciona">
+            <div class="seccion-titulo">Tres pasos. Cero fricción.</div>
+            <div class="seccion-sub">Diseñado para que pedir una reseña sea natural para tus clientes.</div>
+            <div class="pasos">
+              <div class="paso"><div class="paso-num">1</div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta, se abre una página simple donde el cliente califica su experiencia.</p></div>
+              <div class="paso"><div class="paso-num">2</div><h3>Si calificó bien, va directo a Google</h3><p>Lo mandamos automáticamente a dejar la reseña pública en tu perfil de Google.</p></div>
+              <div class="paso"><div class="paso-num">3</div><h3>Si calificó mal, queda privado</h3><p>Ese comentario llega directo a ti — nunca se vuelve una reseña negativa pública.</p></div>
+            </div>
+          </div>
+
+          <div id="accesos">
+            <div class="seccion-titulo">Elige cómo continuar</div>
+            <div class="seccion-sub">Encuentra el acceso que necesitas.</div>
+            <div class="accesos">
+              <a class="acceso acceso-1" href="/pedido"><div class="acceso-badge">RECOMENDADO</div><div class="acceso-icono">✦</div><h3>Pedir tarjeta</h3><p>Solicita tu Tapin y recíbela configurada para tu negocio.</p><span class="acceso-flecha">Quiero mi Tapin →</span></a>
+              <a class="acceso acceso-2" href="/cliente"><div class="acceso-badge">CLIENTES</div><div class="acceso-icono">◯</div><h3>Soy cliente</h3><p>Guarda favoritos y lleva tu historial de reseñas.</p><span class="acceso-flecha">Ir a mi cuenta →</span></a>
+              <a class="acceso acceso-3" href="/mis-negocios"><div class="acceso-icono">▣</div><h3>Tengo un negocio</h3><p>Activa tu tarjeta o entra al panel de tu negocio.</p><span class="acceso-flecha">Entrar a mi negocio →</span></a>
+              <a class="acceso acceso-4" href="/descubre"><div class="acceso-icono">⌖</div><h3>Descubrir negocios</h3><p>Explora el mapa de negocios que ya usan Tapin.</p><span class="acceso-flecha">Ver el mapa →</span></a>
+            </div>
+          </div>
+
+          <div id="precios">
+            <div class="seccion-titulo">Lo que cuesta, sin letra pequeña</div>
+            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres retroalimentación privada, reportes y más.</div>
+            <div class="planes">
+              <div class="plan">
+                <div class="plan-nombre">Pago único</div>
+                <div class="plan-precio">$${PRECIO_BASICO_COP.toLocaleString("es-CO")}<span> COP</span></div>
                 <ul>
-                  <li>Tarjeta NFC física + envío</li>
-                  <li>Redirección automática a Google</li>
-                  <li>Panel con historial y estadísticas</li>
-                  <li>Acta de entrega formal</li>
+                  <li><span class="check">✓</span> Tarjeta NFC física + envío incluido</li>
+                  <li><span class="check">✓</span> Redirección automática a tus reseñas de Google</li>
+                  <li><span class="check">✓</span> Panel con historial y estadísticas</li>
+                  <li><span class="check">✓</span> Acta de entrega formal</li>
                 </ul>
               </div>
-              <div class="plan-card destacado">
-                <div class="plan-card-badge">RECOMENDADO</div>
-                <div class="plan-card-nombre">Mensualidad Pro</div>
-                <div class="plan-card-precio">$${PRECIO_PRO_COP.toLocaleString("es-CO")}<span>COP/mes</span></div>
-                <div class="plan-card-sub">O $${PRECIO_PRO_ANUAL_COP.toLocaleString("es-CO")} COP/año (10% más barato)</div>
+              <div class="plan pro">
+                <div class="plan-badge">RECOMENDADO</div>
+                <div class="plan-nombre">Mensualidad Pro</div>
+                <div class="plan-precio">$${PRECIO_PRO_COP.toLocaleString("es-CO")}<span> COP/mes</span></div>
+                <div class="plan-anual">
+                  <div><div class="plan-anual-etiqueta">Pago anual</div><div class="plan-anual-precio">$${PRECIO_PRO_ANUAL_COP.toLocaleString("es-CO")} COP/año</div></div>
+                  <div class="plan-anual-badge">10% más barato</div>
+                </div>
                 <ul>
-                  <li>Todo lo del pago único, más:</li>
-                  <li>Retroalimentación privada — lo negativo nunca se publica</li>
-                  <li>Alerta instantánea ante retroalimentación negativa</li>
-                  <li>Reporte mensual automático</li>
-                  <li>Generador de contenido para redes</li>
+                  <li><span class="check">✓</span> Todo lo del pago único, más:</li>
+                  <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
+                  <li><span class="check">✓</span> Alerta instantánea ante retroalimentación negativa</li>
+                  <li><span class="check">✓</span> Reporte mensual automático</li>
+                  <li><span class="check">✓</span> Generador de contenido para redes</li>
                 </ul>
               </div>
             </div>
-            <div class="pricing-tables">
-              <div class="pricing-table-card">
-                <div class="pricing-table-titulo">Compra de tarjetas</div>
-                <table>
+            <div class="precios-grid">
+              <div class="precio-card">
+                <div class="precio-card-titulo">Compra de tarjetas</div>
+                <table class="tabla-precios">
                   <tr><th>Cantidad</th><th>Precio c/u</th><th>Ahorro</th></tr>
                   ${ESCALONES_DESCUENTO.slice().reverse().map((e, i, arr) => {
                     const siguiente = arr[i + 1];
@@ -6674,9 +6636,9 @@ app.get("/", (req, res) => {
                   }).join("")}
                 </table>
               </div>
-              <div class="pricing-table-card">
-                <div class="pricing-table-titulo">Suscripción Plan Pro</div>
-                <table>
+              <div class="precio-card">
+                <div class="precio-card-titulo">Suscripción Plan Pro</div>
+                <table class="tabla-precios">
                   <tr><th>Tarjetas activas</th><th>Precio c/u/mes</th></tr>
                   ${ESCALONES_PRO.slice().reverse().map((e, i, arr) => {
                     const siguiente = arr[i + 1];
@@ -6686,184 +6648,25 @@ app.get("/", (req, res) => {
                 </table>
               </div>
             </div>
-            <div class="landing-actions" style="margin-top:34px;"><a class="action-main" href="/pedido">Pedir mi tarjeta →</a></div>
-          </section>
-          <section class="landing-wrap section section-grid" id="beneficios">
-            <div><div class="kicker">LA TARJETA PARA TU NEGOCIO</div><h2>Una forma fácil de pedir reseñas.</h2><p>Tu tarjeta Tapin se configura con el enlace de Google de tu negocio. Solo la pones en un lugar visible y dejas que tus clientes hagan el resto.</p><div class="checks"><div><b>Sin descargar apps</b>Acercan el celular y se abre la página.</div><div><b>Para cualquier negocio</b>Restaurantes, cafés, barberías, clínicas y más.</div><div><b>Diseño profesional</b>Una tarjeta que se ve tan bien como funciona.</div><div><b>Datos en tu panel</b>Consulta actividad y estadísticas en tiempo real.</div></div></div>
-            <div class="product-panel"><div class="product-art"><img src="/assets/tarjeta-tapin-real.png" alt="Tarjeta Tapin real"></div><div class="caption">Tu punto físico para recibir reseñas y conocer la actividad de tu negocio.</div></div>
-          </section>
-          <section class="steps" id="como-funciona"><div class="landing-wrap"><div class="steps-head"><div class="kicker">CÓMO FUNCIONA</div><h2>Tres pasos. Cero fricción.</h2><p>Diseñado para que pedir una reseña sea natural para tus clientes.</p></div><div class="steps-grid"><article class="step"><div class="step-num">PASO 01</div><h3>Recibes tu Tapin</h3><p>Una tarjeta NFC configurada con la información de tu negocio y lista para usar.</p></article><article class="step"><div class="step-num">PASO 02</div><h3>El cliente la toca</h3><p>Acerca su celular y abre tu página de reseñas al instante.</p></article><article class="step"><div class="step-num">PASO 03</div><h3>Suben tus estrellas</h3><p>Más reseñas ayudan a que más personas encuentren tu negocio.</p></article></div></div></section>
-          <section class="access-section"><div class="landing-wrap"><div class="access-head"><div class="kicker">EMPIEZA CON TAPIN</div><h2>Elige cómo quieres continuar.</h2><p>Encuentra el acceso que necesitas sin interrumpir la información de la página.</p></div><div class="access-grid"><a class="access-choice highlight" href="/pedido"><div class="access-icon">✦</div><h3>Pedir tarjeta</h3><p>Solicita tu Tapin y recíbela configurada para tu negocio.</p><span class="access-arrow">Quiero mi Tapin →</span></a><a class="access-choice" href="/cliente"><div class="access-icon">◯</div><h3>Soy cliente</h3><p>Inicia sesión para guardar favoritos y ver tu historial de reseñas.</p><span class="access-arrow">Ir a mi cuenta →</span></a><a class="access-choice" href="/mis-negocios"><div class="access-icon">▣</div><h3>Tengo un negocio</h3><p>Activa tu tarjeta o entra al panel de tu negocio.</p><span class="access-arrow">Entrar a mi negocio →</span></a><a class="access-choice" href="/descubre"><div class="access-icon">⌖</div><h3>Descubrir negocios</h3><p>Explora el mapa de negocios que ya usan Tapin cerca de ti.</p><span class="access-arrow">Ver el mapa →</span></a></div></div></section>
-          <section class="landing-wrap landing-contact"><h2>¿Tienes alguna pregunta?</h2><p>Estamos aquí para ayudarte. Escríbenos y te responderemos lo antes posible.</p><div class="landing-actions" style="justify-content:center"><a class="action-main" href="https://wa.me/573003489609">WhatsApp</a><a class="action-alt" href="mailto:tapin.notificacion@gmail.com">tapin.notificacion@gmail.com</a></div></section>
-          <footer class="landing-wrap landing-footer"><span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span><span><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/descubre">Descubrir negocios</a></span></footer>
-        </main>
-        <div class="hero">
-          <div class="hero-izq">
-            <div class="forma-organica"></div>
-            <div class="forma-organica-2"></div>
-            <div class="logo-hero">${logoSvg("#FFFFFF", 58)}<span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Tapin</span></div>
-            <h1 class="tagline">Tapin — Tarjeta NFC para reseñas de Google en Colombia.<br>Descubre negocios locales, confía en lo que encuentras.</h1>
-
-            <div class="enlaces-generales">
-              <a class="enlace-general" href="/conoce">Conoce Tapin</a>
-              <a class="enlace-general" href="/descubre">Descubrir negocios</a>
-            </div>
-
-            <div class="acceso-titulo-seccion">Entra a tu cuenta</div>
-            <div class="acceso-split">
-              <a class="acceso-card cliente" href="/cliente">
-                <div class="acceso-eyebrow">Para consumidores</div>
-                <div class="acceso-icono">
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="12" cy="8" r="4" stroke="${MARCA.verde}" stroke-width="1.8"/>
-                    <path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6" stroke="${MARCA.verde}" stroke-width="1.8" stroke-linecap="round"/>
-                  </svg>
-                </div>
-                <div class="acceso-titulo">Soy cliente</div>
-                <div class="acceso-desc">Busco negocios y dejo reseñas</div>
-                <ul class="acceso-lista">
-                  <li>Favoritos</li>
-                  <li>Historial de reseñas</li>
-                </ul>
-              </a>
-              <a class="acceso-card negocio" href="/mis-negocios">
-                <div class="acceso-eyebrow">Para dueños de negocio</div>
-                <div class="acceso-icono">
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M4 10L5 4h14l1 6" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
-                    <path d="M4 10v9a1 1 0 001 1h14a1 1 0 001-1v-9" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
-                    <path d="M9 20v-5a1 1 0 011-1h4a1 1 0 011 1v5" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
-                  </svg>
-                </div>
-                <div class="acceso-titulo">Tengo un negocio</div>
-                <div class="acceso-desc">Tengo tarjeta Tapin (o quiero una)</div>
-                <ul class="acceso-lista">
-                  <li>Estadísticas en vivo</li>
-                  <li>Reputación y reseñas</li>
-                </ul>
-              </a>
-            </div>
-
-            <a class="admin-link" href="/pedido" style="margin-top:28px;">¿Todavía no tienes tarjeta? Pídela aquí →</a>
-
-            <div class="franja-features">
-              <div class="feature">
-                <div class="feature-icono">
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6-4.6-4.1 6.1-.6L12 3z" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
-                  </svg>
-                </div>
-                <div>
-                  <div class="feature-titulo">Favoritos</div>
-                  <div class="feature-desc">Guarda los lugares que te gustan</div>
-                </div>
-              </div>
-              <div class="feature">
-                <div class="feature-icono">
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="12" cy="12" r="8.5" stroke="#fff" stroke-width="1.5"/>
-                    <path d="M12 7.5V12l3 2" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
-                <div>
-                  <div class="feature-titulo">Historial de reseñas</div>
-                  <div class="feature-desc">Todas tus calificaciones en un solo lugar</div>
-                </div>
-              </div>
-              <div class="feature">
-                <div class="feature-icono">
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M4 16l5-5 3 3 6-7" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M14 7h4v4" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
-                <div>
-                  <div class="feature-titulo">Estadísticas del negocio</div>
-                  <div class="feature-desc">Sigue tu reputación y crecimiento</div>
-                </div>
-              </div>
-            </div>
-
-            <a class="admin-link" href="/admin">Entrar como administrador</a>
-            <div style="margin-top:18px;font-size:0.72rem;">
-              <a href="/privacidad" style="color:rgba(255,255,255,0.5);margin-right:14px;">Privacidad</a>
-              <a href="/terminos" style="color:rgba(255,255,255,0.5);">Términos y condiciones</a>
-            </div>
           </div>
 
-          <div class="hero-der">
-            <div id="mapa-fondo"></div>
-            <div class="mock-buscar"><span>Buscar negocios o lugares</span><span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="7" stroke="#9aa39d" stroke-width="2"/><path d="M20 20l-4-4" stroke="#9aa39d" stroke-width="2" stroke-linecap="round"/></svg></span></div>
+          <div class="nota"><b>Sobre la retroalimentación:</b> cuando un cliente no tiene una buena experiencia, esa información nunca se convierte en una reseña pública negativa. Se queda contigo, en privado, como una oportunidad para mejorar.</div>
 
-            <div class="tarjeta-flotante">
-              <div class="tarjeta-nfc">
-                <div class="tarjeta-logo">${logoSvg(MARCA.texto, 16)}</div>
-                <svg class="tarjeta-nfc-icono" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M6 9C7.5 10.2 8.4 11.9 8.4 13.8C8.4 15.7 7.5 17.4 6 18.6" stroke="${MARCA.textoSuave}" stroke-width="1.6" stroke-linecap="round"/>
-                  <path d="M9.5 6.5C11.8 8.4 13.2 11 13.2 14C13.2 17 11.8 19.6 9.5 21.5" stroke="${MARCA.textoSuave}" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
-                </svg>
-                <div class="tarjeta-google"><span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span></div>
-                <div class="tarjeta-estrellas">★★★★★</div>
-                <div class="tarjeta-texto">Déjanos una reseña<br>en Google</div>
-              </div>
-              <div class="escena-tap">
-                <div class="onda-tap"></div>
-                <div class="onda-tap d2"></div>
-                <div class="telefono"></div>
-              </div>
-            </div>
-
-            <div class="mock-card">
-              <div class="mock-foto"></div>
-              <div class="mock-info">
-                <div class="mock-nombre">Café Central</div>
-                <div class="mock-cat">Cafetería · Centro</div>
-                <div><span class="mock-estrellas">★★★★★</span><span class="mock-num">4.8 (312)</span></div>
-              </div>
-              <div class="mock-resenas">
-                <div class="mock-resenas-titulo">Lo que dicen los clientes</div>
-                <div class="mock-resena">
-                  <div class="mock-avatar" style="background:${MARCA.verde};">SL</div>
-                  <div class="mock-resena-cuerpo">
-                    <div class="mock-resena-linea1"><span class="mock-resena-nombre">Sofía L.</span><span class="mock-resena-fecha">hace 2 días</span></div>
-                    <div class="mock-resena-texto">Excelente café y ambiente muy acogedor.</div>
-                  </div>
-                </div>
-                <div class="mock-resena">
-                  <div class="mock-avatar" style="background:${MARCA.oro};">JT</div>
-                  <div class="mock-resena-cuerpo">
-                    <div class="mock-resena-linea1"><span class="mock-resena-nombre">Juan T.</span><span class="mock-resena-fecha">hace 1 semana</span></div>
-                    <div class="mock-resena-texto">Atención muy amable, me encantó el lugar.</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="contacto">
+            <div class="seccion-titulo" style="margin-bottom:8px;">¿Tienes alguna pregunta?</div>
+            <div class="seccion-sub">Estamos aquí para ayudarte.</div>
+            <a class="cta" href="/pedido">Pedir mi tarjeta Tapin →</a>
           </div>
         </div>
 
-        <script>
-          // Mapa puramente decorativo: sin zoom, sin arrastre, sin controles.
-          const mapaFondo = L.map('mapa-fondo', {
-            center: [4.7110, -74.0721],
-            zoom: 13,
-            zoomControl: false,
-            dragging: false,
-            scrollWheelZoom: false,
-            doubleClickZoom: false,
-            boxZoom: false,
-            keyboard: false,
-            touchZoom: false,
-            attributionControl: false,
-          });
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaFondo);
-        </script>
+        <footer class="site-footer">
+          <span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span>
+          <span><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/descubre">Descubrir negocios</a></span>
+        </footer>
       </body>
     </html>
   `);
 });
-
-// Puerta discreta de administrador — no aparece como botón grande en la página
-// principal, solo un link chiquito abajo. Pide la clave y redirige al panel.
 app.get("/admin", (req, res) => {
   const error = req.query.error;
   res.send(`
