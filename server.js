@@ -824,14 +824,18 @@ function barraSemana(dias7) {
       const alturaPct = v === 0 ? 8 : Math.max(16, Math.round((v / max) * 100));
       const esPico = v === max && v > 0;
       const esHoy = i === dias7.length - 1;
-      const relleno = esHoy ? "#174B36" : "#2D6E50";
+      const relleno = esPico
+        ? "linear-gradient(180deg,#195B40 0%,#0B3D2A 100%)"
+        : esHoy
+          ? "linear-gradient(180deg,#4F9672 0%,#1F6749 100%)"
+          : "linear-gradient(180deg,#77A98C 0%,#347659 100%)";
       return `
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px;flex:1;height:100%;min-width:0;">
-          <div style="font-size:0.72rem;font-weight:700;color:${MARCA.textoSuave};line-height:1;">${v}</div>
-          <div style="height:52px;width:100%;max-width:28px;display:flex;align-items:flex-end;border-radius:4px 4px 2px 2px;background:#EFF2F0;overflow:hidden;">
-            <div style="width:100%;height:${alturaPct}%;background:${relleno};border-radius:3px 3px 1px 1px;"></div>
+          <div style="font-size:0.72rem;font-weight:${esPico ? "800" : "700"};color:${esPico ? MARCA.verdeOscuro : MARCA.textoSuave};line-height:1;">${v}</div>
+          <div style="height:52px;width:100%;max-width:30px;display:flex;align-items:flex-end;border-radius:7px 7px 3px 3px;background:#EDF2EE;overflow:hidden;">
+            <div style="width:100%;height:${alturaPct}%;background:${relleno};border-radius:6px 6px 2px 2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.2);"></div>
           </div>
-          <div style="font-size:0.62rem;color:#718078;font-weight:600;text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
+          <div style="font-size:0.62rem;color:${esHoy ? MARCA.verdeOscuro : "#718078"};font-weight:${esHoy ? "800" : "600"};text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
         </div>`;
     })
     .join("");
@@ -844,7 +848,9 @@ function barraHoras(porHora, picoHora) {
   return porHora
     .map((v, h) => {
       const alturaPx = v === 0 ? 5 : Math.max(12, Math.round((v / max) * 64));
-      const color = h === picoHora && v > 0 ? "#174B36" : "#2D6E50";
+      const color = h === picoHora && v > 0
+        ? "linear-gradient(180deg,#195B40 0%,#0B3D2A 100%)"
+        : "linear-gradient(180deg,#6FA486 0%,#2F7355 100%)";
       return `<div style="flex:1;height:${alturaPx}px;background:${color};border-radius:2px 2px 0 0;" title="${h}:00 — ${v} toques"></div>`;
     })
     .join("");
