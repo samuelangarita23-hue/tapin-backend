@@ -5095,7 +5095,7 @@ app.get("/conoce", (req, res) => {
         </main>
         <footer class="site-footer">
           <span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span>
-          <span><a href="mailto:hola@tapincol.com">hola@tapincol.com</a><a href="https://wa.me/">WhatsApp</a></span>
+          <span><a href="mailto:hola@tapincol.com">hola@tapincol.com</a><a href="https://wa.me/573003489609" target="_blank">WhatsApp</a></span>
         </footer>
       </body>
     </html>
@@ -6495,11 +6495,16 @@ app.get("/", (req, res) => {
 
           .precios-grid{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:60px;}
           .precio-card{flex:1;min-width:280px;background:var(--paper);border-radius:22px;border:1px solid var(--line);overflow:hidden;box-shadow:0 10px 22px rgba(9,49,30,.05);}
-          .precio-card-titulo{background:var(--forest);color:#fff;padding:17px 22px;font-size:.76rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+          .precio-card-titulo{background:var(--forest);color:#fff;padding:18px 22px 6px;font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+          .precio-card-sub{background:var(--forest);color:#bcd3c4;padding:0 22px 16px;font-size:.72rem;letter-spacing:.01em;}
           .tabla-precios{width:100%;border-collapse:collapse;font-size:.88rem;}
-          .tabla-precios th{text-align:left;padding:10px 22px;font-size:.68rem;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:600;border-bottom:1px solid #ece9de;}
-          .tabla-precios td{padding:12px 22px;border-bottom:1px solid #ece9de;}
-          .tabla-precios tr:last-child td{border-bottom:none;font-weight:800;color:var(--forest);background:#eef4ea;}
+          .tabla-precios th{text-align:left;padding:11px 22px;font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;border-bottom:1.5px solid #e2e0d4;}
+          .tabla-precios th:not(:first-child),.tabla-precios td:not(:first-child){text-align:right;}
+          .tabla-precios td{padding:12px 22px;border-bottom:1px solid #ece9de;font-variant-numeric:tabular-nums;color:var(--ink);}
+          .tabla-precios td:first-child{font-weight:600;color:var(--muted);}
+          .tabla-precios tr:nth-child(even) td{background:#faf9f3;}
+          .tabla-precios tr:last-child td{border-bottom:none;font-weight:800;color:var(--forest);background:#e3efe3!important;}
+          .tabla-precios tr:last-child td:first-child{color:var(--forest);}
 
           .nota{background:#edf2ed;border-radius:20px;padding:26px 30px;color:var(--forest);line-height:1.6;font-size:.92rem;margin-bottom:70px;}
 
@@ -6627,6 +6632,7 @@ app.get("/", (req, res) => {
             <div class="precios-grid">
               <div class="precio-card">
                 <div class="precio-card-titulo">Compra de tarjetas</div>
+                <div class="precio-card-sub">Precio por unidad según cuántas pidas de una vez</div>
                 <table class="tabla-precios">
                   <tr><th>Cantidad</th><th>Precio c/u</th><th>Ahorro</th></tr>
                   ${ESCALONES_DESCUENTO.slice().reverse().map((e, i, arr) => {
@@ -6638,6 +6644,7 @@ app.get("/", (req, res) => {
               </div>
               <div class="precio-card">
                 <div class="precio-card-titulo">Suscripción Plan Pro</div>
+                <div class="precio-card-sub">Precio mensual por tarjeta según cuántas tengas activas</div>
                 <table class="tabla-precios">
                   <tr><th>Tarjetas activas</th><th>Precio c/u/mes</th></tr>
                   ${ESCALONES_PRO.slice().reverse().map((e, i, arr) => {
@@ -6654,14 +6661,17 @@ app.get("/", (req, res) => {
 
           <div class="contacto">
             <div class="seccion-titulo" style="margin-bottom:8px;">¿Tienes alguna pregunta?</div>
-            <div class="seccion-sub">Estamos aquí para ayudarte.</div>
-            <a class="cta" href="/pedido">Pedir mi tarjeta Tapin →</a>
+            <div class="seccion-sub">Estamos aquí para ayudarte. Escríbenos y te respondemos lo antes posible.</div>
+            <div class="hero-cta-row" style="justify-content:center;">
+              <a class="hero-cta-main" href="https://wa.me/573003489609" target="_blank">WhatsApp</a>
+              <a class="acceso-flecha" style="border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:15px 26px;text-decoration:none;font-weight:700;font-size:.92rem;" href="mailto:hola@tapincol.com">hola@tapincol.com</a>
+            </div>
           </div>
         </div>
 
         <footer class="site-footer">
           <span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span>
-          <span><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/descubre">Descubrir negocios</a></span>
+          <span><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/descubre">Descubrir negocios</a><a href="/admin">Administrador</a></span>
         </footer>
       </body>
     </html>
