@@ -17,6 +17,21 @@ const app = express();
 app.set("trust proxy", 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json()); // necesario para recibir el webhook de Wompi (manda JSON)
+
+// tapin.page se redirige automáticamente a tapincol.com (el dominio nuevo y
+// principal de aquí en adelante) — así las tarjetas físicas grabadas con
+// tapin.page siguen funcionando para siempre, y todo el tráfico nuevo, SEO
+// y enlaces se consolidan en tapincol.com. Redirect 301 (permanente) — es
+// la señal correcta para que Google entienda que el sitio se mudó y
+// traslade el posicionamiento acumulado al dominio nuevo.
+app.use((req, res, next) => {
+  const host = (req.get("host") || "").toLowerCase();
+  if (host === "tapin.page" || host === "www.tapin.page") {
+    return res.redirect(301, `https://tapincol.com${req.originalUrl}`);
+  }
+  next();
+});
+
 const PORT = process.env.PORT || 3000;
 
 // ---------- IMPORTANTE: almacenamiento persistente ----------
@@ -60,10 +75,53 @@ function obtenerTransportador() {
 }
 
 async function enviarEmail(destinatario, asunto, html, adjuntos = []) {
+  if (!destinatario) {
+    console.log(`[email no enviado — falta destinatario] asunto: ${asunto}`);
+    return { ok: false, motivo: "El negocio no tiene 'email' configurado." };
+  }
+
+  // Si hay SENDGRID_API_KEY configurada, se usa esa primero — mejor
+  // entregabilidad (menos probabilidad de caer en spam) que el SMTP básico.
+  // Si no está configurada, cae solo al método anterior (Gmail/SMTP), sin
+  // romper nada de lo que ya funcionaba.
+  if (process.env.SENDGRID_API_KEY) {
+    try {
+      const attachments = adjuntos.map((a) => ({
+        filename: a.filename,
+        content: Buffer.isBuffer(a.content) ? a.content.toString("base64") : Buffer.from(a.content).toString("base64"),
+        type: a.filename.endsWith(".pdf") ? "application/pdf" : "application/octet-stream",
+        disposition: "attachment",
+      }));
+      const resp = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
+        },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: destinatario }] }],
+          from: { email: process.env.SENDGRID_FROM || process.env.EMAIL_USER, name: "Tapin" },
+          subject: asunto,
+          content: [{ type: "text/html", value: html }],
+          ...(attachments.length ? { attachments } : {}),
+        }),
+      });
+      if (resp.ok || resp.status === 202) {
+        console.log(`[email enviado con SendGrid] a ${destinatario} — "${asunto}"`);
+        return { ok: true };
+      }
+      const errorTexto = await resp.text();
+      console.error(`[error SendGrid] a ${destinatario}:`, resp.status, errorTexto);
+      // sigue abajo e intenta con SMTP como respaldo, en vez de fallar directo
+    } catch (err) {
+      console.error("[error SendGrid — intentando SMTP como respaldo]:", err.message);
+    }
+  }
+
   const transportador = obtenerTransportador();
-  if (!transportador || !destinatario) {
-    console.log(`[email no enviado — falta config o destinatario] asunto: ${asunto}`);
-    return { ok: false, motivo: "Falta EMAIL_USER/EMAIL_PASS en el servidor o el negocio no tiene 'email' configurado." };
+  if (!transportador) {
+    console.log(`[email no enviado — falta config] asunto: ${asunto}`);
+    return { ok: false, motivo: "Falta EMAIL_USER/EMAIL_PASS o SENDGRID_API_KEY en el servidor." };
   }
   try {
     await transportador.sendMail({
@@ -80,6 +138,37 @@ async function enviarEmail(destinatario, asunto, html, adjuntos = []) {
     // se veía "Error enviando email" sin detalle suficiente para saber la causa real).
     console.error(`[error enviando email] a ${destinatario} — "${asunto}":`, err.message, err.code || "");
     return { ok: false, motivo: err.message };
+  }
+}
+
+// Llama a la API de Claude (Anthropic) para generar texto — se usa en el
+// generador de contenido para redes y el análisis de patrones en quejas.
+// Necesita ANTHROPIC_API_KEY en las variables de entorno de Render (se saca
+// gratis con crédito inicial en console.anthropic.com). Si no está
+// configurada, devuelve null y quien la llame debe manejar ese caso
+// (mostrar el texto de plantilla de siempre, sin romper nada).
+async function generarConIA(prompt, maxTokens = 300) {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001", // rápido y barato, perfecto para textos cortos
+        max_tokens: maxTokens,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    const data = await resp.json();
+    const texto = data?.content?.find((b) => b.type === "text")?.text;
+    return texto ? texto.trim() : null;
+  } catch (err) {
+    console.error("[generarConIA] Error:", err.message);
+    return null;
   }
 }
 
@@ -1779,11 +1868,20 @@ app.get("/activar/:codigo", (req, res) => {
 
           <div class="form-card">
             <form method="POST" action="/activar/${codigo}" id="form-activar">
+              ${process.env.GOOGLE_PLACES_API_KEY ? `
+              <label>Busca tu negocio en Google (opcional — te llena los datos solo)</label>
+              <input type="text" id="buscador-places" placeholder="Escribe el nombre de tu negocio..."
+                     style="margin-bottom:6px;">
+              <p class="nota" style="margin:-4px 0 16px;font-size:0.76rem;color:${MARCA.textoSuave};">
+                Si tu negocio no aparece en la búsqueda, no hay problema — llena los campos de abajo a mano.
+              </p>
+              ` : ""}
+
               <label>Nombre del negocio</label>
-              <input type="text" name="nombre" required placeholder="Ej: Restaurante La 21">
+              <input type="text" name="nombre" id="input-nombre" required placeholder="Ej: Restaurante La 21">
 
               <label>Enlace de reseñas de Google</label>
-              <input type="url" name="googleUrl" required placeholder="https://g.page/r/.../review">
+              <input type="url" name="googleUrl" id="input-google-url" required placeholder="https://g.page/r/.../review">
 
               <label>Email del negocio (alertas y reportes llegan aquí)</label>
               <input type="email" name="email" required placeholder="dueno@negocio.com">
@@ -1803,7 +1901,7 @@ app.get("/activar/:codigo", (req, res) => {
               <datalist id="lista-ciudades"></datalist>
 
               <label>Dirección exacta</label>
-              <input type="text" name="direccion" required placeholder="Ej: Cra 7 # 12-34, local 2">
+              <input type="text" name="direccion" id="input-direccion" required placeholder="Ej: Cra 7 # 12-34, local 2">
 
               <label>Categoría</label>
               <div class="categorias" id="categorias">
@@ -1878,6 +1976,26 @@ app.get("/activar/:codigo", (req, res) => {
             }
           });
         </script>
+        ${process.env.GOOGLE_PLACES_API_KEY ? `
+        <script>
+          function iniciarPlaces() {
+            const buscador = document.getElementById('buscador-places');
+            if (!buscador || !window.google) return;
+            const autocomplete = new google.maps.places.Autocomplete(buscador, {
+              fields: ['place_id', 'name', 'formatted_address'],
+            });
+            autocomplete.addListener('place_changed', () => {
+              const lugar = autocomplete.getPlace();
+              if (!lugar.place_id) return;
+              if (lugar.name) document.getElementById('input-nombre').value = lugar.name;
+              if (lugar.formatted_address) document.getElementById('input-direccion').value = lugar.formatted_address;
+              document.getElementById('input-google-url').value =
+                'https://search.google.com/local/writereview?placeid=' + lugar.place_id;
+            });
+          }
+        </script>
+        <script async src="https://maps.googleapis.com/maps/api/js?key=${process.env.GOOGLE_PLACES_API_KEY}&libraries=places&callback=iniciarPlaces"></script>
+        ` : ""}
       </body>
     </html>
   `);
@@ -2460,6 +2578,12 @@ app.get("/contenido/:slug", (req, res) => {
             <span>${t.fechaLegible}</span>
             <a href="/contenido/${slug}/tarjeta.svg?key=${req.query.key}&i=${i}" download>Descargar</a>
           </div>
+          ${process.env.ANTHROPIC_API_KEY ? `
+          <div class="tarjeta-caption">
+            <button type="button" onclick="generarCaption(${i}, this)">✨ Generar caption con IA</button>
+            <div class="caption-resultado" id="caption-${i}"></div>
+          </div>
+          ` : ""}
         </div>`;
     })
     .join("");
@@ -2477,6 +2601,12 @@ app.get("/contenido/:slug", (req, res) => {
           .tarjeta img{width:100%;display:block;}
           .tarjeta-pie{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;font-size:0.78rem;color:${MARCA.textoSuave};}
           .tarjeta-pie a{font-weight:700;color:${MARCA.verde};text-decoration:none;}
+          .tarjeta-caption{padding:10px 14px 14px;border-top:1px solid ${MARCA.borde};}
+          .tarjeta-caption button{width:100%;background:${MARCA.crema};border:1px solid ${MARCA.borde};
+                                   border-radius:8px;padding:8px;font-size:0.78rem;font-weight:600;cursor:pointer;color:${MARCA.texto};}
+          .tarjeta-caption button:disabled{opacity:0.6;cursor:wait;}
+          .caption-resultado{font-size:0.8rem;color:${MARCA.textoSuave};margin-top:8px;white-space:pre-wrap;
+                              background:${MARCA.verdeClaro};border-radius:8px;padding:10px;display:none;}
         </style>
       </head>
       <body>
@@ -2489,10 +2619,53 @@ app.get("/contenido/:slug", (req, res) => {
             ${tarjetas || "<p>Todavía no hay testimonios. Aparecerán aquí cuando los clientes califiquen positivo y elijan una frase.</p>"}
           </div>
         </div>
+        <script>
+          async function generarCaption(i, boton) {
+            boton.disabled = true;
+            boton.textContent = 'Generando...';
+            try {
+              const resp = await fetch('/contenido/${slug}/caption?key=${req.query.key}&i=' + i);
+              const data = await resp.json();
+              const div = document.getElementById('caption-' + i);
+              div.textContent = data.caption || 'No se pudo generar — intenta de nuevo.';
+              div.style.display = 'block';
+              boton.textContent = '✨ Generar otra vez';
+            } catch (err) {
+              boton.textContent = 'Error — intenta de nuevo';
+            }
+            boton.disabled = false;
+          }
+        </script>
       </body>
     </html>
   `);
 });
+
+// Genera un caption con IA para acompañar una tarjeta de testimonio al
+// publicarla en redes — bajo demanda, no se genera solo para todas de una.
+app.get("/contenido/:slug/caption", async (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).json({ caption: null });
+  if (!autorizadoProNegocio(req, negocio) || !esPro(negocio)) {
+    return res.status(401).json({ caption: null });
+  }
+  const datos = leerDatos();
+  const testimonios = (datos[slug] && datos[slug].testimonios) || [];
+  const i = parseInt(req.query.i, 10);
+  const t = testimonios[i];
+  if (!t) return res.status(404).json({ caption: null });
+
+  const prompt = `Eres el community manager de "${negocio.nombre}", un negocio de categoría "${negocio.categoria || "general"}" en Colombia. ` +
+    `Un cliente calificó bien y eligió esta frase: "${t.frase}". ` +
+    `Escribe un caption corto para Instagram (máximo 3 líneas, tono cálido y cercano, en español de Colombia, ` +
+    `sin hashtags genéricos de relleno, máximo 2-3 hashtags relevantes al final) para acompañar una imagen con este testimonio. ` +
+    `Responde solo con el caption, sin explicaciones ni comillas.`;
+
+  const caption = await generarConIA(prompt, 200);
+  res.json({ caption: caption || "No se pudo generar el caption — intenta de nuevo en un momento." });
+});
+
 
 // Descarga el SVG individual de una tarjeta de testimonio.
 app.get("/contenido/:slug/tarjeta.svg", (req, res) => {
