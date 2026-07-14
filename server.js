@@ -14,7 +14,48 @@ const app = express();
 // siempre da "http" aunque el sitio real sea https — y eso rompe cualquier
 // cosa que arme una URL completa a partir de req.protocol (como el login de
 // Google, que exige que el redirect_uri coincida exactamente con https).
+// Limitador de intentos simple, en memoria (sin librerías ni base de datos
+// aparte) — protege login de cliente, acceso de administrador, y registro
+// contra alguien probando contraseñas o claves sin parar. Se resetea si el
+// servidor se reinicia, lo cual es aceptable para este tamaño de proyecto.
+const intentosPorIP = {};
+function limitarIntentos(maxIntentos, ventanaMinutos) {
+  return (req, res, next) => {
+    const ip = req.ip || "desconocida";
+    const clave = `${ip}:${req.path}`;
+    const ahora = Date.now();
+    const ventanaMs = ventanaMinutos * 60 * 1000;
+    if (!intentosPorIP[clave]) intentosPorIP[clave] = [];
+    intentosPorIP[clave] = intentosPorIP[clave].filter((t) => ahora - t < ventanaMs);
+    if (intentosPorIP[clave].length >= maxIntentos) {
+      return res.status(429).send("Demasiados intentos. Espera unos minutos e inténtalo de nuevo.");
+    }
+    intentosPorIP[clave].push(ahora);
+    next();
+  };
+}
+// Limpieza periódica para que este objeto no crezca sin control con el tiempo.
+setInterval(() => {
+  const ahora = Date.now();
+  for (const clave in intentosPorIP) {
+    intentosPorIP[clave] = intentosPorIP[clave].filter((t) => ahora - t < 30 * 60 * 1000);
+    if (intentosPorIP[clave].length === 0) delete intentosPorIP[clave];
+  }
+}, 10 * 60 * 1000);
+
 app.set("trust proxy", 1);
+
+// Encabezados de seguridad básicos en cada respuesta — sin librerías extra.
+// No cambian nada visual ni de comportamiento, solo le dicen al navegador
+// que sea más estricto (no dejar que Tapin se cargue dentro de un iframe
+// ajeno, no adivinar tipos de archivo, etc.).
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Strict-Transport-Security", "max-age=15552000; includeSubDomains");
+  next();
+});
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json()); // necesario para recibir el webhook de Wompi (manda JSON)
 
@@ -480,7 +521,7 @@ function iniciarSesionCliente(res, clienteId, recordar = true) {
   // Si "recordar" está marcado, la sesión dura 30 días. Si no, es una cookie
   // de sesión normal — se borra sola al cerrar el navegador.
   const maxAge = recordar ? `Max-Age=${30 * 24 * 60 * 60}; ` : "";
-  res.setHeader("Set-Cookie", `tapin_sesion=${token}; HttpOnly; Path=/; ${maxAge}SameSite=Lax`);
+  res.setHeader("Set-Cookie", `tapin_sesion=${token}; HttpOnly; Secure; Path=/; ${maxAge}SameSite=Lax`);
 }
 
 function generarCodigo() {
@@ -529,6 +570,20 @@ function esPro(negocio) {
   return true;
 }
 
+// Escapa HTML para que texto escrito por clientes (comentarios de quejas,
+// nombres, etc.) nunca se interprete como código — sin esto, alguien podría
+// escribir <script> en un comentario y que se ejecute cuando el negocio abra
+// su panel o su correo de alerta. Se usa en TODO texto libre de usuario que
+// se inserta en HTML.
+function escaparHtml(texto) {
+  return String(texto == null ? "" : texto)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // Valida que un link realmente sea de Google Maps/Reseñas, para no dejar
 // pasar por error un link equivocado que rompería la redirección de reseñas.
 function esLinkGoogleValido(url) {
@@ -558,7 +613,7 @@ function ponerCookieSesion(res, slug, clave) {
   const valor = encodeURIComponent(clave);
   res.setHeader(
     "Set-Cookie",
-    `tapin_sesion_${slug}=${valor}; Max-Age=${60 * 60 * 24 * 30}; Path=/; HttpOnly; SameSite=Lax`
+    `tapin_sesion_${slug}=${valor}; Max-Age=${60 * 60 * 24 * 30}; Path=/; HttpOnly; Secure; SameSite=Lax`
   );
 }
 // Da la clave efectiva a usar: la de la URL si vino, si no la de la cookie de
@@ -821,21 +876,12 @@ function barraSemana(dias7) {
   }
   return dias7
     .map((v, i) => {
-      const alturaPct = v === 0 ? 8 : Math.max(16, Math.round((v / max) * 100));
-      const esPico = v === max && v > 0;
-      const esHoy = i === dias7.length - 1;
-      const relleno = esPico
-        ? "linear-gradient(180deg,#195B40 0%,#0B3D2A 100%)"
-        : esHoy
-          ? "linear-gradient(180deg,#4F9672 0%,#1F6749 100%)"
-          : "linear-gradient(180deg,#77A98C 0%,#347659 100%)";
+      const alturaPx = 6 + Math.round((v / max) * 46);
       return `
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px;flex:1;height:100%;min-width:0;">
-          <div style="font-size:0.72rem;font-weight:${esPico ? "800" : "700"};color:${esPico ? MARCA.verdeOscuro : MARCA.textoSuave};line-height:1;">${v}</div>
-          <div style="height:52px;width:100%;max-width:30px;display:flex;align-items:flex-end;border-radius:7px 7px 3px 3px;background:#EDF2EE;overflow:hidden;">
-            <div style="width:100%;height:${alturaPct}%;background:${relleno};border-radius:6px 6px 2px 2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.2);"></div>
-          </div>
-          <div style="font-size:0.62rem;color:${esHoy ? MARCA.verdeOscuro : "#718078"};font-weight:${esHoy ? "800" : "600"};text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;height:100%;">
+          <div style="font-size:0.75rem;font-weight:700;color:${MARCA.textoSuave};line-height:1;">${v}</div>
+          <div style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
+          <div style="font-size:0.62rem;color:#999;text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
         </div>`;
     })
     .join("");
@@ -847,10 +893,8 @@ function barraHoras(porHora, picoHora) {
   const max = Math.max(1, ...porHora);
   return porHora
     .map((v, h) => {
-      const alturaPx = v === 0 ? 5 : Math.max(12, Math.round((v / max) * 64));
-      const color = h === picoHora && v > 0
-        ? "linear-gradient(180deg,#195B40 0%,#0B3D2A 100%)"
-        : "linear-gradient(180deg,#6FA486 0%,#2F7355 100%)";
+      const alturaPx = 4 + Math.round((v / max) * 64);
+      const color = h === picoHora && v > 0 ? MARCA.oro : MARCA.verde;
       return `<div style="flex:1;height:${alturaPx}px;background:${color};border-radius:2px 2px 0 0;" title="${h}:00 — ${v} toques"></div>`;
     })
     .join("");
@@ -924,8 +968,8 @@ function guardarQueja(slug, comentario, negocio, telefono = "") {
       negocio.email,
       `⚠️ Nueva queja privada en ${negocio.nombre}`,
       `<p>Un cliente dejó una calificación negativa y este comentario privado:</p>
-       <p style="background:#F8F4EC;padding:14px;border-radius:8px;">"${comentario}"</p>
-       ${telefono ? `<p>Teléfono de contacto: <b>${telefono}</b></p>` : ""}
+       <p style="background:#F8F4EC;padding:14px;border-radius:8px;">"${escaparHtml(comentario)}"</p>
+       ${telefono ? `<p>Teléfono de contacto: <b>${escaparHtml(telefono)}</b></p>` : ""}
        <p>Puedes verla y marcarla como contactada/resuelta en tu panel Pro.</p>`
     ).catch((err) => console.error("[alerta queja] Error enviando correo:", err.message));
   }
@@ -1032,6 +1076,21 @@ function promedioSector(categoria, slugActual, datos) {
   }, 0);
   return Math.round(total / pares.length);
 }
+
+// Lista blanca de frases válidas de testimonio — se usa tanto para mostrar
+// los chips en /calificar como para VALIDAR que lo que llega a /testimonio
+// (que viaja como parámetro en la URL) sea de verdad una de estas frases y
+// no texto arbitrario. Sin esto, alguien podría armar un link con cualquier
+// texto en "?frase=" y ese texto terminaría metido sin control en el prompt
+// que le mandamos a la IA para generar el caption (inyección de prompt).
+const FRASES_POR_CATEGORIA = {
+  restaurante: ["Excelente atención", "Muy buena comida", "Ambiente increíble", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
+  peluqueria: ["Excelente atención", "Quedé feliz con el resultado", "Ambiente muy agradable", "Rápido y puntual", "Lo recomiendo 100%", "Volveré seguro"],
+  tienda: ["Excelente atención", "Buenos precios", "Gran variedad", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
+  clinica: ["Excelente atención", "Muy profesionales", "Instalaciones impecables", "Puntualidad", "Lo recomiendo 100%", "Volveré seguro"],
+  otro: ["Excelente atención", "Muy buen servicio", "Ambiente increíble", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
+};
+const TODAS_LAS_FRASES_VALIDAS = new Set(Object.values(FRASES_POR_CATEGORIA).flat());
 
 // ---------- Rutas ----------
 
@@ -1143,14 +1202,7 @@ app.get("/calificar/:slug", (req, res) => {
       return res.redirect(302, negocio.googleUrl);
     }
 
-    const frasesPorCategoria = {
-      restaurante: ["Excelente atención", "Muy buena comida", "Ambiente increíble", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
-      peluqueria: ["Excelente atención", "Quedé feliz con el resultado", "Ambiente muy agradable", "Rápido y puntual", "Lo recomiendo 100%", "Volveré seguro"],
-      tienda: ["Excelente atención", "Buenos precios", "Gran variedad", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
-      clinica: ["Excelente atención", "Muy profesionales", "Instalaciones impecables", "Puntualidad", "Lo recomiendo 100%", "Volveré seguro"],
-      otro: ["Excelente atención", "Muy buen servicio", "Ambiente increíble", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
-    };
-    const frases = frasesPorCategoria[negocio.categoria] || frasesPorCategoria.otro;
+    const frases = FRASES_POR_CATEGORIA[negocio.categoria] || FRASES_POR_CATEGORIA.otro;
     const chips = frases
       .map(
         (f) =>
@@ -1313,9 +1365,9 @@ app.post("/calificar/:slug", async (req, res) => {
           <h2 style="color:#C0392B;margin-bottom:4px;">Un cliente no tuvo una buena experiencia</h2>
           <p style="color:#666;font-size:0.9rem;margin-top:0;">${horaLocal}</p>
           <div style="background:#FBEFE9;border-left:3px solid #C0392B;padding:14px 16px;border-radius:8px;margin:16px 0;">
-            <p style="margin:0;color:#16201C;">"${comentario}"</p>
+            <p style="margin:0;color:#16201C;">"${escaparHtml(comentario)}"</p>
           </div>
-          ${telefono ? `<p><b>Teléfono para contactarlo:</b> <a href="tel:${telefono}">${telefono}</a></p>` : `<p style="color:#888;">No dejó teléfono de contacto.</p>`}
+          ${telefono ? `<p><b>Teléfono para contactarlo:</b> <a href="tel:${encodeURIComponent(telefono)}">${escaparHtml(telefono)}</a></p>` : `<p style="color:#888;">No dejó teléfono de contacto.</p>`}
           <p style="font-size:0.85rem;color:#888;margin-top:24px;">Entre más rápido respondas, más probable es convertir esto en un cliente recuperado en vez de una reseña negativa pública.</p>
         </div>
       `
@@ -1344,7 +1396,11 @@ app.get("/testimonio/:slug", (req, res) => {
 
   const frase = req.query.frase || "";
   const valor = parseInt(req.query.valor, 10) || 5;
-  if (frase && esPro(negocio)) guardarTestimonio(slug, frase, valor, negocio);
+  // Solo se guarda si es EXACTAMENTE una de las frases predefinidas — nunca
+  // texto libre. Esto es lo que evita que alguien arme un link con cualquier
+  // cosa en "?frase=" y ese texto termine sin control dentro del prompt que
+  // se le manda a la IA más adelante, al generar el caption de esa tarjeta.
+  if (frase && esPro(negocio) && TODAS_LAS_FRASES_VALIDAS.has(frase)) guardarTestimonio(slug, frase, valor, negocio);
 
   res.redirect(302, negocio.googleUrl);
 });
@@ -1457,6 +1513,7 @@ app.post("/editar/nuevo", (req, res) => {
     },
   };
   guardarCodigos(codigos);
+  registrarAuditoriaGlobal("crear_negocio", `Negocio "${nombre}" (${slug}) creado directamente desde /editar/nuevo`, req);
 
   res.redirect(`/editar?key=${req.query.key}`);
 });
@@ -1516,10 +1573,15 @@ app.post("/editar/:slug", (req, res) => {
     lng: lng ? parseFloat(lng) : null,
   };
   guardarCodigos(codigos);
+  const planCambio = negocioActual.plan !== (plan === "pro" ? "pro" : "basico");
+  registrarAuditoriaGlobal(
+    "editar_negocio",
+    `Negocio "${nombre}" (${slug}) editado desde /editar${planCambio ? ` — plan cambiado de "${negocioActual.plan}" a "${plan === "pro" ? "pro" : "basico"}"` : ""}`,
+    req
+  );
 
   res.redirect(`/editar?key=${req.query.key}`);
 });
-
 // Pantalla de confirmación antes de quitar una tarjeta (para evitar borrados accidentales).
 app.get("/editar/:slug/quitar", (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
@@ -1582,6 +1644,7 @@ app.post("/editar/:slug/quitar", (req, res) => {
   codigos[slug].desactivado = true;
   codigos[slug].desactivadoEl = new Date().toISOString();
   guardarCodigos(codigos);
+  registrarAuditoriaGlobal("quitar_negocio", `Negocio "${negocio.nombre}" (${slug}) desactivado desde /editar`, req);
 
   res.redirect(`/editar?key=${req.query.key}`);
 });
@@ -1805,6 +1868,7 @@ app.post("/codigos/generar", async (req, res) => {
   }
 
   guardarCodigos(codigos);
+  registrarAuditoriaGlobal("generar_codigos", `${cantidad} código(s) generado(s)${proIncluido ? ` con Plan Pro ${planProTipo} incluido` : ""}${email ? ` — enviados a ${email}` : ""}`, req);
 
   if (email && nuevos.length > 0) {
     const base = `${req.protocol}://${req.get("host")}`;
@@ -2256,19 +2320,19 @@ app.get("/stats", (req, res) => {
 
           /* Resumen global */
           .resumen-grid{display:flex;gap:14px;flex-wrap:wrap;}
-          .resumen-box{background:linear-gradient(145deg,#fff,#F4F8F3);border:1px solid ${MARCA.borde};border-radius:18px;padding:23px 16px;text-align:center;
-                       box-shadow:0 8px 18px rgba(11,61,44,0.06);flex:1;min-width:140px;}
+          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px 16px;text-align:center;
+                       box-shadow:0 1px 2px rgba(11,61,44,0.04);flex:1;min-width:140px;}
           .resumen-num{font-size:2rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
           .resumen-lbl{font-size:0.74rem;color:${MARCA.textoSuave};margin-top:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
-          .chart-card{background:linear-gradient(145deg,#fff,#FBFCF9);border:1px solid ${MARCA.borde};border-radius:22px;padding:24px;margin-top:16px;
-                      box-shadow:0 12px 26px rgba(11,61,44,0.07);}
-          .chart-card-titulo{font-size:0.82rem;font-weight:800;color:${MARCA.verdeOscuro};margin-bottom:18px;text-align:left;}
+          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px 24px;margin-top:16px;
+                      box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .chart-card-titulo{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:18px;text-align:center;}
           .sparkline-grande{height:120px;max-width:520px;margin:0 auto;}
 
           /* Lista de negocios */
           .lista-negocios{display:flex;flex-direction:column;gap:16px;}
-          .card{background:linear-gradient(145deg,#fff,#FBFCF9);border-radius:22px;padding:25px;box-shadow:0 6px 16px rgba(11,61,44,0.05), 0 14px 30px rgba(11,61,44,0.06);border:1px solid ${MARCA.borde};transition:box-shadow .2s,transform .2s,border-color .2s;}
-          .card:hover{box-shadow:0 8px 20px rgba(11,61,44,0.08), 0 18px 38px rgba(11,61,44,0.11);transform:translateY(-3px);border-color:#AFC8B5;}
+          .card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 1px 2px rgba(11,61,44,0.04), 0 8px 24px rgba(11,61,44,0.06);border:1px solid ${MARCA.borde};transition:box-shadow .2s;}
+          .card:hover{box-shadow:0 1px 2px rgba(11,61,44,0.05), 0 12px 32px rgba(11,61,44,0.10);}
           .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
           .card-nombre{font-weight:700;font-size:1.08rem;letter-spacing:-0.01em;}
           .badge-pro{background:${MARCA.oro};color:#fff;font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:100px;letter-spacing:0.04em;vertical-align:middle;}
@@ -2277,7 +2341,7 @@ app.get("/stats", (req, res) => {
           .card-total{text-align:right;font-size:1.7rem;font-weight:700;color:${MARCA.verde};line-height:1;}
           .card-total span{display:block;font-size:0.6rem;font-weight:600;color:${MARCA.textoSuave};margin-top:4px;letter-spacing:0.04em;text-transform:uppercase;}
           .card-metrics{display:flex;gap:12px;margin-bottom:26px;max-width:340px;}
-          .metric{background:linear-gradient(145deg,#EAF4EC,#DDEEE2);border:1px solid #D0E5D5;border-radius:14px;padding:13px 14px;flex:1;text-align:center;}
+          .metric{background:${MARCA.verdeClaro};border-radius:12px;padding:12px 14px;flex:1;text-align:center;}
           .metric-num{font-size:1.3rem;font-weight:700;color:${MARCA.verdeOscuro};}
           .metric-lbl{font-size:0.68rem;color:${MARCA.verde};margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
           .sparkline{display:flex;align-items:flex-end;gap:5px;height:92px;margin-bottom:16px;max-width:300px;}
@@ -2289,22 +2353,22 @@ app.get("/stats", (req, res) => {
           .card-ultimo{font-size:0.82rem;color:${MARCA.textoSuave};margin-bottom:16px;padding-top:14px;border-top:1px solid ${MARCA.borde};}
           .card-ultimo b{color:${MARCA.texto};}
           .card-actions{display:flex;flex-wrap:wrap;gap:8px;}
-          .card-actions a{color:${MARCA.verdeOscuro};font-weight:800;text-decoration:none;font-size:0.74rem;
-                          white-space:nowrap;background:${MARCA.verdeClaro};border:1px solid #CDE2D2;padding:8px 12px;border-radius:999px;transition:transform .16s,background .16s,box-shadow .16s;}
-          .card-actions a:hover{background:${MARCA.verde};color:#fff;transform:translateY(-2px);box-shadow:0 7px 14px rgba(11,61,44,.16);}
+          .card-actions a{color:${MARCA.verdeOscuro};font-weight:600;text-decoration:none;font-size:0.74rem;
+                          white-space:nowrap;background:${MARCA.verdeClaro};padding:6px 12px;border-radius:100px;}
+          .card-actions a:hover{background:${MARCA.verde};color:#fff;}
           .seccion-pais{margin-bottom:36px;}
           .pais-header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;
                        border-bottom:2px solid ${MARCA.verdeOscuro};padding-bottom:10px;margin-bottom:18px;}
           .pais-titulo{font-size:1.15rem;font-weight:800;color:${MARCA.verdeOscuro};}
           .pais-conteo{font-size:0.78rem;color:${MARCA.textoSuave};font-weight:600;}
           .botones-paises{display:flex;flex-wrap:wrap;justify-content:center;margin-bottom:28px;}
-          .btn-pais{background:#fff;border:1px solid ${MARCA.borde};color:${MARCA.texto};font-weight:800;
-                    font-size:0.82rem;padding:10px 18px;border-radius:999px;text-decoration:none;
-                    margin:0 8px 8px 0;display:inline-block;box-shadow:0 4px 10px rgba(11,61,44,.04);transition:transform .16s,box-shadow .16s,border-color .16s;}
-          .btn-pais:hover{border-color:${MARCA.verdeOscuro};background:${MARCA.verdeClaro};transform:translateY(-2px);box-shadow:0 9px 16px rgba(11,61,44,.1);}
+          .btn-pais{background:#fff;border:1px solid ${MARCA.borde};color:${MARCA.texto};font-weight:700;
+                    font-size:0.82rem;padding:9px 18px;border-radius:100px;text-decoration:none;
+                    margin:0 8px 8px 0;display:inline-block;}
+          .btn-pais:hover{border-color:${MARCA.verdeOscuro};background:${MARCA.verdeClaro};}
           .topbar-nav{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:flex-end;}
-          .topbar-nav a{color:#fff;font-size:0.78rem;font-weight:800;text-decoration:none;white-space:nowrap;padding:8px 11px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.12);transition:background .16s,transform .16s;}
-          .topbar-nav a:hover{color:#fff;background:rgba(255,255,255,.2);transform:translateY(-1px);}
+          .topbar-nav a{color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;white-space:nowrap;}
+          .topbar-nav a:hover{color:#fff;text-decoration:underline;}
           @media (max-width:640px){
             .topbar{flex-direction:column;align-items:flex-start;gap:10px;padding:16px 20px;}
             .topbar-nav{justify-content:flex-start;width:100%;}
@@ -2321,6 +2385,8 @@ app.get("/stats", (req, res) => {
             <a href="/descubre" target="_blank">Mapa público</a>
             <a href="/editar?key=${key}">Editar negocios</a>
             <a href="/codigos?key=${key}">+ Generar tarjetas</a>
+            <a href="/auditoria?key=${key}">Auditoría</a>
+            <a href="/respaldo?key=${key}">Respaldo</a>
           </div>
         </div>
         <div class="content">
@@ -2445,8 +2511,8 @@ app.get("/quejas/:slug", (req, res) => {
       const estado = q.estado || "pendiente";
       return `<tr>
         <td data-label="Fecha">${q.fechaLegible}</td>
-        <td data-label="Comentario">${q.comentario}</td>
-        <td data-label="Teléfono">${q.telefono ? `<a href="tel:${q.telefono}">${q.telefono}</a>` : "—"}</td>
+        <td data-label="Comentario">${escaparHtml(q.comentario)}</td>
+        <td data-label="Teléfono">${q.telefono ? `<a href="tel:${encodeURIComponent(q.telefono)}">${escaparHtml(q.telefono)}</a>` : "—"}</td>
         <td data-label="Estado"><span style="background:${fondos[estado]};color:${colores[estado]};padding:4px 10px;border-radius:100px;font-size:0.74rem;font-weight:700;">${estado}</span></td>
         <td data-label="Nota">
           <form method="POST" action="/quejas/${slug}/nota?key=${req.query.key}" style="display:flex;gap:4px;">
@@ -2457,8 +2523,14 @@ app.get("/quejas/:slug", (req, res) => {
           </form>
         </td>
         <td data-label="Acción">
-          ${estado !== "contactado" ? `<a href="/quejas/${slug}/estado?key=${req.query.key}&i=${i}&estado=contactado" style="margin-right:8px;">Marcar contactado</a>` : ""}
-          ${estado !== "resuelto" ? `<a href="/quejas/${slug}/estado?key=${req.query.key}&i=${i}&estado=resuelto">Marcar resuelto</a>` : ""}
+          ${estado !== "contactado" ? `<form method="POST" action="/quejas/${slug}/estado?key=${req.query.key}" style="display:inline;">
+              <input type="hidden" name="i" value="${i}"><input type="hidden" name="estado" value="contactado">
+              <button type="submit" style="background:none;border:none;color:${MARCA.verde};font-weight:600;font-size:0.82rem;cursor:pointer;padding:0;margin-right:8px;text-decoration:underline;">Marcar contactado</button>
+            </form>` : ""}
+          ${estado !== "resuelto" ? `<form method="POST" action="/quejas/${slug}/estado?key=${req.query.key}" style="display:inline;">
+              <input type="hidden" name="i" value="${i}"><input type="hidden" name="estado" value="resuelto">
+              <button type="submit" style="background:none;border:none;color:${MARCA.verde};font-weight:600;font-size:0.82rem;cursor:pointer;padding:0;text-decoration:underline;">Marcar resuelto</button>
+            </form>` : ""}
         </td>
       </tr>`;
     })
@@ -2514,15 +2586,15 @@ app.get("/quejas/:slug", (req, res) => {
 
 // Cambia el estado de una queja (pendiente -> contactado -> resuelto), para llevar
 // el seguimiento de recuperación de clientes insatisfechos.
-app.get("/quejas/:slug/estado", (req, res) => {
+app.post("/quejas/:slug/estado", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado.");
   }
-  const i = parseInt(req.query.i, 10);
-  const nuevoEstado = req.query.estado;
+  const i = parseInt(req.body.i, 10);
+  const nuevoEstado = req.body.estado;
   if (!["contactado", "resuelto", "pendiente"].includes(nuevoEstado)) {
     return res.status(400).send("Estado inválido.");
   }
@@ -2823,27 +2895,19 @@ app.get("/mi-panel/:slug", (req, res) => {
                        display:flex;align-items:center;justify-content:space-between;
                        padding-left:10px;border-left:3px solid ${MARCA.verde};}
           .card-titulo span.suave{font-weight:600;color:${MARCA.oro};font-size:0.72rem;}
-          .accion-panel{display:inline-flex!important;align-items:center;justify-content:center;min-height:38px;
-                         border-radius:10px!important;padding:9px 15px!important;box-shadow:none!important;
-                         background:${MARCA.verdeOscuro}!important;border-color:${MARCA.verdeOscuro}!important;color:#fff!important;
-                         transition:border-color .16s ease,background .16s ease,color .16s ease!important;}
-          .accion-panel:hover{transform:none;background:${MARCA.verde}!important;border-color:${MARCA.verde}!important;}
-          .accion-panel.accion-principal{background:${MARCA.verdeOscuro}!important;border-color:${MARCA.verdeOscuro}!important;color:#fff!important;}
-          .accion-panel.accion-principal:hover{background:${MARCA.verde}!important;border-color:${MARCA.verde}!important;}
-          .accion-panel:focus-visible,.btn-herramienta:focus-visible,.btn-reporte-pdf:focus-visible{outline:3px solid rgba(201,162,75,.5);outline-offset:3px;}
 
           .resumen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:16px 8px;text-align:center;
-                       box-shadow:none;border-top:3px solid ${MARCA.verdeOscuro};}
+          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:14px 8px;text-align:center;
+                       box-shadow:0 1px 2px rgba(11,61,44,0.04);}
           .resumen-num{font-size:1.5rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
           .resumen-lbl{font-size:0.64rem;color:${MARCA.textoSuave};margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.02em;}
 
-          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;padding:20px;margin-top:12px;
-                      box-shadow:none;box-sizing:border-box;}
+          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px 18px;margin-top:12px;
+                      box-shadow:0 1px 2px rgba(11,61,44,0.04);box-sizing:border-box;}
           .grid-2 .chart-card{height:100%;}
-          .chart-card-titulo{font-size:0.78rem;font-weight:800;letter-spacing:.025em;color:${MARCA.verdeOscuro};margin-bottom:16px;text-align:left;}
+          .chart-card-titulo{font-size:0.78rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:12px;text-align:center;}
           .sparkline{display:flex;align-items:flex-end;gap:5px;}
-          .sparkline-grande{height:98px;padding:4px 2px 2px;}
+          .sparkline-grande{height:70px;}
 
           .ultimo-toque{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};margin-top:10px;}
           .ultimo-toque b{color:${MARCA.texto};}
@@ -2851,12 +2915,12 @@ app.get("/mi-panel/:slug", (req, res) => {
           .reco{background:${MARCA.verdeClaro};border-left:3px solid ${MARCA.verde};border-radius:8px;padding:12px 14px;
                 font-size:0.83rem;margin-bottom:8px;color:${MARCA.verdeOscuro};}
 
-          .horas-chart{display:flex;align-items:flex-end;gap:3px;height:70px;padding:4px 0 0;border-bottom:1px solid ${MARCA.borde};}
+          .horas-chart{display:flex;align-items:flex-end;gap:2px;height:60px;}
           .horas-labels{display:flex;justify-content:space-between;font-size:0.6rem;color:${MARCA.textoSuave};margin-top:6px;}
           .horas-nota{text-align:center;font-size:0.76rem;color:${MARCA.textoSuave};margin-top:10px;}
           .horas-nota b{color:${MARCA.texto};}
 
-          .sentimiento-barra{display:flex;height:16px;border-radius:100px;overflow:hidden;background:${MARCA.borde};box-shadow:inset 0 1px 2px rgba(0,0,0,.08);}
+          .sentimiento-barra{display:flex;height:14px;border-radius:100px;overflow:hidden;background:${MARCA.borde};}
           .sentimiento-leyenda{display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:0.78rem;color:${MARCA.textoSuave};}
           .sentimiento-leyenda span{display:flex;align-items:center;gap:6px;}
           .sentimiento-leyenda i{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
@@ -2871,14 +2935,14 @@ app.get("/mi-panel/:slug", (req, res) => {
           .tabla-actividad tr:last-child td{border-bottom:none;}
 
           .fila-herramientas{display:flex;gap:10px;flex-wrap:wrap;}
-          .btn-herramienta{flex:1;min-width:140px;background:${MARCA.verdeOscuro};border:1px solid ${MARCA.verdeOscuro};border-radius:10px;
-                           padding:12px 14px;text-decoration:none;color:#fff;font-size:0.82rem;font-weight:700;
-                           text-align:center;box-shadow:none;transition:border-color .18s,background .18s;}
-          .btn-herramienta:hover{border-color:${MARCA.verde};transform:none;box-shadow:none;background:${MARCA.verde};}
+          .btn-herramienta{flex:1;min-width:140px;background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;
+                           padding:12px 14px;text-decoration:none;color:${MARCA.texto};font-size:0.82rem;font-weight:700;
+                           text-align:center;box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .btn-herramienta:hover{border-color:${MARCA.verde};}
           .btn-reporte-pdf{display:flex;align-items:center;justify-content:space-between;gap:12px;
-                           background:${MARCA.verdeOscuro};color:#fff;border-radius:10px;padding:16px 20px;
+                           background:${MARCA.verdeOscuro};color:#fff;border-radius:14px;padding:16px 20px;
                            text-decoration:none;margin-top:12px;}
-          .btn-reporte-pdf b{font-size:0.92rem;}.btn-reporte-pdf:hover{transform:none;box-shadow:none;background:${MARCA.verde};}
+          .btn-reporte-pdf b{font-size:0.92rem;}
           .btn-reporte-pdf span{font-size:0.76rem;color:#CFE3D6;display:block;margin-top:2px;}
           .btn-reporte-pdf .flecha{font-size:1.3rem;flex-shrink:0;}
         </style>
@@ -2905,25 +2969,25 @@ app.get("/mi-panel/:slug", (req, res) => {
             </div>
             ${!soloLectura ? `
             <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-              <a class="accion-panel" href="/mi-panel/${slug}/editar?key=${req.query.key}"
+              <a href="/mi-panel/${slug}/editar?key=${req.query.key}"
                  style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
                         border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;
                         transition:border-color .15s;">
                 Editar mi negocio
               </a>
-              <a class="accion-panel" href="/mi-panel/${slug}/clave?key=${req.query.key}"
+              <a href="/mi-panel/${slug}/clave?key=${req.query.key}"
                  style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
                         border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;">
                 Cambiar mi clave
               </a>
               ${esPro(negocio) ? `
-              <a class="accion-panel" href="/suscripcion/${slug}?key=${req.query.key}"
+              <a href="/suscripcion/${slug}?key=${req.query.key}"
                  style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
                         border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;">
                 Mi suscripción
               </a>
               ` : ""}
-              <a class="accion-panel accion-principal" href="/mi-panel/${slug}/configuracion?key=${req.query.key}"
+              <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}"
                  style="font-size:0.78rem;font-weight:700;color:#fff;background:${MARCA.oro};
                         border:1.5px solid ${MARCA.oro};border-radius:100px;padding:9px 18px;text-decoration:none;">
                 Configuración
@@ -3631,7 +3695,7 @@ app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
     .map(([id, c]) => {
       const listo = fid.metaSellos && c.sellos >= fid.metaSellos;
       return `<tr style="${listo ? `background:${MARCA.verdeClaro};` : ""}">
-        <td>${c.nombre || id}</td>
+        <td>${escaparHtml(c.nombre || id)}</td>
         <td>${id}</td>
         <td>${c.sellos || 0} / ${fid.metaSellos || "—"}</td>
         <td>${listo
@@ -4716,7 +4780,7 @@ app.get("/enviar-resumenes-quejas", async (req, res) => {
     }
 
     const filas = quejas
-      .map((q) => `<li style="margin-bottom:10px;"><b>${q.fechaLegible}</b><br>"${q.comentario}"${q.telefono ? `<br>Tel: ${q.telefono}` : ""}</li>`)
+      .map((q) => `<li style="margin-bottom:10px;"><b>${q.fechaLegible}</b><br>"${escaparHtml(q.comentario)}"${q.telefono ? `<br>Tel: ${escaparHtml(q.telefono)}` : ""}</li>`)
       .join("");
     try {
       await enviarEmail(
@@ -4846,6 +4910,12 @@ app.get("/reportes-guardados/:slug/:mes.pdf", (req, res) => {
   if (!autorizadoProNegocio(req, negocio, slug)) {
     return res.status(401).send("No autorizado.");
   }
+  // Valida que "mes" tenga exactamente el formato AAAA-MM esperado — sin esto,
+  // alguien podría meter "../../../algo" en la URL e intentar leer archivos
+  // fuera de la carpeta de reportes (path traversal).
+  if (!/^\d{4}-\d{2}$/.test(mes)) {
+    return res.status(400).send("Formato de mes inválido.");
+  }
 
   const archivo = path.join(DATA_DIR, "reportes", slug, `${mes}.pdf`);
   if (!fs.existsSync(archivo)) {
@@ -4878,6 +4948,130 @@ app.get("/stats.json", (req, res) => {
   res.json(resultado);
 });
 
+// ---------- Respaldo manual de todos los datos ----------
+// No hay backup automático de los archivos JSON (viven solo en el disco de
+// Render) — esto te da un botón para descargar TODO en un solo archivo
+// cuando quieras, sin depender de ninguna librería nueva que instalar.
+// Recomendado: descárgalo a mano cada tanto, o prográmalo en cron-job.org
+// para que te lo mande por correo cada semana (ver /respaldo-correo abajo).
+// Visítalo así: https://tu-dominio.com/respaldo?key=TU_CLAVE
+// Muestra el registro de acciones administrativas sensibles (crear/editar/
+// quitar negocios, generar códigos) — quién hizo qué y cuándo, para tener
+// rastro si algo raro pasa o simplemente para acordarte de tus propios cambios.
+// Visítalo así: https://tu-dominio.com/auditoria?key=TU_CLAVE
+app.get("/auditoria", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  let registros = [];
+  try {
+    if (fs.existsSync(AUDITORIA_GLOBAL_FILE)) registros = JSON.parse(fs.readFileSync(AUDITORIA_GLOBAL_FILE, "utf8"));
+  } catch {
+    registros = [];
+  }
+  const filas = registros
+    .slice()
+    .reverse()
+    .slice(0, 300)
+    .map((r) => `<tr>
+        <td>${escaparHtml(r.fechaLegible)}</td>
+        <td><span class="pill">${escaparHtml(r.accion)}</span></td>
+        <td>${escaparHtml(r.detalle)}</td>
+        <td class="ip">${escaparHtml(r.ip || "—")}</td>
+      </tr>`)
+    .join("");
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Auditoría — Tapin</title>
+        <style>
+          ${ESTILO_BASE}
+          table{border-collapse:collapse;width:100%;background:#fff;border-radius:12px;overflow:hidden;border:1px solid ${MARCA.borde};}
+          th,td{padding:11px 16px;text-align:left;font-size:0.84rem;border-bottom:1px solid ${MARCA.borde};}
+          th{background:${MARCA.verdeOscuro};color:#fff;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;}
+          .pill{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};padding:3px 10px;border-radius:100px;font-size:0.72rem;font-weight:700;}
+          .ip{font-family:monospace;font-size:0.76rem;color:${MARCA.textoSuave};}
+        </style>
+      </head>
+      <body>
+        <div class="topbar">
+          <div>${logoSvg("#FFFFFF", 30)}</div>
+          <a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a>
+        </div>
+        <div class="content">
+          <div class="eyebrow">Seguridad</div>
+          <h1 class="titulo-pagina">Auditoría del sistema</h1>
+          <div class="subtitulo">Las últimas ${Math.min(300, registros.length)} acciones administrativas registradas (de ${registros.length} en total).</div>
+          <table>
+            <tr><th>Fecha</th><th>Acción</th><th>Detalle</th><th>IP</th></tr>
+            ${filas || "<tr><td colspan='4'>Todavía no hay acciones registradas.</td></tr>"}
+          </table>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.get("/respaldo", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  const archivos = ["data.json", "codigos.json", "clientes.json", "sesiones-clientes.json", "pedidos.json", "tokens.json"];
+  const respaldo = { generadoEl: new Date().toISOString() };
+  for (const archivo of archivos) {
+    const ruta = path.join(DATA_DIR, archivo);
+    try {
+      respaldo[archivo] = fs.existsSync(ruta) ? JSON.parse(fs.readFileSync(ruta, "utf8")) : null;
+    } catch (err) {
+      respaldo[archivo] = { errorLeyendo: err.message };
+    }
+  }
+  const nombreArchivo = `respaldo-tapin-${new Date().toISOString().slice(0, 10)}.json`;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${nombreArchivo}"`);
+  res.send(JSON.stringify(respaldo, null, 2));
+});
+
+// Igual que /respaldo, pero te lo manda por correo en vez de descargarlo —
+// pensado para programarlo en cron-job.org una vez a la semana, así el
+// respaldo te llega solo sin que tengas que acordarte de entrar a bajarlo.
+// Visítalo así: https://tu-dominio.com/respaldo-correo?key=TU_CLAVE
+app.get("/respaldo-correo", async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const destino = req.query.a || process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+  if (!destino) {
+    return res.status(400).send("Falta a quién mandarlo — agrega &a=tu@correo.com o configura ADMIN_EMAIL/EMAIL_USER en Render.");
+  }
+  const archivos = ["data.json", "codigos.json", "clientes.json", "sesiones-clientes.json", "pedidos.json", "tokens.json"];
+  const respaldo = { generadoEl: new Date().toISOString() };
+  for (const archivo of archivos) {
+    const ruta = path.join(DATA_DIR, archivo);
+    try {
+      respaldo[archivo] = fs.existsSync(ruta) ? JSON.parse(fs.readFileSync(ruta, "utf8")) : null;
+    } catch (err) {
+      respaldo[archivo] = { errorLeyendo: err.message };
+    }
+  }
+  const contenido = Buffer.from(JSON.stringify(respaldo, null, 2), "utf8");
+  const nombreArchivo = `respaldo-tapin-${new Date().toISOString().slice(0, 10)}.json`;
+  const resultado = await enviarEmail(
+    destino,
+    `Respaldo de datos Tapin — ${new Date().toLocaleDateString("es-CO")}`,
+    `<p>Adjunto va el respaldo completo de todos tus datos (negocios, códigos, clientes, pedidos) en formato JSON.</p>
+     <p style="font-size:0.82rem;color:#888;">Guárdalo en un lugar seguro — tiene información sensible de tus negocios y clientes.</p>`,
+    [{ filename: nombreArchivo, content: contenido }]
+  );
+  if (resultado.ok) {
+    res.send(`Respaldo enviado a ${destino}.`);
+  } else {
+    res.status(500).send("No se pudo enviar: " + resultado.motivo);
+  }
+});
 // ---------- Dashboard de clientes: mapa de calor público ----------
 // Calcula una "reputación" aproximada de un negocio a partir de sus quejas
 // privadas vs. su total de toques (no tenemos un conteo directo de "positivos",
@@ -5809,7 +6003,7 @@ app.get("/cliente", (req, res) => {
   `);
 });
 
-app.post("/cliente/registro", (req, res) => {
+app.post("/cliente/registro", limitarIntentos(10, 15), (req, res) => {
   const nombre = (req.body.nombre || "").trim();
   const email = (req.body.email || "").trim().toLowerCase();
   const password = req.body.password || "";
@@ -5837,7 +6031,7 @@ app.post("/cliente/registro", (req, res) => {
   res.redirect("/cuenta");
 });
 
-app.post("/cliente/login", (req, res) => {
+app.post("/cliente/login", limitarIntentos(8, 15), (req, res) => {
   const email = (req.body.email || "").trim().toLowerCase();
   const password = req.body.password || "";
   const recordar = req.body.recordar === "si";
@@ -5859,7 +6053,7 @@ app.get("/cliente/salir", (req, res) => {
     delete sesiones[cookies.tapin_sesion];
     guardarSesionesClientes(sesiones);
   }
-  res.setHeader("Set-Cookie", "tapin_sesion=; HttpOnly; Path=/; Max-Age=0");
+  res.setHeader("Set-Cookie", "tapin_sesion=; HttpOnly; Secure; Path=/; Max-Age=0");
   res.redirect("/");
 });
 
@@ -6073,30 +6267,30 @@ app.get("/cuenta", (req, res) => {
           ${ESTILO_BASE}
           .content{max-width:640px;}
           .hero-cuenta{background:linear-gradient(135deg, ${MARCA.verdeOscuro} 0%, #0F5132 100%);
-                       border-radius:24px;padding:34px 30px;color:#fff;margin-bottom:30px;position:relative;overflow:hidden;box-shadow:0 16px 32px rgba(11,61,44,.2);}
+                       border-radius:20px;padding:32px 28px;color:#fff;margin-bottom:28px;position:relative;overflow:hidden;}
           .hero-cuenta::before{content:"";position:absolute;top:-40%;right:-15%;width:220px;height:220px;
                                 border-radius:50%;background:radial-gradient(circle, rgba(201,162,75,0.35), transparent 70%);}
           .hero-saludo{font-size:1.5rem;font-weight:800;position:relative;}
           .hero-email{color:#CFE3D8;font-size:0.85rem;margin-top:2px;position:relative;}
           .hero-stats{display:flex;gap:12px;margin-top:22px;position:relative;flex-wrap:wrap;}
-          .hero-stat{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,.12);border-radius:15px;padding:13px 16px;flex:1;min-width:96px;}
+          .hero-stat{background:rgba(255,255,255,0.12);border-radius:14px;padding:12px 16px;flex:1;min-width:96px;}
           .hero-stat-num{font-size:1.4rem;font-weight:800;}
           .hero-stat-lbl{font-size:0.66rem;color:#CFE3D8;text-transform:uppercase;letter-spacing:0.04em;margin-top:2px;}
 
           .seccion-titulo{font-size:1.05rem;font-weight:800;margin:32px 0 14px;color:${MARCA.texto};
                            display:flex;align-items:center;gap:8px;}
 
-          .fav-card{background:linear-gradient(145deg,#fff,#FBFCF9);border:1px solid ${MARCA.borde};border-radius:18px;padding:17px;
-                    display:flex;align-items:center;gap:14px;margin-bottom:11px;box-shadow:0 5px 12px rgba(11,61,44,.04);transition:box-shadow .18s,transform .18s,border-color .18s;}
-          .fav-card:hover{box-shadow:0 13px 24px rgba(11,61,44,0.1);transform:translateY(-3px);border-color:#ACC5B2;}
+          .fav-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px;
+                    display:flex;align-items:center;gap:14px;margin-bottom:10px;transition:box-shadow .15s,transform .15s;}
+          .fav-card:hover{box-shadow:0 6px 18px rgba(11,61,44,0.08);transform:translateY(-1px);}
           .fav-icono{width:42px;height:42px;border-radius:11px;background:${MARCA.verdeClaro};display:flex;
                      align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;}
           .fav-info{flex:1;min-width:0;}
           .fav-nombre{font-weight:700;font-size:0.95rem;}
           .fav-cat{color:${MARCA.textoSuave};font-size:0.78rem;text-transform:capitalize;}
           .fav-acciones{display:flex;gap:6px;flex-shrink:0;}
-          .fav-acciones a{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;
-                          text-decoration:none;font-size:0.9rem;background:${MARCA.crema};color:${MARCA.texto};border:1px solid ${MARCA.borde};transition:transform .18s,background .18s;}
+          .fav-acciones a{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+                          text-decoration:none;font-size:0.9rem;background:${MARCA.crema};color:${MARCA.texto};}
           .fav-acciones .quitar{color:${MARCA.rojo};}
           .fav-acciones a:hover{background:${MARCA.verdeClaro};}
 
@@ -6116,9 +6310,9 @@ app.get("/cuenta", (req, res) => {
           .vacio-msg a{color:${MARCA.verde};font-weight:700;}
 
           .fid-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;}
-          .fid-card{background:linear-gradient(145deg,#fff,#FBFCF9);border:1px solid ${MARCA.borde};border-radius:18px;padding:17px;
-                    cursor:pointer;box-shadow:0 5px 12px rgba(11,61,44,.04);transition:border-color .18s,box-shadow .18s,transform .18s;}
-          .fid-card:hover{box-shadow:0 13px 24px rgba(11,61,44,.1);transform:translateY(-3px);}
+          .fid-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px;
+                    cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+          .fid-card:hover{box-shadow:0 4px 16px rgba(11,61,44,0.07);}
           .fid-card.fid-lista{border-color:${MARCA.oro};border-width:1.5px;}
           .fid-fila{display:flex;align-items:center;gap:14px;}
           .fid-anillo-wrap{position:relative;width:56px;height:56px;flex-shrink:0;}
@@ -6137,9 +6331,8 @@ app.get("/cuenta", (req, res) => {
           .fid-detalle-nota{font-size:0.74rem;color:#8A6300;margin-top:8px;font-weight:600;}
 
           .top-acciones{display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;}
-          .icono-toggle{width:38px;height:38px;border-radius:12px;background:#fff;border:1px solid ${MARCA.borde};
-                        display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.95rem;box-shadow:0 4px 10px rgba(11,61,44,.05);transition:transform .18s,box-shadow .18s;}
-          .icono-toggle:hover{transform:translateY(-2px);box-shadow:0 9px 16px rgba(11,61,44,.1);}
+          .icono-toggle{width:34px;height:34px;border-radius:50%;background:#fff;border:1px solid ${MARCA.borde};
+                        display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.95rem;}
 
           .insignias-fila{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:26px;}
           .insignia{background:#fff;border:1px solid ${MARCA.borde};border-radius:100px;padding:6px 14px;
@@ -6153,10 +6346,10 @@ app.get("/cuenta", (req, res) => {
                               border-radius:10px;font-size:0.85rem;}
 
           .reco-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:26px;}
-          .reco-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:15px;box-shadow:0 5px 12px rgba(11,61,44,.04);}
+          .reco-card{background:#fff;border:1px dashed ${MARCA.borde};border-radius:12px;padding:14px;}
           .reco-nombre{font-weight:700;font-size:0.85rem;}
           .reco-cat{color:${MARCA.textoSuave};font-size:0.72rem;text-transform:capitalize;margin-bottom:6px;}
-          .reco-card a{display:inline-flex;margin-top:3px;font-size:0.76rem;color:${MARCA.verdeOscuro};font-weight:800;text-decoration:none;background:${MARCA.verdeClaro};padding:7px 10px;border-radius:999px;}
+          .reco-card a{font-size:0.76rem;color:${MARCA.verde};font-weight:700;text-decoration:none;}
 
           #mini-mapa{height:180px;border-radius:14px;margin-bottom:26px;border:1px solid ${MARCA.borde};}
 
@@ -6195,7 +6388,7 @@ app.get("/cuenta", (req, res) => {
           </div>
 
           <div class="hero-cuenta">
-            <div class="hero-saludo">Hola, ${cliente.nombre.split(" ")[0]}</div>
+            <div class="hero-saludo">Hola, ${escaparHtml(cliente.nombre.split(" ")[0])}</div>
             <div class="hero-email">${cliente.email}</div>
             <div class="hero-stats">
               <div class="hero-stat"><div class="hero-stat-num">${favoritos.length}</div><div class="hero-stat-lbl">Favoritos</div></div>
@@ -6359,7 +6552,7 @@ app.get("/perfil/:clienteId", (req, res) => {
 
   res.send(`
     <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Favoritos de ${cliente.nombre.split(" ")[0]} — Tapin</title>
+    <title>Favoritos de ${escaparHtml(cliente.nombre.split(" ")[0])} — Tapin</title>
     <style>
       ${ESTILO_BASE}
       .fav-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px;
@@ -6371,7 +6564,7 @@ app.get("/perfil/:clienteId", (req, res) => {
       <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
       <div class="content">
         <div class="eyebrow">Lista pública</div>
-        <h1 class="titulo-pagina">Favoritos de ${cliente.nombre.split(" ")[0]}</h1>
+        <h1 class="titulo-pagina">Favoritos de ${escaparHtml(cliente.nombre.split(" ")[0])}</h1>
         <div class="subtitulo">Negocios recomendados en Tapin</div>
         ${filas || "<p>Todavía no tiene negocios favoritos guardados.</p>"}
       </div>
@@ -6465,7 +6658,6 @@ app.get("/", (req, res) => {
           .site-brand{display:flex;align-items:center;}
           .site-nav{display:flex;gap:32px;align-items:center;}
           .site-nav a{font-size:.88rem;color:var(--ink);text-decoration:none;font-weight:500;}
-          .site-login{border:1px solid var(--forest);color:var(--forest)!important;padding:11px 18px;border-radius:999px;font-weight:800!important;}
           .site-order{background:var(--forest);color:#fff!important;padding:12px 20px;border-radius:999px;font-weight:700!important;}
 
           .hero{background:linear-gradient(155deg,var(--forest2) 0%,var(--forest) 45%,#082c1c 100%);color:#fff;padding:80px 24px 60px;text-align:center;position:relative;overflow:hidden;}
@@ -6508,17 +6700,11 @@ app.get("/", (req, res) => {
 
           .pasos{display:flex;flex-wrap:wrap;gap:20px;margin-bottom:110px;}
           .paso{flex:1;min-width:230px;background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:30px 26px;box-shadow:0 10px 20px rgba(9,49,30,.05);}
+          .paso.paso-pro{border:2px solid var(--gold);background:linear-gradient(135deg,#fff 40%,#f9f1dd);position:relative;}
+          .paso-pro-badge{position:absolute;right:18px;top:18px;background:var(--forest);color:#fff;font-size:.62rem;font-weight:900;letter-spacing:.06em;padding:6px 10px;border-radius:999px;text-transform:uppercase;}
           .paso-num{width:38px;height:38px;border-radius:50%;background:#edf1ed;color:var(--forest);font-size:.8rem;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:18px;}
           .paso h3{font-family:'Playfair Display',Georgia,serif;font-size:1.25rem;margin:0 0 8px;color:var(--ink);}
           .paso p{font-size:.88rem;color:var(--muted);line-height:1.55;margin:0;}
-
-          .marketing-section{margin:0 0 72px;padding:48px;border:1px solid var(--line);border-radius:30px;background:linear-gradient(135deg,#fffef9 0%,#f4f0df 100%);box-shadow:0 16px 34px rgba(9,49,30,.06);}
-          .marketing-eyebrow{display:inline-flex;align-items:center;gap:8px;background:#e4eee5;color:var(--forest);border-radius:999px;padding:7px 12px;font-size:.68rem;font-weight:900;letter-spacing:.1em;}
-          .marketing-copy h2{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2rem,3.6vw,3rem);line-height:1.04;letter-spacing:-.045em;color:var(--ink);margin:17px 0 14px;}
-          .marketing-copy>p{color:var(--muted);font-size:1rem;line-height:1.65;margin:0 0 24px;max-width:510px;}
-          .activation-steps{display:grid;gap:12px;margin:0 0 28px;}.activation-step{display:flex;align-items:center;gap:12px;color:var(--ink);font-size:.9rem;font-weight:650;}.activation-step b{flex:0 0 29px;width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:var(--forest);color:#fff;font-size:.72rem;}
-          .marketing-cta{display:inline-block;border-radius:999px;background:var(--forest);color:#fff;padding:14px 22px;text-decoration:none;font-size:.9rem;font-weight:800;box-shadow:0 10px 20px rgba(9,67,43,.17);}
-          .tech-section{margin:0 0 110px;padding:48px;border-radius:30px;background:linear-gradient(135deg,#0b4b31,#082c1c);box-shadow:0 16px 34px rgba(9,49,30,.12);}.tech-section .marketing-eyebrow{background:rgba(232,166,35,.18);color:#f6cf66;}.tech-section .marketing-copy h2{color:#fff;}.tech-section .marketing-copy>p{color:#cfe3d8;}.tech-benefits{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:26px;}.tech-benefit{border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:15px 13px;font-size:.78rem;line-height:1.35;color:#cfe3d8;background:rgba(255,255,255,.07);}.tech-benefit b{display:block;color:#fff;font-size:.84rem;margin-bottom:5px;}
 
           .accesos{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-bottom:110px;}
           .acceso{border-radius:24px;padding:32px 28px;text-decoration:none;color:var(--ink);position:relative;overflow:hidden;box-shadow:0 14px 28px rgba(9,49,30,.08);transition:transform .2s ease,box-shadow .2s ease;min-height:210px;display:flex;flex-direction:column;}
@@ -6574,15 +6760,14 @@ app.get("/", (req, res) => {
 
           @media(max-width:760px){
             .site-header{height:64px;}
-            .site-nav{gap:9px;}.site-nav a:not(.site-order):not(.site-login){display:none;}
-            .site-login,.site-order{padding:10px 13px;font-size:.78rem!important;}
+            .site-nav a:not(.site-order){display:none;}
+            .site-order{padding:10px 15px;}
             .hero h1{font-size:2.4rem;}
             .contenido{padding:60px 20px;}
             .stats-strip{grid-template-columns:1fr;}
             .stats-strip div{border-right:none;border-bottom:1px solid var(--line);}
             .stats-strip div:last-child{border-bottom:none;}
             .accesos{grid-template-columns:1fr;}
-            .marketing-section,.tech-section{padding:28px;margin-bottom:72px;}.tech-benefits{grid-template-columns:1fr;}
             .planes,.precios-grid{flex-direction:column;}
             .site-footer{flex-direction:column;}
             .site-footer span:last-child{display:flex;gap:16px;margin-top:6px;}
@@ -6594,16 +6779,14 @@ app.get("/", (req, res) => {
           <a class="site-brand" href="/" aria-label="Tapin inicio">${logoSvg(MARCA.verdeOscuro, 25)}</a>
           <nav class="site-nav" aria-label="Navegación principal">
             <a href="#como-funciona">Cómo funciona</a>
-            <a href="#tecnologia">Tecnolog&iacute;a NFC</a>
-            <a href="#activar">Activar tarjeta</a>
+            <a href="#accesos">Accesos</a>
             <a href="#precios">Precios</a>
-            <a class="site-login" href="#accesos">Iniciar sesi&oacute;n</a>
             <a class="site-order" href="/pedido">Pedir tarjeta</a>
           </nav>
         </header>
 
         <div class="hero">
-          <div class="hero-kicker">HECHO EN COLOMBIA · SIN APPS · SIN FRICCIÓN</div>
+          <div class="hero-kicker">HECHO EN COLOMBIA · SIN COMPLICACIONES · SIN FRICCIÓN</div>
           <h1>Más reseñas. Mejor reputación.</h1>
           <p>Tapin convierte cada visita a tu negocio en una reseña de Google. El cliente acerca su celular a tu tarjeta y listo.</p>
           <div class="hero-cta-row">
@@ -6633,56 +6816,29 @@ app.get("/", (req, res) => {
 
         <div class="contenido">
           <div class="stats-strip">
-            <div><strong>Sin apps</strong><span>Funciona desde cualquier celular</span></div>
+            <div><strong>Sin complicaciones</strong><span>Funciona desde cualquier celular</span></div>
             <div><strong>1 toque</strong><span>Para abrir tu enlace de reseñas</span></div>
             <div><strong>En segundos</strong><span>Listo para usar al recibirlo</span></div>
           </div>
 
           <div id="como-funciona">
-            <div class="seccion-titulo">Tres pasos. Cero fricción.</div>
-            <div class="seccion-sub">Diseñado para que pedir una reseña sea natural para tus clientes.</div>
+            <div class="seccion-titulo">Cinco pasos. Cero complicaciones.</div>
+            <div class="seccion-sub">Recibes tu código, activas tu tarjeta fácilmente y ya puedes empezar. Los pasos 4 y 5 usan el filtro del Plan Pro; sin Plan Pro ese filtro no está disponible.</div>
             <div class="pasos">
-              <div class="paso"><div class="paso-num">1</div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta, se abre una página simple donde el cliente califica su experiencia.</p></div>
-              <div class="paso"><div class="paso-num">2</div><h3>Si calificó bien, va directo a Google</h3><p>Lo mandamos automáticamente a dejar la reseña pública en tu perfil de Google.</p></div>
-              <div class="paso"><div class="paso-num">3</div><h3>Si calificó mal, queda privado</h3><p>Ese comentario llega directo a ti — nunca se vuelve una reseña negativa pública.</p></div>
+              <div class="paso"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar de forma fácil.</p></div>
+              <div class="paso"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código, completas los datos de tu negocio y dejas Tapin listo en pocos minutos.</p></div>
+              <div class="paso"><div class="paso-num">3</div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta, se abre una página simple donde el cliente califica su experiencia.</p></div>
+              <div class="paso paso-pro"><div class="paso-pro-badge">Con Plan Pro</div><div class="paso-num">4</div><h3>Si calificó bien, va directo a Google</h3><p>Lo mandamos automáticamente a dejar la reseña pública en tu perfil de Google.</p></div>
+              <div class="paso paso-pro"><div class="paso-pro-badge">Con Plan Pro</div><div class="paso-num">5</div><h3>Si calificó mal, queda privado</h3><p>Ese comentario llega directo a ti — nunca se vuelve una reseña negativa pública.</p></div>
             </div>
           </div>
 
-          <section id="activar" class="marketing-section">
-            <div class="marketing-copy">
-              <div class="marketing-eyebrow">ACTIVA TU TARJETA</div>
-              <h2>Rec&iacute;bela, act&iacute;vala y empieza a recibir rese&ntilde;as.</h2>
-              <p>Tu Tapin llega lista para que la pongas a trabajar. Solo registra el c&oacute;digo de tu tarjeta, agrega la informaci&oacute;n de tu negocio y conecta tu enlace de Google.</p>
-              <div class="activation-steps">
-                <div class="activation-step"><b>1</b>Encuentra el c&oacute;digo de activaci&oacute;n de tu tarjeta.</div>
-                <div class="activation-step"><b>2</b>Configura los datos y el enlace de rese&ntilde;as de tu negocio.</div>
-                <div class="activation-step"><b>3</b>Ub&iacute;cala donde tus clientes la vean y empiecen a tocar.</div>
-              </div>
-              <a class="marketing-cta" href="/mis-negocios">Activar mi tarjeta &rarr;</a>
-            </div>
-          </section>
-
-          <section id="tecnologia" class="tech-section">
-            <div class="marketing-copy">
-              <div class="marketing-eyebrow">TECNOLOG&Iacute;A NFC</div>
-              <h2>La forma m&aacute;s simple de llevar clientes a Google.</h2>
-              <p>Tapin usa NFC, la tecnolog&iacute;a de proximidad que ya tienen los celulares modernos. Cuando una persona acerca su celular a la tarjeta, abrimos tu experiencia de rese&ntilde;as al instante.</p>
-              <div class="tech-benefits">
-                <div class="tech-benefit"><b>Sin aplicaciones</b>El cliente no descarga ni instala nada.</div>
-                <div class="tech-benefit"><b>En segundos</b>Un toque abre tu enlace de rese&ntilde;as.</div>
-                <div class="tech-benefit"><b>Siempre contigo</b>Una tarjeta f&iacute;sica, clara y lista para tu local.</div>
-              </div>
-            </div>
-          </section>
-
           <div id="accesos">
             <div class="seccion-titulo">Elige cómo continuar</div>
-            <div class="seccion-sub">Encuentra el acceso que necesitas.</div>
+            <div class="seccion-sub">Todo es fácil: pide tu tarjeta o entra a administrar tu negocio.</div>
             <div class="accesos">
               <a class="acceso acceso-1" href="/pedido"><div class="acceso-badge">RECOMENDADO</div><div class="acceso-icono">✦</div><h3>Pedir tarjeta</h3><p>Solicita tu Tapin y recíbela configurada para tu negocio.</p><span class="acceso-flecha">Quiero mi Tapin →</span></a>
-              <a class="acceso acceso-2" href="/cliente"><div class="acceso-badge">CLIENTES</div><div class="acceso-icono">◯</div><h3>Soy cliente</h3><p>Guarda favoritos y lleva tu historial de reseñas.</p><span class="acceso-flecha">Ir a mi cuenta →</span></a>
               <a class="acceso acceso-3" href="/mis-negocios"><div class="acceso-icono">▣</div><h3>Tengo un negocio</h3><p>Activa tu tarjeta o entra al panel de tu negocio.</p><span class="acceso-flecha">Entrar a mi negocio →</span></a>
-              <a class="acceso acceso-4" href="/descubre"><div class="acceso-icono">⌖</div><h3>Descubrir negocios</h3><p>Explora el mapa de negocios que ya usan Tapin.</p><span class="acceso-flecha">Ver el mapa →</span></a>
             </div>
           </div>
 
@@ -6751,14 +6907,15 @@ app.get("/", (req, res) => {
             <div class="seccion-titulo" style="margin-bottom:8px;">¿Tienes alguna pregunta?</div>
             <div class="seccion-sub">Estamos aquí para ayudarte. Escríbenos y te respondemos lo antes posible.</div>
             <div class="hero-cta-row" style="justify-content:center;">
-              <a class="hero-cta-main" href="https://wa.me/573003489609" target="_blank">Hablar por WhatsApp &rarr;</a>
+              <a class="hero-cta-main" href="https://wa.me/573003489609" target="_blank">WhatsApp</a>
+              <a class="acceso-flecha" style="border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:15px 26px;text-decoration:none;font-weight:700;font-size:.92rem;" href="mailto:hola@tapincol.com">hola@tapincol.com</a>
             </div>
           </div>
         </div>
 
         <footer class="site-footer">
           <span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span>
-          <span><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/descubre">Descubrir negocios</a><a href="/admin">Administrador</a></span>
+          <span><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/admin">Administrador</a></span>
         </footer>
       </body>
     </html>
@@ -6818,7 +6975,7 @@ app.get("/admin", (req, res) => {
   `);
 });
 
-app.get("/admin/entrar", (req, res) => {
+app.get("/admin/entrar", limitarIntentos(6, 15), (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.redirect("/admin?error=1");
   }
@@ -7536,6 +7693,29 @@ function registrarAuditoria(slug, negocio, texto) {
   guardarDatos(datos);
 }
 
+// Auditoría a nivel de TODO el sistema (no de un solo negocio) — para
+// acciones que solo el administrador puede hacer: crear/quitar negocios,
+// generar códigos, cambiar planes a mano. Antes no quedaba ningún rastro de
+// quién hizo qué cambio administrativo ni cuándo.
+const AUDITORIA_GLOBAL_FILE = path.join(DATA_DIR, "auditoria-global.json");
+function registrarAuditoriaGlobal(accion, detalle, req) {
+  let registros = [];
+  try {
+    if (fs.existsSync(AUDITORIA_GLOBAL_FILE)) registros = JSON.parse(fs.readFileSync(AUDITORIA_GLOBAL_FILE, "utf8"));
+  } catch {
+    registros = [];
+  }
+  registros.push({
+    accion,
+    detalle,
+    ip: req ? req.ip : null,
+    fechaISO: new Date().toISOString(),
+    fechaLegible: new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" }),
+  });
+  if (registros.length > 5000) registros = registros.slice(-5000); // no crece sin control
+  fs.writeFileSync(AUDITORIA_GLOBAL_FILE, JSON.stringify(registros, null, 2));
+}
+
 // Página donde el dueño de un negocio Pro registra su tarjeta una sola vez,
 // usando el Widget de Wompi en modo "tokenize" (no cobra nada en este paso).
 app.get("/suscripcion/:slug", (req, res) => {
@@ -7954,6 +8134,53 @@ app.get("/terminos", (req, res) => {
   `);
 });
 
+// ---------- Monitoreo básico de errores ----------
+// Antes, un error en cualquier ruta simplemente aparecía en la consola de
+// Render y se perdía ahí — nadie se enteraba hasta que un negocio se quejara.
+// Esto captura cualquier error no manejado y (a) lo deja bien registrado en
+// consola con fecha y ruta, y (b) le manda un correo al admin — pero como
+// máximo uno cada 30 minutos, para no llenarte el correo si algo falla muchas
+// veces seguidas.
+let ultimaAlertaError = 0;
+function avisarErrorCritico(origen, err) {
+  console.error(`[ERROR ${new Date().toISOString()}] ${origen}:`, err && err.stack ? err.stack : err);
+  const ahora = Date.now();
+  if (ahora - ultimaAlertaError < 30 * 60 * 1000) return; // ya se avisó hace poco
+  if (!process.env.EMAIL_USER && !process.env.SENDGRID_API_KEY) return;
+  ultimaAlertaError = ahora;
+  const destino = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+  if (!destino) return;
+  enviarEmail(
+    destino,
+    "⚠️ Error en el servidor de Tapin",
+    `<p>Ocurrió un error en <b>${escaparHtml(origen)}</b>.</p>
+     <pre style="background:#f4f4f4;padding:12px;border-radius:8px;white-space:pre-wrap;font-size:0.82rem;">${escaparHtml(String(err && err.stack ? err.stack : err)).slice(0, 2000)}</pre>
+     <p style="font-size:0.8rem;color:#888;">No se te va a avisar de nuevo por 30 minutos, aunque el error se repita, para no saturarte el correo.</p>`
+  ).catch(() => {});
+}
+
+// Captura errores que ninguna ruta atrapó (por ejemplo, algo que truena dentro
+// de un `.then()` sin `.catch()`) — sin esto, el servidor entero se podía
+// caer en silencio por un error suelto en cualquier parte del código.
+process.on("uncaughtException", (err) => avisarErrorCritico("uncaughtException", err));
+process.on("unhandledRejection", (err) => avisarErrorCritico("unhandledRejection", err));
+
+// Debe ir DESPUÉS de todas las rutas — Express solo la usa cuando algo
+// lanza un error dentro de una ruta y nadie lo atrapó explícitamente.
+app.use((err, req, res, next) => {
+  avisarErrorCritico(`${req.method} ${req.path}`, err);
+  if (res.headersSent) return next(err);
+  res.status(500).send("Ocurrió un error inesperado. Ya quedó registrado para revisarlo.");
+});
+
 app.listen(PORT, () => {
   console.log(`Tapin backend corriendo en el puerto ${PORT}`);
+  if (!process.env.ADMIN_KEY) {
+    console.warn(
+      "\n⚠️  ADVERTENCIA DE SEGURIDAD: no configuraste ADMIN_KEY en las variables de " +
+      "entorno de Render. El panel de administrador está usando la clave por defecto " +
+      "'cambia-esta-clave', que cualquiera puede ver en el código público. Ve a Render " +
+      "→ Environment → agrega ADMIN_KEY con una clave larga y difícil de adivinar.\n"
+    );
+  }
 });
