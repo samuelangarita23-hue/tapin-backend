@@ -277,15 +277,17 @@ const ICONO_OJO_CERRADO = `<svg width="18" height="18" viewBox="0 0 24 24" fill=
 
 const ESTILO_BASE = `
   *{box-sizing:border-box;}
-  body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};color:${MARCA.texto};margin:0;}
+  body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:radial-gradient(circle at 100% 0,#f4e2ae 0,transparent 25%),${MARCA.crema};color:${MARCA.texto};margin:0;min-height:100vh;}
   a{color:${MARCA.verde};}
-  .topbar{background:${MARCA.verdeOscuro};padding:18px 32px;display:flex;align-items:center;justify-content:space-between;}
+  .topbar{background:linear-gradient(105deg,#062d1e,#0c4a30);padding:18px max(24px,calc((100vw - 1140px)/2));display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 20px rgba(4,41,25,.15);}
   .topbar .back{color:#CFE3D8;font-size:0.82rem;font-weight:500;text-decoration:none;}
   .topbar .back:hover{color:#fff;}
-  .content{padding:32px 32px 60px;max-width:1140px;margin:0 auto;}
+  .content{padding:48px 32px 76px;max-width:1140px;margin:0 auto;}
   .eyebrow{font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${MARCA.verde};margin-bottom:6px;}
-  .titulo-pagina{font-size:1.5rem;font-weight:700;margin:0 0 4px;letter-spacing:-0.01em;}
+  .titulo-pagina{font-family:Georgia,serif;font-size:clamp(1.8rem,3vw,2.55rem);font-weight:700;margin:0 0 7px;letter-spacing:-.045em;color:${MARCA.verdeOscuro};}
   .subtitulo{color:${MARCA.textoSuave};font-size:0.92rem;margin-bottom:30px;}
+  button,.btn{transition:transform .2s ease,box-shadow .2s ease;}button:hover,.btn:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(5,58,36,.14);}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:${MARCA.verde}!important;box-shadow:0 0 0 3px rgba(15,81,50,.12);}
 `;
 
 // ---------- Configuración de negocios ----------
