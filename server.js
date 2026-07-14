@@ -66,30 +66,32 @@ const CONTROL_TEMA_GLOBAL = `
   <style>
     #tapin-theme-toggle{position:fixed;right:16px;bottom:16px;z-index:99999;width:48px;height:48px;border:1px solid rgba(255,255,255,.45);border-radius:50%;padding:0;background:#0d432b;color:#fff;font:700 21px/1 'Segoe UI Emoji','Segoe UI',sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.28);cursor:pointer;display:flex;align-items:center;justify-content:center;}
     #tapin-theme-toggle:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.34);}
-    html.tapin-dark{color-scheme:dark;--ink:#f4faf6;--forest:#16704b;--forest2:#0c5337;--cream:#07150f;--paper:#10251a;--muted:#bfd2c6;--line:#3b5b4b;--gold:#f0b83e;--gold2:#ffdc7a;}
-    html.tapin-dark body{background:#07150f!important;color:#f4faf6!important;}
-    html.tapin-dark body *{color:#edf6f0!important;border-color:#3b5b4b!important;}
-    html.tapin-dark body :is(.site-header,.box,.card,.seccion,.form-card,.chart-card,.metric,.plan,.paso,.flujo,.precio-card,.nota,.tarjeta-info,.reco,table){background:#10251a!important;color:#f4faf6!important;border-color:#3b5b4b!important;box-shadow:0 10px 24px rgba(0,0,0,.28);}
+    html.tapin-dark{color-scheme:dark;--ink:#f5f6f5;--forest:#35624c;--forest2:#243c31;--cream:#101210;--paper:#1b1e1c;--muted:#c6cbc7;--line:#424844;--gold:#e8ad32;--gold2:#f7d77d;}
+    html.tapin-dark body{background:#101210!important;color:#f5f6f5!important;}
+    html.tapin-dark body *{color:#f0f2f0!important;border-color:#424844!important;}
+    html.tapin-dark body :is(.site-header,.box,.card,.seccion,.form-card,.chart-card,.metric,.plan,.paso,.flujo,.precio-card,.nota,.tarjeta-info,.reco,table){background:#1b1e1c!important;color:#f5f6f5!important;border-color:#424844!important;box-shadow:0 10px 24px rgba(0,0,0,.28);}
     html.tapin-dark body :is(h1,h2,h3,h4,strong,b,.card-titulo,.seccion-titulo,.titulo-pagina){color:#f4faf6!important;}
-    html.tapin-dark body :is(p,.nota,.subtitulo,.seccion-sub,.flujo-descripcion,.paso p,.acceso p,td,th,label,.metric-lbl){color:#bfd2c6!important;}
-    html.tapin-dark body :is(input,select,textarea){background:#091c12!important;color:#f4faf6!important;border-color:#52705f!important;}
-    html.tapin-dark body :is(input,textarea)::placeholder{color:#8da99a!important;}
-    html.tapin-dark body :is(td,th){background:#10251a!important;}
-    html.tapin-dark body .tabla-precios tr:nth-child(even) td{background:#0c1f15!important;}
-    html.tapin-dark body .tabla-precios tr:last-child td{background:#173b29!important;color:#eaf7ef!important;}
-    html.tapin-dark body :is(.paso-num,.metric-num){background:#294638!important;color:#fff!important;}
+    html.tapin-dark body :is(p,.nota,.subtitulo,.seccion-sub,.flujo-descripcion,.paso p,.acceso p,td,th,label,.metric-lbl){color:#c6cbc7!important;}
+    html.tapin-dark body :is(input,select,textarea){background:#121513!important;color:#f5f6f5!important;border-color:#555d58!important;}
+    html.tapin-dark body :is(input,textarea)::placeholder{color:#929993!important;}
+    html.tapin-dark body :is(td,th){background:#1b1e1c!important;}
+    html.tapin-dark body .tabla-precios tr:nth-child(even) td{background:#151816!important;}
+    html.tapin-dark body .tabla-precios tr:last-child td{background:#26352e!important;color:#f2f5f3!important;}
+    html.tapin-dark body :is(.paso-num,.metric-num){background:#303632!important;color:#fff!important;}
     html.tapin-dark body :is(.check,.eyebrow){color:#ffdc7a!important;}
-    html.tapin-dark body :is(.hero,.topbar,.site-order){color:#fff!important;}
+    html.tapin-dark body :is(.hero,.topbar,.site-order){background:#171b18!important;color:#fff!important;}
     html.tapin-dark body :is(.hero,.topbar,.site-order) *{color:#fff!important;}
     html.tapin-dark body :is(.hero-cta-main,.plan-anual,.plan-anual-badge,.plan-badge,.acceso-badge){background:#f0b83e!important;color:#062e1e!important;}
     html.tapin-dark body :is(.hero-cta-main,.plan-anual,.plan-anual-badge,.plan-badge,.acceso-badge) *{color:#062e1e!important;}
-    html.tapin-dark body .paso-pro-badge{background:#16704b!important;color:#fff!important;}
-    html.tapin-dark body .acceso{border-color:#3b5b4b!important;}
-    html.tapin-dark body .acceso-1{background:linear-gradient(135deg,#0c5136,#16704b)!important;color:#fff!important;}
-    html.tapin-dark body .acceso-3{background:#10251a!important;color:#f4faf6!important;}
+    html.tapin-dark body .paso-pro-badge{background:#35624c!important;color:#fff!important;}
+    html.tapin-dark body .acceso{border-color:#424844!important;}
+    html.tapin-dark body .acceso-1{background:linear-gradient(135deg,#24372e,#315441)!important;color:#fff!important;}
+    html.tapin-dark body .acceso-3{background:#1b1e1c!important;color:#f5f6f5!important;}
     html.tapin-dark body .acceso-4{background:linear-gradient(135deg,#ffdc7a,#f0b83e)!important;color:#062e1e!important;}
     html.tapin-dark body .acceso-4 :is(h3,p,span){color:#062e1e!important;}
-    html.tapin-dark body .flujo-pro{background:linear-gradient(135deg,#15271d,#332a13)!important;border-color:#f0b83e!important;}
+    html.tapin-dark body .flujo-pro{background:linear-gradient(135deg,#1b1e1c,#302919)!important;border-color:#e8ad32!important;}
+    html.tapin-dark body :is(.site-brand,.logo,.topbar>div:first-child) svg [fill]{fill:#fff!important;}
+    html.tapin-dark body :is(.site-brand,.logo,.topbar>div:first-child) svg [stroke]{stroke:#fff!important;}
     html.tapin-dark body .tarjeta-nfc{background:#fff!important;}
     html.tapin-dark body .tarjeta-nfc *{color:#062e1e!important;}
     html.tapin-dark body .tarjeta-google span:nth-child(1),html.tapin-dark body .tarjeta-google span:nth-child(4){color:#4285F4!important;}
