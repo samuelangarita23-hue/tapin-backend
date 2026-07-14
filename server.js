@@ -821,12 +821,21 @@ function barraSemana(dias7) {
   }
   return dias7
     .map((v, i) => {
-      const alturaPx = 6 + Math.round((v / max) * 46);
+      const alturaPct = v === 0 ? 8 : Math.max(16, Math.round((v / max) * 100));
+      const esPico = v === max && v > 0;
+      const esHoy = i === dias7.length - 1;
+      const relleno = esPico
+        ? `linear-gradient(180deg,${MARCA.oro} 0%,#C87800 100%)`
+        : esHoy
+          ? `linear-gradient(180deg,#2B865B 0%,${MARCA.verde} 100%)`
+          : `linear-gradient(180deg,#4D9A70 0%,${MARCA.verdeOscuro} 100%)`;
       return `
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;height:100%;">
-          <div style="font-size:0.75rem;font-weight:700;color:${MARCA.textoSuave};line-height:1;">${v}</div>
-          <div style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
-          <div style="font-size:0.62rem;color:#999;text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px;flex:1;height:100%;min-width:0;">
+          <div style="font-size:0.72rem;font-weight:800;color:${esPico ? "#9B6200" : MARCA.textoSuave};line-height:1;">${v}</div>
+          <div style="height:52px;width:100%;max-width:34px;display:flex;align-items:flex-end;border-radius:9px 9px 5px 5px;background:#EEF3EE;overflow:hidden;">
+            <div style="width:100%;height:${alturaPct}%;background:${relleno};border-radius:8px 8px 4px 4px;box-shadow:inset 0 1px 0 rgba(255,255,255,.24);"></div>
+          </div>
+          <div style="font-size:0.62rem;color:${esHoy ? MARCA.verdeOscuro : "#809187"};font-weight:${esHoy ? "800" : "600"};text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
         </div>`;
     })
     .join("");
@@ -838,8 +847,10 @@ function barraHoras(porHora, picoHora) {
   const max = Math.max(1, ...porHora);
   return porHora
     .map((v, h) => {
-      const alturaPx = 4 + Math.round((v / max) * 64);
-      const color = h === picoHora && v > 0 ? MARCA.oro : MARCA.verde;
+      const alturaPx = v === 0 ? 5 : Math.max(12, Math.round((v / max) * 64));
+      const color = h === picoHora && v > 0
+        ? `linear-gradient(180deg,${MARCA.oro} 0%,#C87800 100%)`
+        : `linear-gradient(180deg,#3E9367 0%,${MARCA.verdeOscuro} 100%)`;
       return `<div style="flex:1;height:${alturaPx}px;background:${color};border-radius:2px 2px 0 0;" title="${h}:00 — ${v} toques"></div>`;
     })
     .join("");
@@ -2814,17 +2825,17 @@ app.get("/mi-panel/:slug", (req, res) => {
           .card-titulo span.suave{font-weight:600;color:${MARCA.oro};font-size:0.72rem;}
 
           .resumen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:14px 8px;text-align:center;
-                       box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .resumen-box{background:linear-gradient(145deg,#fff 0%,#F5F8F3 100%);border:1px solid ${MARCA.borde};border-radius:16px;padding:16px 8px;text-align:center;
+                       box-shadow:0 8px 18px rgba(11,61,44,0.06);}
           .resumen-num{font-size:1.5rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
           .resumen-lbl{font-size:0.64rem;color:${MARCA.textoSuave};margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.02em;}
 
-          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px 18px;margin-top:12px;
-                      box-shadow:0 1px 2px rgba(11,61,44,0.04);box-sizing:border-box;}
+          .chart-card{background:linear-gradient(145deg,#fff 0%,#FBFCF9 100%);border:1px solid ${MARCA.borde};border-radius:20px;padding:20px;margin-top:12px;
+                      box-shadow:0 10px 24px rgba(11,61,44,0.07);box-sizing:border-box;}
           .grid-2 .chart-card{height:100%;}
-          .chart-card-titulo{font-size:0.78rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:12px;text-align:center;}
+          .chart-card-titulo{font-size:0.78rem;font-weight:800;letter-spacing:.025em;color:${MARCA.verdeOscuro};margin-bottom:16px;text-align:left;}
           .sparkline{display:flex;align-items:flex-end;gap:5px;}
-          .sparkline-grande{height:70px;}
+          .sparkline-grande{height:96px;padding:4px 2px 0;border-bottom:1px solid ${MARCA.borde};}
 
           .ultimo-toque{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};margin-top:10px;}
           .ultimo-toque b{color:${MARCA.texto};}
@@ -2832,12 +2843,12 @@ app.get("/mi-panel/:slug", (req, res) => {
           .reco{background:${MARCA.verdeClaro};border-left:3px solid ${MARCA.verde};border-radius:8px;padding:12px 14px;
                 font-size:0.83rem;margin-bottom:8px;color:${MARCA.verdeOscuro};}
 
-          .horas-chart{display:flex;align-items:flex-end;gap:2px;height:60px;}
+          .horas-chart{display:flex;align-items:flex-end;gap:3px;height:70px;padding:4px 0 0;border-bottom:1px solid ${MARCA.borde};}
           .horas-labels{display:flex;justify-content:space-between;font-size:0.6rem;color:${MARCA.textoSuave};margin-top:6px;}
           .horas-nota{text-align:center;font-size:0.76rem;color:${MARCA.textoSuave};margin-top:10px;}
           .horas-nota b{color:${MARCA.texto};}
 
-          .sentimiento-barra{display:flex;height:14px;border-radius:100px;overflow:hidden;background:${MARCA.borde};}
+          .sentimiento-barra{display:flex;height:16px;border-radius:100px;overflow:hidden;background:${MARCA.borde};box-shadow:inset 0 1px 2px rgba(0,0,0,.08);}
           .sentimiento-leyenda{display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:0.78rem;color:${MARCA.textoSuave};}
           .sentimiento-leyenda span{display:flex;align-items:center;gap:6px;}
           .sentimiento-leyenda i{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
