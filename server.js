@@ -258,15 +258,15 @@ function logoSvg(color, height) {
 
 // Paleta de marca (extraída del logo oficial de Tapin)
 const MARCA = {
-  verdeOscuro: "#0B3D2C",
-  verde: "#0F5132",
-  verdeClaro: "#E7F0EA",
-  crema: "#FAFAF8",
-  texto: "#16201C",
-  textoSuave: "#6B7570",
-  borde: "#E7E5E0",
+  verdeOscuro: "#0d432b",
+  verde: "#146542",
+  verdeClaro: "#edf1ed",
+  crema: "#fbf6e9",
+  texto: "#062e1e",
+  textoSuave: "#50695b",
+  borde: "#dedccc",
   rojo: "#C0392B",
-  oro: "#C9A24B",
+  oro: "#e8a623",
 };
 
 // Estilos base compartidos por todas las páginas del panel — look "pro" consistente.
@@ -277,17 +277,21 @@ const ICONO_OJO_CERRADO = `<svg width="18" height="18" viewBox="0 0 24 24" fill=
 
 const ESTILO_BASE = `
   *{box-sizing:border-box;}
-  body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:radial-gradient(circle at 100% 0,#f4e2ae 0,transparent 25%),${MARCA.crema};color:${MARCA.texto};margin:0;min-height:100vh;}
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&display=swap');
+  :root{--ink:#062e1e;--forest:#0d432b;--forest2:#146542;--cream:#fbf6e9;--paper:#fffefd;--muted:#50695b;--line:#dedccc;--gold:#e8a623;--gold2:#f3d576;}
+  body{font-family:'DM Sans','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};color:${MARCA.texto};margin:0;min-height:100vh;line-height:1.5;}
   a{color:${MARCA.verde};}
-  .topbar{background:linear-gradient(105deg,#062d1e,#0c4a30);padding:18px max(24px,calc((100vw - 1140px)/2));display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 20px rgba(4,41,25,.15);}
+  .topbar{background:linear-gradient(155deg,var(--forest2) 0%,var(--forest) 55%,#082c1c 100%);padding:20px max(24px,calc((100vw - 1140px)/2));display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 20px rgba(4,41,25,.15);position:relative;}
   .topbar .back{color:#CFE3D8;font-size:0.82rem;font-weight:500;text-decoration:none;}
   .topbar .back:hover{color:#fff;}
-  .content{padding:48px 32px 76px;max-width:1140px;margin:0 auto;}
-  .eyebrow{font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${MARCA.verde};margin-bottom:6px;}
-  .titulo-pagina{font-family:Georgia,serif;font-size:clamp(1.8rem,3vw,2.55rem);font-weight:700;margin:0 0 7px;letter-spacing:-.045em;color:${MARCA.verdeOscuro};}
+  .content{padding:52px 32px 76px;max-width:1140px;margin:0 auto;}
+  .eyebrow{font-size:0.72rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .titulo-pagina{font-family:'Playfair Display',Georgia,serif;font-size:clamp(1.9rem,3vw,2.7rem);font-weight:700;margin:0 0 8px;letter-spacing:-.03em;color:var(--ink);}
   .subtitulo{color:${MARCA.textoSuave};font-size:0.92rem;margin-bottom:30px;}
-  button,.btn{transition:transform .2s ease,box-shadow .2s ease;}button:hover,.btn:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(5,58,36,.14);}
+  button,.btn{transition:transform .2s ease,box-shadow .2s ease;font-family:'DM Sans','Segoe UI',sans-serif;}
+  button:hover,.btn:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(5,58,36,.14);}
   input:focus,select:focus,textarea:focus{outline:none;border-color:${MARCA.verde}!important;box-shadow:0 0 0 3px rgba(15,81,50,.12);}
+  h1,h2,h3{font-family:'Playfair Display',Georgia,serif;}
 `;
 
 // ---------- Configuración de negocios ----------
