@@ -59,6 +59,50 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json()); // necesario para recibir el webhook de Wompi (manda JSON)
 
+// Selector de tema disponible en todas las páginas HTML. Solo cambia la
+// apariencia y recuerda la preferencia en el navegador; no altera datos,
+// sesiones, rutas ni la lógica de negocio.
+const CONTROL_TEMA_GLOBAL = `
+  <style>
+    #tapin-theme-toggle{position:fixed;right:16px;bottom:16px;z-index:99999;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:10px 14px;background:#0d432b;color:#fff;font:700 12px/1.2 'Segoe UI',sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.22);cursor:pointer;}
+    html.tapin-dark{color-scheme:dark;}
+    html.tapin-dark body{background:#071a12!important;color:#eef7f1!important;}
+    html.tapin-dark body :is(.box,.card,.seccion,.form-card,.chart-card,.metric,.plan,.paso,.flujo,.acceso,.precio-card,.nota,.tarjeta-info,.reco,table,input,select,textarea){background-color:#10271c!important;color:#eef7f1!important;border-color:#355647!important;}
+    html.tapin-dark body :is(p,.nota,.subtitulo,.seccion-sub,.flujo-descripcion,.paso p,.acceso p,td,th,label){color:#c9dbd0!important;}
+    html.tapin-dark body a{color:#f3d576;}
+    html.tapin-dark #tapin-theme-toggle{background:#f3d576;color:#062e1e;border-color:#e8a623;}
+  </style>
+  <button id="tapin-theme-toggle" type="button" aria-label="Cambiar tema">Tema oscuro</button>
+  <script>
+    (() => {
+      const raiz = document.documentElement;
+      const boton = document.getElementById("tapin-theme-toggle");
+      let oscuro = false;
+      try { oscuro = localStorage.getItem("tapin-tema") === "oscuro"; } catch (_) {}
+      const aplicar = () => {
+        raiz.classList.toggle("tapin-dark", oscuro);
+        boton.textContent = oscuro ? "Tema claro" : "Tema oscuro";
+      };
+      aplicar();
+      boton.addEventListener("click", () => {
+        oscuro = !oscuro;
+        aplicar();
+        try { localStorage.setItem("tapin-tema", oscuro ? "oscuro" : "claro"); } catch (_) {}
+      });
+    })();
+  </script>`;
+
+app.use((req, res, next) => {
+  const enviar = res.send.bind(res);
+  res.send = (contenido) => {
+    if (typeof contenido === "string" && /<\/body>/i.test(contenido) && !contenido.includes('id="tapin-theme-toggle"')) {
+      contenido = contenido.replace(/<\/body>/i, `${CONTROL_TEMA_GLOBAL}</body>`);
+    }
+    return enviar(contenido);
+  };
+  next();
+});
+
 // tapin.page se redirige automáticamente a tapincol.com (el dominio nuevo y
 // principal de aquí en adelante) — así las tarjetas físicas grabadas con
 // tapin.page siguen funcionando para siempre, y todo el tráfico nuevo, SEO
@@ -5291,14 +5335,17 @@ app.get("/conoce", (req, res) => {
                 <div class="plan-anual-badge">10% más barato</div>
               </div>
               <ul>
+                <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
                 <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
+                <li><span class="check">✓</span> Filtro de calificaciones y retroalimentación privada — lo negativo nunca se publica</li>
                 <li><span class="check">✓</span> Alerta instantánea por correo ante retroalimentación negativa</li>
                 <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
                 <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
                 <li><span class="check">✓</span> Reportes en CSV, PDF y Word — te los enviamos por correo cuando los necesites</li>
                 <li><span class="check">✓</span> Generador de contenido para redes sociales</li>
                 <li><span class="check">✓</span> Comparación contra el promedio de tu categoría</li>
+                <li><span class="check">✓</span> Recomendaciones automáticas para tu negocio</li>
+                <li><span class="check">✓</span> Programa de fidelización de clientes</li>
               </ul>
             </div>
           </div>
@@ -6847,13 +6894,14 @@ app.get("/", (req, res) => {
 
             <div class="flujo flujo-pro">
               <div class="flujo-cabecera"><span class="flujo-etiqueta">Con Plan Pro</span><h3>Con filtro de calificaciones</h3></div>
-              <p class="flujo-descripcion"><b>Este filtro solo está incluido en el Plan Pro:</b> separa las experiencias positivas de la retroalimentación negativa antes de enviarlas a su destino.</p>
+              <p class="flujo-descripcion"><b>Este filtro solo está incluido en el Plan Pro:</b> separa las experiencias positivas y convierte las negativas en retroalimentación privada para el negocio.</p>
               <div class="pasos">
                 <div class="paso paso-pro"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
                 <div class="paso paso-pro"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código, completas los datos y activas el Plan Pro.</p></div>
                 <div class="paso paso-pro"><div class="paso-num">3</div><h3>El cliente toca y califica</h3><p>Al acercar el celular, se abre una página sencilla para calificar la experiencia.</p></div>
                 <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">4</div><h3>El filtro separa la calificación</h3><p>Las experiencias positivas siguen hacia Google y las negativas se reciben de forma privada.</p></div>
-                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">5</div><h3>La experiencia llega a su destino</h3><p>Si fue positiva, el cliente deja su reseña en Google Reviews; si fue negativa, el comentario llega en privado al negocio.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">5</div><h3>Reseña pública o retroalimentación privada</h3><p>Si fue positiva, el cliente deja su reseña en Google Reviews; si fue negativa, el negocio la recibe de forma privada y obtiene una alerta instantánea.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">6</div><h3>Recibe el reporte mensual</h3><p>El último paso es un reporte mensual con todas tus estadísticas y análisis: horas pico, subidas, caídas y comparación con otros negocios de tu sector.</p></div>
               </div>
             </div>
           </div>
@@ -6863,7 +6911,6 @@ app.get("/", (req, res) => {
             <div class="seccion-sub">Encuentra el acceso que necesitas.</div>
             <div class="accesos">
               <a class="acceso acceso-1" href="/pedido"><div class="acceso-badge">RECOMENDADO</div><div class="acceso-icono">✦</div><h3>Pedir tarjeta</h3><p>Solicita tu Tapin y recíbela configurada para tu negocio.</p><span class="acceso-flecha">Quiero mi Tapin →</span></a>
-              <a class="acceso acceso-2" href="/cliente"><div class="acceso-badge">CLIENTES</div><div class="acceso-icono">◯</div><h3>Soy cliente</h3><p>Guarda favoritos y lleva tu historial de reseñas.</p><span class="acceso-flecha">Ir a mi cuenta →</span></a>
               <a class="acceso acceso-3" href="/mis-negocios"><div class="acceso-icono">▣</div><h3>Tengo un negocio</h3><p>Activa tu tarjeta o entra al panel de tu negocio.</p><span class="acceso-flecha">Entrar a mi negocio →</span></a>
               <a class="acceso acceso-4" href="/descubre"><div class="acceso-icono">⌖</div><h3>Descubrir negocios</h3><p>Explora el mapa de negocios que ya usan Tapin.</p><span class="acceso-flecha">Ver el mapa →</span></a>
             </div>
@@ -6894,10 +6941,14 @@ app.get("/", (req, res) => {
                 <ul>
                   <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
                   <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                  <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
+                  <li><span class="check">✓</span> Filtro de calificaciones y retroalimentación privada</li>
                   <li><span class="check">✓</span> Alerta instantánea ante retroalimentación negativa</li>
-                  <li><span class="check">✓</span> Reporte mensual automático</li>
-                  <li><span class="check">✓</span> Generador de contenido para redes</li>
+                  <li><span class="check">✓</span> Historial detallado de cada toque y estadísticas completas</li>
+                  <li><span class="check">✓</span> Reporte PDF mensual con horas pico, subidas y caídas</li>
+                  <li><span class="check">✓</span> Comparación y análisis frente a negocios del mismo sector</li>
+                  <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
+                  <li><span class="check">✓</span> Recomendaciones automáticas y generador de contenido para redes</li>
+                  <li><span class="check">✓</span> Programa de fidelización de clientes</li>
                 </ul>
               </div>
             </div>
