@@ -6491,6 +6491,16 @@ app.get("/", (req, res) => {
           .paso h3{font-family:'Playfair Display',Georgia,serif;font-size:1.25rem;margin:0 0 8px;color:var(--ink);}
           .paso p{font-size:.88rem;color:var(--muted);line-height:1.55;margin:0;}
 
+          .marketing-section{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(300px,.94fr);gap:54px;align-items:center;margin:0 0 110px;padding:48px;border:1px solid var(--line);border-radius:30px;background:linear-gradient(135deg,#fffef9 0%,#f4f0df 100%);box-shadow:0 16px 34px rgba(9,49,30,.06);}
+          .marketing-eyebrow{display:inline-flex;align-items:center;gap:8px;background:#e4eee5;color:var(--forest);border-radius:999px;padding:7px 12px;font-size:.68rem;font-weight:900;letter-spacing:.1em;}
+          .marketing-copy h2{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2rem,3.6vw,3rem);line-height:1.04;letter-spacing:-.045em;color:var(--ink);margin:17px 0 14px;}
+          .marketing-copy>p{color:var(--muted);font-size:1rem;line-height:1.65;margin:0 0 24px;max-width:510px;}
+          .activation-steps{display:grid;gap:12px;margin:0 0 28px;}.activation-step{display:flex;align-items:center;gap:12px;color:var(--ink);font-size:.9rem;font-weight:650;}.activation-step b{flex:0 0 29px;width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:var(--forest);color:#fff;font-size:.72rem;}
+          .marketing-cta{display:inline-block;border-radius:999px;background:var(--forest);color:#fff;padding:14px 22px;text-decoration:none;font-size:.9rem;font-weight:800;box-shadow:0 10px 20px rgba(9,67,43,.17);}
+          .marketing-visual{min-height:310px;border-radius:24px;background:linear-gradient(140deg,#0b4b31,#082c1c);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}.marketing-visual::before{content:"";position:absolute;width:250px;height:250px;border-radius:50%;background:radial-gradient(circle,rgba(232,166,35,.5),transparent 68%);top:-86px;right:-65px;}
+          .activation-card{width:220px;height:220px;border-radius:20px;background:#fff;box-shadow:0 25px 45px rgba(0,0,0,.3);position:relative;padding:24px;transform:rotate(-7deg);display:flex;flex-direction:column;justify-content:space-between;color:var(--ink);}.activation-card small{font-size:.65rem;font-weight:800;letter-spacing:.09em;color:#527260;}.activation-card strong{font-family:'Playfair Display',Georgia,serif;font-size:1.7rem;line-height:1;}.activation-card span{font-size:.78rem;color:var(--muted);line-height:1.4;}.activation-code{border-top:1px dashed #b9c8bc;padding-top:12px;font-size:.75rem;font-weight:800;letter-spacing:.08em;color:var(--forest);}
+          .tech-section{display:grid;grid-template-columns:minmax(300px,.9fr) minmax(0,1.1fr);gap:54px;align-items:center;margin:0 0 110px;}.tech-orbit{min-height:325px;border-radius:28px;background:linear-gradient(145deg,#e8f0e8,#f7e7a8);display:grid;place-items:center;position:relative;overflow:hidden;}.tech-orbit::after{content:"NFC";position:absolute;font-family:'Playfair Display',Georgia,serif;font-size:7.5rem;font-weight:700;color:rgba(9,67,43,.08);right:18px;bottom:-21px;letter-spacing:-.08em;}.tech-card{width:215px;height:145px;border-radius:17px;background:#fff;box-shadow:0 20px 36px rgba(9,49,30,.22);position:relative;padding:21px;transform:rotate(6deg);z-index:1;display:flex;flex-direction:column;justify-content:space-between;}.tech-card strong{font-size:1.18rem;color:var(--ink);}.tech-wave{font-size:1.9rem;color:var(--forest);letter-spacing:-.25em;align-self:flex-end;line-height:1;}.tech-card span{font-size:.72rem;color:var(--muted);}.tech-benefits{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:26px;}.tech-benefit{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:15px 13px;font-size:.78rem;line-height:1.35;color:var(--muted);}.tech-benefit b{display:block;color:var(--forest);font-size:.84rem;margin-bottom:5px;}
+
           .accesos{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-bottom:110px;}
           .acceso{border-radius:24px;padding:32px 28px;text-decoration:none;color:var(--ink);position:relative;overflow:hidden;box-shadow:0 14px 28px rgba(9,49,30,.08);transition:transform .2s ease,box-shadow .2s ease;min-height:210px;display:flex;flex-direction:column;}
           .acceso:hover{transform:translateY(-6px);box-shadow:0 22px 40px rgba(9,49,30,.16);}
@@ -6553,6 +6563,7 @@ app.get("/", (req, res) => {
             .stats-strip div{border-right:none;border-bottom:1px solid var(--line);}
             .stats-strip div:last-child{border-bottom:none;}
             .accesos{grid-template-columns:1fr;}
+            .marketing-section,.tech-section{grid-template-columns:1fr;gap:30px;padding:28px;margin-bottom:72px;}.marketing-visual,.tech-orbit{min-height:250px;}.tech-benefits{grid-template-columns:1fr;}
             .planes,.precios-grid{flex-direction:column;}
             .site-footer{flex-direction:column;}
             .site-footer span:last-child{display:flex;gap:16px;margin-top:6px;}
@@ -6564,7 +6575,8 @@ app.get("/", (req, res) => {
           <a class="site-brand" href="/" aria-label="Tapin inicio">${logoSvg(MARCA.verdeOscuro, 25)}</a>
           <nav class="site-nav" aria-label="Navegación principal">
             <a href="#como-funciona">Cómo funciona</a>
-            <a href="#accesos">Accesos</a>
+            <a href="#tecnologia">Tecnolog&iacute;a NFC</a>
+            <a href="#activar">Activar tarjeta</a>
             <a href="#precios">Precios</a>
             <a class="site-order" href="/pedido">Pedir tarjeta</a>
           </nav>
@@ -6615,6 +6627,39 @@ app.get("/", (req, res) => {
               <div class="paso"><div class="paso-num">3</div><h3>Si calificó mal, queda privado</h3><p>Ese comentario llega directo a ti — nunca se vuelve una reseña negativa pública.</p></div>
             </div>
           </div>
+
+          <section id="activar" class="marketing-section">
+            <div class="marketing-copy">
+              <div class="marketing-eyebrow">ACTIVA TU TARJETA</div>
+              <h2>Rec&iacute;bela, act&iacute;vala y empieza a recibir rese&ntilde;as.</h2>
+              <p>Tu Tapin llega lista para que la pongas a trabajar. Solo registra el c&oacute;digo de tu tarjeta, agrega la informaci&oacute;n de tu negocio y conecta tu enlace de Google.</p>
+              <div class="activation-steps">
+                <div class="activation-step"><b>1</b>Encuentra el c&oacute;digo de activaci&oacute;n de tu tarjeta.</div>
+                <div class="activation-step"><b>2</b>Configura los datos y el enlace de rese&ntilde;as de tu negocio.</div>
+                <div class="activation-step"><b>3</b>Ub&iacute;cala donde tus clientes la vean y empiecen a tocar.</div>
+              </div>
+              <a class="marketing-cta" href="/mis-negocios">Activar mi tarjeta &rarr;</a>
+            </div>
+            <div class="marketing-visual" aria-hidden="true">
+              <div class="activation-card"><small>TAPIN &middot; ACTIVACI&Oacute;N</small><strong>Tu negocio,<br>listo para crecer.</strong><span>Conecta tu perfil de Google y empieza a recibir rese&ntilde;as.</span><div class="activation-code">C&Oacute;DIGO &middot; TAP-2026</div></div>
+            </div>
+          </section>
+
+          <section id="tecnologia" class="tech-section">
+            <div class="tech-orbit" aria-hidden="true">
+              <div class="tech-card"><strong>Un toque.<br>Una rese&ntilde;a.</strong><div class="tech-wave">)))</div><span>Tecnolog&iacute;a NFC Tapin</span></div>
+            </div>
+            <div class="marketing-copy">
+              <div class="marketing-eyebrow">TECNOLOG&Iacute;A NFC</div>
+              <h2>La forma m&aacute;s simple de llevar clientes a Google.</h2>
+              <p>Tapin usa NFC, la tecnolog&iacute;a de proximidad que ya tienen los celulares modernos. Cuando una persona acerca su celular a la tarjeta, abrimos tu experiencia de rese&ntilde;as al instante.</p>
+              <div class="tech-benefits">
+                <div class="tech-benefit"><b>Sin aplicaciones</b>El cliente no descarga ni instala nada.</div>
+                <div class="tech-benefit"><b>En segundos</b>Un toque abre tu enlace de rese&ntilde;as.</div>
+                <div class="tech-benefit"><b>Siempre contigo</b>Una tarjeta f&iacute;sica, clara y lista para tu local.</div>
+              </div>
+            </div>
+          </section>
 
           <div id="accesos">
             <div class="seccion-titulo">Elige cómo continuar</div>
@@ -6692,8 +6737,7 @@ app.get("/", (req, res) => {
             <div class="seccion-titulo" style="margin-bottom:8px;">¿Tienes alguna pregunta?</div>
             <div class="seccion-sub">Estamos aquí para ayudarte. Escríbenos y te respondemos lo antes posible.</div>
             <div class="hero-cta-row" style="justify-content:center;">
-              <a class="hero-cta-main" href="https://wa.me/573003489609" target="_blank">WhatsApp</a>
-              <a class="acceso-flecha" style="border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:15px 26px;text-decoration:none;font-weight:700;font-size:.92rem;" href="mailto:hola@tapincol.com">hola@tapincol.com</a>
+              <a class="hero-cta-main" href="https://wa.me/573003489609" target="_blank">Hablar por WhatsApp &rarr;</a>
             </div>
           </div>
         </div>
