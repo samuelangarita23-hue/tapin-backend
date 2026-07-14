@@ -2825,8 +2825,9 @@ app.get("/mi-panel/:slug", (req, res) => {
           .card-titulo span.suave{font-weight:600;color:${MARCA.oro};font-size:0.72rem;}
           .accion-panel{display:inline-flex!important;align-items:center;justify-content:center;min-height:38px;
                          border-radius:10px!important;padding:9px 15px!important;box-shadow:none!important;
+                         background:${MARCA.verdeOscuro}!important;border-color:${MARCA.verdeOscuro}!important;color:#fff!important;
                          transition:border-color .16s ease,background .16s ease,color .16s ease!important;}
-          .accion-panel:hover{transform:none;background:#EDF4EF!important;border-color:${MARCA.verde}!important;}
+          .accion-panel:hover{transform:none;background:${MARCA.verde}!important;border-color:${MARCA.verde}!important;}
           .accion-panel.accion-principal{background:${MARCA.verdeOscuro}!important;border-color:${MARCA.verdeOscuro}!important;color:#fff!important;}
           .accion-panel.accion-principal:hover{background:${MARCA.verde}!important;border-color:${MARCA.verde}!important;}
           .accion-panel:focus-visible,.btn-herramienta:focus-visible,.btn-reporte-pdf:focus-visible{outline:3px solid rgba(201,162,75,.5);outline-offset:3px;}
@@ -2842,7 +2843,7 @@ app.get("/mi-panel/:slug", (req, res) => {
           .grid-2 .chart-card{height:100%;}
           .chart-card-titulo{font-size:0.78rem;font-weight:800;letter-spacing:.025em;color:${MARCA.verdeOscuro};margin-bottom:16px;text-align:left;}
           .sparkline{display:flex;align-items:flex-end;gap:5px;}
-          .sparkline-grande{height:96px;padding:4px 2px 0;border-bottom:1px solid ${MARCA.borde};}
+          .sparkline-grande{height:98px;padding:4px 2px 2px;}
 
           .ultimo-toque{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};margin-top:10px;}
           .ultimo-toque b{color:${MARCA.texto};}
@@ -2870,10 +2871,10 @@ app.get("/mi-panel/:slug", (req, res) => {
           .tabla-actividad tr:last-child td{border-bottom:none;}
 
           .fila-herramientas{display:flex;gap:10px;flex-wrap:wrap;}
-          .btn-herramienta{flex:1;min-width:140px;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
-                           padding:12px 14px;text-decoration:none;color:${MARCA.texto};font-size:0.82rem;font-weight:700;
+          .btn-herramienta{flex:1;min-width:140px;background:${MARCA.verdeOscuro};border:1px solid ${MARCA.verdeOscuro};border-radius:10px;
+                           padding:12px 14px;text-decoration:none;color:#fff;font-size:0.82rem;font-weight:700;
                            text-align:center;box-shadow:none;transition:border-color .18s,background .18s;}
-          .btn-herramienta:hover{border-color:${MARCA.verde};transform:none;box-shadow:none;background:#F4F8F4;}
+          .btn-herramienta:hover{border-color:${MARCA.verde};transform:none;box-shadow:none;background:${MARCA.verde};}
           .btn-reporte-pdf{display:flex;align-items:center;justify-content:space-between;gap:12px;
                            background:${MARCA.verdeOscuro};color:#fff;border-radius:10px;padding:16px 20px;
                            text-decoration:none;margin-top:12px;}
