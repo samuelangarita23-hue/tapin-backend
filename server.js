@@ -6698,9 +6698,17 @@ app.get("/", (req, res) => {
           .seccion-titulo{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2.2rem,4vw,3.4rem);line-height:1.03;letter-spacing:-.05em;text-align:center;margin:0 0 16px;color:var(--ink);}
           .seccion-sub{text-align:center;color:var(--muted);max-width:560px;margin:0 auto 50px;font-size:1rem;}
 
-          .pasos{display:flex;flex-wrap:wrap;gap:20px;margin-bottom:110px;}
+          .flujo{border-radius:28px;padding:34px 30px;margin-bottom:28px;}
+          .flujo-basico{background:#edf2ed;border:1px solid #d5e1d7;}
+          .flujo-pro{background:linear-gradient(135deg,#fff 35%,#f9f1dd);border:2px solid var(--gold);box-shadow:0 16px 30px rgba(139,96,12,.1);}
+          .flujo-cabecera{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+          .flujo-cabecera h3{font-family:'Playfair Display',Georgia,serif;font-size:1.65rem;margin:0;color:var(--ink);}
+          .flujo-etiqueta{font-size:.66rem;font-weight:900;letter-spacing:.07em;padding:6px 11px;border-radius:999px;text-transform:uppercase;background:var(--paper);color:var(--forest);}
+          .flujo-pro .flujo-etiqueta{background:var(--forest);color:#fff;}
+          .flujo-descripcion{color:var(--muted);font-size:.9rem;margin:0 0 24px;}
+          .pasos{display:flex;flex-wrap:wrap;gap:16px;margin:0;}
           .paso{flex:1;min-width:230px;background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:30px 26px;box-shadow:0 10px 20px rgba(9,49,30,.05);}
-          .paso.paso-pro{border:2px solid var(--gold);background:linear-gradient(135deg,#fff 40%,#f9f1dd);position:relative;}
+          .paso.paso-pro{border:1px solid #e6c774;background:var(--paper);position:relative;}
           .paso-pro-badge{position:absolute;right:18px;top:18px;background:var(--forest);color:#fff;font-size:.62rem;font-weight:900;letter-spacing:.06em;padding:6px 10px;border-radius:999px;text-transform:uppercase;}
           .paso-num{width:38px;height:38px;border-radius:50%;background:#edf1ed;color:var(--forest);font-size:.8rem;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:18px;}
           .paso h3{font-family:'Playfair Display',Georgia,serif;font-size:1.25rem;margin:0 0 8px;color:var(--ink);}
@@ -6768,6 +6776,7 @@ app.get("/", (req, res) => {
             .stats-strip div{border-right:none;border-bottom:1px solid var(--line);}
             .stats-strip div:last-child{border-bottom:none;}
             .accesos{grid-template-columns:1fr;}
+            .flujo{padding:28px 20px;}
             .planes,.precios-grid{flex-direction:column;}
             .site-footer{flex-direction:column;}
             .site-footer span:last-child{display:flex;gap:16px;margin-top:6px;}
@@ -6822,29 +6831,47 @@ app.get("/", (req, res) => {
           </div>
 
           <div id="como-funciona">
-            <div class="seccion-titulo">Cinco pasos. Cero complicaciones.</div>
-            <div class="seccion-sub">Recibes tu código, activas tu tarjeta fácilmente y ya puedes empezar. Los pasos 4 y 5 usan el filtro del Plan Pro; sin Plan Pro ese filtro no está disponible.</div>
-            <div class="pasos">
-              <div class="paso"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar de forma fácil.</p></div>
-              <div class="paso"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código, completas los datos de tu negocio y dejas Tapin listo en pocos minutos.</p></div>
-              <div class="paso"><div class="paso-num">3</div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta, se abre una página simple donde el cliente califica su experiencia.</p></div>
-              <div class="paso paso-pro"><div class="paso-pro-badge">Con Plan Pro</div><div class="paso-num">4</div><h3>Si calificó bien, va directo a Google</h3><p>Lo mandamos automáticamente a dejar la reseña pública en tu perfil de Google.</p></div>
-              <div class="paso paso-pro"><div class="paso-pro-badge">Con Plan Pro</div><div class="paso-num">5</div><h3>Si calificó mal, queda privado</h3><p>Ese comentario llega directo a ti — nunca se vuelve una reseña negativa pública.</p></div>
+            <div class="seccion-titulo">Así funciona Tapin</div>
+            <div class="seccion-sub">El proceso es fácil. La diferencia está en el filtro de calificaciones, que es exclusivo del Plan Pro.</div>
+
+            <div class="flujo flujo-basico">
+              <div class="flujo-cabecera"><span class="flujo-etiqueta">Sin Plan Pro</span><h3>Con tu tarjeta Tapin</h3></div>
+              <p class="flujo-descripcion">El cliente va directamente a dejar su reseña. Este recorrido no incluye el filtro de calificaciones.</p>
+              <div class="pasos">
+                <div class="paso"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
+                <div class="paso"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código y completas los datos de tu negocio en pocos minutos.</p></div>
+                <div class="paso"><div class="paso-num">3</div><h3>El cliente toca la tarjeta</h3><p>Solo acerca su celular a la tarjeta Tapin para abrir el enlace.</p></div>
+                <div class="paso"><div class="paso-num">4</div><h3>Deja su reseña en Google Reviews</h3><p>El último paso lleva al cliente a publicar su reseña directamente en Google Reviews.</p></div>
+              </div>
+            </div>
+
+            <div class="flujo flujo-pro">
+              <div class="flujo-cabecera"><span class="flujo-etiqueta">Con Plan Pro</span><h3>Con filtro de calificaciones</h3></div>
+              <p class="flujo-descripcion"><b>Este filtro solo está incluido en el Plan Pro:</b> separa las experiencias positivas de la retroalimentación negativa antes de enviarlas a su destino.</p>
+              <div class="pasos">
+                <div class="paso paso-pro"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
+                <div class="paso paso-pro"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código, completas los datos y activas el Plan Pro.</p></div>
+                <div class="paso paso-pro"><div class="paso-num">3</div><h3>El cliente toca y califica</h3><p>Al acercar el celular, se abre una página sencilla para calificar la experiencia.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">4</div><h3>El filtro separa la calificación</h3><p>Las experiencias positivas siguen hacia Google y las negativas se reciben de forma privada.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">5</div><h3>La experiencia llega a su destino</h3><p>Si fue positiva, el cliente deja su reseña en Google Reviews; si fue negativa, el comentario llega en privado al negocio.</p></div>
+              </div>
             </div>
           </div>
 
           <div id="accesos">
             <div class="seccion-titulo">Elige cómo continuar</div>
-            <div class="seccion-sub">Todo es fácil: pide tu tarjeta o entra a administrar tu negocio.</div>
+            <div class="seccion-sub">Encuentra el acceso que necesitas.</div>
             <div class="accesos">
               <a class="acceso acceso-1" href="/pedido"><div class="acceso-badge">RECOMENDADO</div><div class="acceso-icono">✦</div><h3>Pedir tarjeta</h3><p>Solicita tu Tapin y recíbela configurada para tu negocio.</p><span class="acceso-flecha">Quiero mi Tapin →</span></a>
+              <a class="acceso acceso-2" href="/cliente"><div class="acceso-badge">CLIENTES</div><div class="acceso-icono">◯</div><h3>Soy cliente</h3><p>Guarda favoritos y lleva tu historial de reseñas.</p><span class="acceso-flecha">Ir a mi cuenta →</span></a>
               <a class="acceso acceso-3" href="/mis-negocios"><div class="acceso-icono">▣</div><h3>Tengo un negocio</h3><p>Activa tu tarjeta o entra al panel de tu negocio.</p><span class="acceso-flecha">Entrar a mi negocio →</span></a>
+              <a class="acceso acceso-4" href="/descubre"><div class="acceso-icono">⌖</div><h3>Descubrir negocios</h3><p>Explora el mapa de negocios que ya usan Tapin.</p><span class="acceso-flecha">Ver el mapa →</span></a>
             </div>
           </div>
 
           <div id="precios">
             <div class="seccion-titulo">Lo que cuesta, sin letra pequeña</div>
-            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres retroalimentación privada, reportes y más.</div>
+            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres el filtro, retroalimentación privada, reportes y más. Para pagar la mensualidad Pro primero debes tener una tarjeta Tapin.</div>
             <div class="planes">
               <div class="plan">
                 <div class="plan-nombre">Pago único</div>
@@ -6865,6 +6892,7 @@ app.get("/", (req, res) => {
                   <div class="plan-anual-badge">10% más barato</div>
                 </div>
                 <ul>
+                  <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
                   <li><span class="check">✓</span> Todo lo del pago único, más:</li>
                   <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
                   <li><span class="check">✓</span> Alerta instantánea ante retroalimentación negativa</li>
@@ -6915,7 +6943,7 @@ app.get("/", (req, res) => {
 
         <footer class="site-footer">
           <span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span>
-          <span><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/admin">Administrador</a></span>
+          <span><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/descubre">Descubrir negocios</a><a href="/admin">Administrador</a></span>
         </footer>
       </body>
     </html>
