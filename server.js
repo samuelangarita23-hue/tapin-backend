@@ -2824,19 +2824,21 @@ app.get("/mi-panel/:slug", (req, res) => {
                        padding-left:10px;border-left:3px solid ${MARCA.verde};}
           .card-titulo span.suave{font-weight:600;color:${MARCA.oro};font-size:0.72rem;}
           .accion-panel{display:inline-flex!important;align-items:center;justify-content:center;min-height:38px;
-                         border-radius:999px!important;padding:9px 17px!important;box-shadow:0 5px 12px rgba(11,61,44,.07);
-                         transition:transform .18s ease,box-shadow .18s ease,background .18s ease!important;}
-          .accion-panel:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(11,61,44,.15)!important;}
+                         border-radius:10px!important;padding:9px 15px!important;box-shadow:none!important;
+                         transition:border-color .16s ease,background .16s ease,color .16s ease!important;}
+          .accion-panel:hover{transform:none;background:#EDF4EF!important;border-color:${MARCA.verde}!important;}
+          .accion-panel.accion-principal{background:${MARCA.verdeOscuro}!important;border-color:${MARCA.verdeOscuro}!important;color:#fff!important;}
+          .accion-panel.accion-principal:hover{background:${MARCA.verde}!important;border-color:${MARCA.verde}!important;}
           .accion-panel:focus-visible,.btn-herramienta:focus-visible,.btn-reporte-pdf:focus-visible{outline:3px solid rgba(201,162,75,.5);outline-offset:3px;}
 
           .resumen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-          .resumen-box{background:linear-gradient(145deg,#fff 0%,#F5F8F3 100%);border:1px solid ${MARCA.borde};border-radius:16px;padding:16px 8px;text-align:center;
-                       box-shadow:0 8px 18px rgba(11,61,44,0.06);}
+          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:16px 8px;text-align:center;
+                       box-shadow:none;border-top:3px solid ${MARCA.verdeOscuro};}
           .resumen-num{font-size:1.5rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
           .resumen-lbl{font-size:0.64rem;color:${MARCA.textoSuave};margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.02em;}
 
-          .chart-card{background:linear-gradient(145deg,#fff 0%,#FBFCF9 100%);border:1px solid ${MARCA.borde};border-radius:20px;padding:20px;margin-top:12px;
-                      box-shadow:0 10px 24px rgba(11,61,44,0.07);box-sizing:border-box;}
+          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;padding:20px;margin-top:12px;
+                      box-shadow:none;box-sizing:border-box;}
           .grid-2 .chart-card{height:100%;}
           .chart-card-titulo{font-size:0.78rem;font-weight:800;letter-spacing:.025em;color:${MARCA.verdeOscuro};margin-bottom:16px;text-align:left;}
           .sparkline{display:flex;align-items:flex-end;gap:5px;}
@@ -2868,14 +2870,14 @@ app.get("/mi-panel/:slug", (req, res) => {
           .tabla-actividad tr:last-child td{border-bottom:none;}
 
           .fila-herramientas{display:flex;gap:10px;flex-wrap:wrap;}
-          .btn-herramienta{flex:1;min-width:140px;background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;
+          .btn-herramienta{flex:1;min-width:140px;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
                            padding:12px 14px;text-decoration:none;color:${MARCA.texto};font-size:0.82rem;font-weight:700;
-                           text-align:center;box-shadow:0 5px 12px rgba(11,61,44,0.05);transition:transform .18s,box-shadow .18s,border-color .18s;}
-          .btn-herramienta:hover{border-color:${MARCA.verde};transform:translateY(-2px);box-shadow:0 10px 20px rgba(11,61,44,.1);}
+                           text-align:center;box-shadow:none;transition:border-color .18s,background .18s;}
+          .btn-herramienta:hover{border-color:${MARCA.verde};transform:none;box-shadow:none;background:#F4F8F4;}
           .btn-reporte-pdf{display:flex;align-items:center;justify-content:space-between;gap:12px;
-                           background:${MARCA.verdeOscuro};color:#fff;border-radius:14px;padding:16px 20px;
+                           background:${MARCA.verdeOscuro};color:#fff;border-radius:10px;padding:16px 20px;
                            text-decoration:none;margin-top:12px;}
-          .btn-reporte-pdf b{font-size:0.92rem;}.btn-reporte-pdf:hover{transform:translateY(-2px);box-shadow:0 12px 24px rgba(11,61,44,.2);}
+          .btn-reporte-pdf b{font-size:0.92rem;}.btn-reporte-pdf:hover{transform:none;box-shadow:none;background:${MARCA.verde};}
           .btn-reporte-pdf span{font-size:0.76rem;color:#CFE3D6;display:block;margin-top:2px;}
           .btn-reporte-pdf .flecha{font-size:1.3rem;flex-shrink:0;}
         </style>
@@ -2920,7 +2922,7 @@ app.get("/mi-panel/:slug", (req, res) => {
                 Mi suscripción
               </a>
               ` : ""}
-              <a class="accion-panel" href="/mi-panel/${slug}/configuracion?key=${req.query.key}"
+              <a class="accion-panel accion-principal" href="/mi-panel/${slug}/configuracion?key=${req.query.key}"
                  style="font-size:0.78rem;font-weight:700;color:#fff;background:${MARCA.oro};
                         border:1.5px solid ${MARCA.oro};border-radius:100px;padding:9px 18px;text-decoration:none;">
                 Configuración
