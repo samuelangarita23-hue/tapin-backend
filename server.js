@@ -6440,6 +6440,10 @@ app.get("/", (req, res) => {
 
           .hero-der{flex:1;background:#EEF3EC;position:relative;display:flex;align-items:center;justify-content:center;
                     padding:40px;overflow:hidden;}
+          .hero-der::before{content:"";position:absolute;top:50%;left:50%;width:520px;height:520px;
+                    transform:translate(-50%,-50%);border-radius:50%;
+                    background:radial-gradient(circle, rgba(201,162,75,0.14), rgba(11,61,44,0.08) 55%, transparent 75%);
+                    pointer-events:none;z-index:0;}
           #mapa-fondo{position:absolute;top:8%;left:10%;width:80%;height:84%;border-radius:24px;
                       box-shadow:0 20px 60px rgba(0,0,0,0.18);filter:saturate(0.7) brightness(1.02);}
           .mock-buscar{position:absolute;top:10%;left:13%;width:74%;background:#fff;border-radius:100px;
@@ -6491,8 +6495,37 @@ app.get("/", (req, res) => {
             50%  { transform: translateY(-16px) rotate(2deg); }
             100% { transform: translateY(0) rotate(-4deg); }
           }
+
+          /* Teléfono que se acerca y toca la tarjeta — reemplaza el ícono
+             estático de mano por una escena real, con onda de contacto NFC.
+             Posicionado pegado a la tarjeta (no con % grandes) para no
+             recortarse contra el overflow:hidden del contenedor padre. */
+          .escena-tap{position:absolute;bottom:-18px;right:-38px;width:120px;height:170px;z-index:5;pointer-events:none;}
+          .telefono{position:absolute;bottom:0;right:20px;width:68px;height:138px;border-radius:16px;
+                    background:linear-gradient(155deg,#1c2620,#0B3D2C);
+                    box-shadow:0 16px 32px rgba(0,0,0,0.35), inset 0 0 0 3px rgba(255,255,255,0.06);
+                    animation:tocar 4.5s ease-in-out infinite;}
+          .telefono::before{content:"";position:absolute;inset:6px;border-radius:10px;
+                    background:linear-gradient(160deg, rgba(231,240,234,0.16), rgba(231,240,234,0.03));}
+          .telefono::after{content:"";position:absolute;top:11px;left:50%;transform:translateX(-50%);
+                    width:16px;height:3px;border-radius:2px;background:rgba(255,255,255,0.25);}
+          .onda-tap{position:absolute;bottom:20px;right:52px;width:12px;height:12px;border-radius:50%;
+                    background:${MARCA.oro};opacity:0;animation:onda 4.5s ease-in-out infinite;}
+          .onda-tap.d2{animation-delay:0.25s;}
+          @keyframes tocar {
+            0%, 20%   { transform: translate(34px, 8px) rotate(14deg); }
+            42%, 54%  { transform: translate(0, 0) rotate(-2deg); }
+            76%, 100% { transform: translate(34px, 8px) rotate(14deg); }
+          }
+          @keyframes onda {
+            0%, 40%  { opacity: 0; transform: scale(0.4); }
+            48%      { opacity: 0.9; transform: scale(0.6); }
+            68%      { opacity: 0; transform: scale(2.4); }
+            100%     { opacity: 0; transform: scale(0.4); }
+          }
           @media (prefers-reduced-motion: reduce) {
             .tarjeta-nfc{ animation:none; }
+            .telefono, .onda-tap{ animation:none; opacity:0; }
           }
 
           @media (max-width: 980px){
@@ -6618,13 +6651,11 @@ app.get("/", (req, res) => {
                 <div class="tarjeta-google"><span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span></div>
                 <div class="tarjeta-estrellas">★★★★★</div>
                 <div class="tarjeta-texto">Déjanos una reseña<br>en Google</div>
-                <svg class="tarjeta-mano" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9 12V6.5C9 5.67 9.67 5 10.5 5C11.33 5 12 5.67 12 6.5V11" stroke="${MARCA.texto}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M12 11V5.5C12 4.67 12.67 4 13.5 4C14.33 4 15 4.67 15 5.5V11" stroke="${MARCA.texto}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M15 11V6.5C15 5.67 15.67 5 16.5 5C17.33 5 18 5.67 18 6.5V13C18 16.87 14.87 20 11 20C9 20 7.5 19 6.3 17.3L4 13.5C3.6 12.8 3.9 11.9 4.7 11.6C5.3 11.4 6 11.6 6.4 12.1L8 14" stroke="${MARCA.texto}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M20 5C21 6 21.5 7.3 21.5 8.5" stroke="${MARCA.oro}" stroke-width="1.4" stroke-linecap="round"/>
-                  <path d="M22 3C23.5 4.5 24.3 6.4 24.3 8.5" stroke="${MARCA.oro}" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>
-                </svg>
+              </div>
+              <div class="escena-tap">
+                <div class="onda-tap"></div>
+                <div class="onda-tap d2"></div>
+                <div class="telefono"></div>
               </div>
             </div>
 
