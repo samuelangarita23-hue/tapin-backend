@@ -5384,7 +5384,7 @@ app.get("/conoce", (req, res) => {
         </main>
         <footer class="site-footer">
           <span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span>
-          <span><a href="mailto:hola@tapincol.com">hola@tapincol.com</a><a href="https://wa.me/573003489609" target="_blank">WhatsApp</a></span>
+          <span><a href="mailto:tapin.notificaciones@gmail.com">tapin.notificaciones@gmail.com</a><a href="https://wa.me/573003489609" target="_blank">WhatsApp</a></span>
         </footer>
       </body>
     </html>
@@ -6761,8 +6761,8 @@ app.get("/", (req, res) => {
           .paso h3{font-family:'Playfair Display',Georgia,serif;font-size:1.25rem;margin:0 0 8px;color:var(--ink);}
           .paso p{font-size:.88rem;color:var(--muted);line-height:1.55;margin:0;}
 
-          .accesos{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-bottom:110px;}
-          .acceso{border-radius:24px;padding:32px 28px;text-decoration:none;color:var(--ink);position:relative;overflow:hidden;box-shadow:0 14px 28px rgba(9,49,30,.08);transition:transform .2s ease,box-shadow .2s ease;min-height:210px;display:flex;flex-direction:column;}
+          .accesos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-bottom:110px;align-items:stretch;}
+          .acceso{border-radius:24px;padding:32px 28px;text-decoration:none;color:var(--ink);position:relative;overflow:hidden;box-shadow:0 14px 28px rgba(9,49,30,.08);transition:transform .2s ease,box-shadow .2s ease;min-height:240px;height:100%;display:flex;flex-direction:column;}
           .acceso:hover{transform:translateY(-6px);box-shadow:0 22px 40px rgba(9,49,30,.16);}
           .acceso-1{background:linear-gradient(135deg,#0a3e29,#146542);color:#fff;}
           .acceso-2{background:linear-gradient(145deg,#fffef8,#fbf1d8);border:2px solid var(--gold);}
@@ -6987,7 +6987,7 @@ app.get("/", (req, res) => {
             <div class="seccion-sub">Estamos aquí para ayudarte. Escríbenos y te respondemos lo antes posible.</div>
             <div class="hero-cta-row" style="justify-content:center;">
               <a class="hero-cta-main" href="https://wa.me/573003489609" target="_blank">WhatsApp</a>
-              <a class="acceso-flecha" style="border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:15px 26px;text-decoration:none;font-weight:700;font-size:.92rem;" href="mailto:hola@tapincol.com">hola@tapincol.com</a>
+              <a class="acceso-flecha" style="border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:15px 26px;text-decoration:none;font-weight:700;font-size:.92rem;" href="mailto:tapin.notificaciones@gmail.com">tapin.notificaciones@gmail.com</a>
             </div>
           </div>
         </div>
