@@ -64,15 +64,25 @@ app.use(express.json()); // necesario para recibir el webhook de Wompi (manda JS
 // sesiones, rutas ni la lógica de negocio.
 const CONTROL_TEMA_GLOBAL = `
   <style>
-    #tapin-theme-toggle{position:fixed;right:16px;bottom:16px;z-index:99999;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:10px 14px;background:#0d432b;color:#fff;font:700 12px/1.2 'Segoe UI',sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.22);cursor:pointer;}
-    html.tapin-dark{color-scheme:dark;}
-    html.tapin-dark body{background:#071a12!important;color:#eef7f1!important;}
-    html.tapin-dark body :is(.box,.card,.seccion,.form-card,.chart-card,.metric,.plan,.paso,.flujo,.acceso,.precio-card,.nota,.tarjeta-info,.reco,table,input,select,textarea){background-color:#10271c!important;color:#eef7f1!important;border-color:#355647!important;}
-    html.tapin-dark body :is(p,.nota,.subtitulo,.seccion-sub,.flujo-descripcion,.paso p,.acceso p,td,th,label){color:#c9dbd0!important;}
-    html.tapin-dark body a{color:#f3d576;}
-    html.tapin-dark #tapin-theme-toggle{background:#f3d576;color:#062e1e;border-color:#e8a623;}
+    #tapin-theme-toggle{position:fixed;right:16px;bottom:16px;z-index:99999;width:48px;height:48px;border:1px solid rgba(255,255,255,.45);border-radius:50%;padding:0;background:#0d432b;color:#fff;font:700 21px/1 'Segoe UI Emoji','Segoe UI',sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.28);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+    #tapin-theme-toggle:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.34);}
+    html.tapin-dark{color-scheme:dark;--ink:#f4faf6;--forest:#16704b;--forest2:#0c5337;--cream:#07150f;--paper:#10251a;--muted:#bfd2c6;--line:#3b5b4b;--gold:#f0b83e;--gold2:#ffdc7a;}
+    html.tapin-dark body{background:#07150f!important;color:#f4faf6!important;}
+    html.tapin-dark body :is(.site-header,.box,.card,.seccion,.form-card,.chart-card,.metric,.plan,.paso,.flujo,.precio-card,.nota,.tarjeta-info,.reco,table){background:#10251a!important;color:#f4faf6!important;border-color:#3b5b4b!important;box-shadow:0 10px 24px rgba(0,0,0,.28);}
+    html.tapin-dark body :is(h1,h2,h3,h4,strong,b,.card-titulo,.seccion-titulo,.titulo-pagina){color:#f4faf6!important;}
+    html.tapin-dark body :is(p,.nota,.subtitulo,.seccion-sub,.flujo-descripcion,.paso p,.acceso p,td,th,label,.metric-lbl){color:#bfd2c6!important;}
+    html.tapin-dark body :is(input,select,textarea){background:#091c12!important;color:#f4faf6!important;border-color:#52705f!important;}
+    html.tapin-dark body :is(input,textarea)::placeholder{color:#8da99a!important;}
+    html.tapin-dark body .acceso{border-color:#3b5b4b!important;}
+    html.tapin-dark body .acceso-1{background:linear-gradient(135deg,#0c5136,#16704b)!important;color:#fff!important;}
+    html.tapin-dark body .acceso-3{background:#10251a!important;color:#f4faf6!important;}
+    html.tapin-dark body .acceso-4{background:linear-gradient(135deg,#ffdc7a,#f0b83e)!important;color:#062e1e!important;}
+    html.tapin-dark body .acceso-4 :is(h3,p,span){color:#062e1e!important;}
+    html.tapin-dark body .flujo-pro{background:linear-gradient(135deg,#15271d,#332a13)!important;border-color:#f0b83e!important;}
+    html.tapin-dark body a{color:#ffdc7a;}
+    html.tapin-dark #tapin-theme-toggle{background:#ffdc7a;color:#062e1e;border-color:#f0b83e;}
   </style>
-  <button id="tapin-theme-toggle" type="button" aria-label="Cambiar tema">Tema oscuro</button>
+  <button id="tapin-theme-toggle" type="button" aria-label="Activar tema oscuro" title="Activar tema oscuro">🌙</button>
   <script>
     (() => {
       const raiz = document.documentElement;
@@ -81,7 +91,10 @@ const CONTROL_TEMA_GLOBAL = `
       try { oscuro = localStorage.getItem("tapin-tema") === "oscuro"; } catch (_) {}
       const aplicar = () => {
         raiz.classList.toggle("tapin-dark", oscuro);
-        boton.textContent = oscuro ? "Tema claro" : "Tema oscuro";
+        boton.textContent = oscuro ? "☀️" : "🌙";
+        const descripcion = oscuro ? "Activar tema claro" : "Activar tema oscuro";
+        boton.setAttribute("aria-label", descripcion);
+        boton.setAttribute("title", descripcion);
       };
       aplicar();
       boton.addEventListener("click", () => {
