@@ -520,6 +520,12 @@ function esPro(negocio) {
   if (negocio.billingType === "anual" && negocio.proAnualHasta) {
     return new Date(negocio.proAnualHasta) > new Date();
   }
+  // Si canceló su suscripción mensual, sigue siendo Pro hasta el final del
+  // período que ya pagó (vigenteHasta) — después de esa fecha, baja solo a
+  // Básico, sin que nadie tenga que hacerlo a mano.
+  if (negocio.suscripcion && negocio.suscripcion.vigenteHasta) {
+    return new Date(negocio.suscripcion.vigenteHasta) > new Date();
+  }
   return true;
 }
 
@@ -2879,20 +2885,28 @@ app.get("/mi-panel/:slug", (req, res) => {
               ${soloLectura ? `<span style="display:inline-block;margin-left:6px;padding:5px 14px;border-radius:100px;font-size:0.72rem;font-weight:700;background:#F3F1EC;color:${MARCA.textoSuave};">Solo lectura</span>` : ""}
             </div>
             ${!soloLectura ? `
-            <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+            <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
               <a href="/mi-panel/${slug}/editar?key=${req.query.key}"
-                 style="font-size:0.76rem;font-weight:600;color:${MARCA.texto};background:#fff;
-                        border:1px solid ${MARCA.borde};border-radius:100px;padding:7px 14px;text-decoration:none;">
+                 style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
+                        border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;
+                        transition:border-color .15s;">
                 Editar mi negocio
               </a>
               <a href="/mi-panel/${slug}/clave?key=${req.query.key}"
-                 style="font-size:0.76rem;font-weight:600;color:${MARCA.texto};background:#fff;
-                        border:1px solid ${MARCA.borde};border-radius:100px;padding:7px 14px;text-decoration:none;">
+                 style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
+                        border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;">
                 Cambiar mi clave
               </a>
+              ${esPro(negocio) ? `
+              <a href="/suscripcion/${slug}?key=${req.query.key}"
+                 style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
+                        border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;">
+                Mi suscripción
+              </a>
+              ` : ""}
               <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}"
-                 style="font-size:0.76rem;font-weight:600;color:${MARCA.texto};background:#fff;
-                        border:1px solid ${MARCA.borde};border-radius:100px;padding:7px 14px;text-decoration:none;">
+                 style="font-size:0.78rem;font-weight:700;color:#fff;background:${MARCA.oro};
+                        border:1.5px solid ${MARCA.oro};border-radius:100px;padding:9px 18px;text-decoration:none;">
                 Configuración
               </a>
             </div>
@@ -3418,6 +3432,17 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
         <div class="content">
           <div class="eyebrow">Ajustes · ${negocio.nombre}</div>
           <h1 class="titulo-pagina">Configuración</h1>
+
+          ${esPro(negocio) ? `
+          <div class="form-card">
+            <h3>Mi suscripción</h3>
+            <p class="nota">Ver el estado de tu pago, cambiar de tarjeta, o cancelar el Plan Pro.</p>
+            <a href="/suscripcion/${slug}?key=${claveUsada}" style="display:inline-block;background:${MARCA.verdeOscuro};color:#fff;
+               border-radius:9px;padding:11px 18px;font-weight:700;font-size:0.88rem;text-decoration:none;">
+              Gestionar mi suscripción →
+            </a>
+          </div>
+          ` : ""}
 
           <div class="form-card">
             <h3>Meta mensual</h3>
@@ -7465,12 +7490,11 @@ app.get("/suscripcion/:slug", (req, res) => {
   if (!esPro(negocio)) {
     return res.status(402).send("Esta página es solo para negocios en Plan Pro.");
   }
-  if (!process.env.WOMPI_PUBLIC_KEY) {
-    return res.status(500).send("Los pagos todavía no están configurados (falta WOMPI_PUBLIC_KEY en Render).");
-  }
 
   const sus = negocio.suscripcion;
   const activa = !!(sus && sus.activa && sus.paymentSourceId);
+  const cancelada = !!(sus && !sus.activa && sus.vigenteHasta);
+  const esAnual = negocio.billingType === "anual";
   const precioProAplicable = precioProSegunLocales(negocio.email, todosLosNegocios());
 
   res.send(`
@@ -7481,35 +7505,63 @@ app.get("/suscripcion/:slug", (req, res) => {
         <title>Suscripción Pro — ${negocio.nombre}</title>
         <style>
           *{box-sizing:border-box;}
-          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
+          @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&display=swap');
+          :root{--ink:#062e1e;--forest:#0d432b;--cream:#fbf6e9;--muted:#50695b;--line:#dedccc;--gold:#e8a623;}
+          body{font-family:'DM Sans','Segoe UI',-apple-system,Arial,sans-serif;background:var(--cream);
                margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
-          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:420px;width:100%;text-align:center;
-               box-shadow:0 10px 40px rgba(0,0,0,0.08);}
-          h1{font-size:1.1rem;color:${MARCA.texto};margin:14px 0 6px;}
-          p{color:${MARCA.textoSuave};font-size:0.85rem;}
-          .estado{padding:12px 16px;border-radius:10px;font-weight:700;margin:16px 0;font-size:0.85rem;
-                  background:${activa ? MARCA.verdeClaro : "#fff4e0"};color:${activa ? MARCA.verdeOscuro : "#8a5a00"};}
+          .box{background:#fff;border-radius:24px;padding:38px 34px;max-width:440px;width:100%;text-align:center;
+               box-shadow:0 20px 50px rgba(9,49,30,.1);border:1px solid var(--line);}
+          h1{font-family:'Playfair Display',Georgia,serif;font-size:1.5rem;color:var(--ink);margin:16px 0 4px;letter-spacing:-.02em;}
+          p{color:var(--muted);font-size:0.9rem;line-height:1.55;}
+          .estado{padding:14px 18px;border-radius:14px;font-weight:700;margin:18px 0;font-size:0.85rem;}
+          .estado.ok{background:#e7f0ea;color:var(--forest);}
+          .estado.cancelada{background:#fff4e0;color:#8a5a00;}
+          .btn{display:inline-block;width:100%;border-radius:999px;padding:14px 20px;font-weight:700;font-size:.9rem;
+               text-decoration:none;cursor:pointer;border:none;box-sizing:border-box;margin-top:10px;}
+          .btn-principal{background:var(--gold);color:var(--ink);box-shadow:0 10px 20px rgba(232,166,35,.28);}
+          .btn-secundario{background:#fff;color:var(--ink);border:1.5px solid var(--line);}
+          .btn-peligro{background:#fff;color:#a83a2b;border:1.5px solid #f0d0c8;}
+          .divisor{height:1px;background:var(--line);margin:22px 0;}
         </style>
       </head>
       <body>
         <div class="box">
           <div class="logo">${logoSvg(MARCA.verdeOscuro, 34)}</div>
           <h1>Suscripción Plan Pro</h1>
-          <p style="color:${MARCA.textoSuave};font-size:0.85rem;margin-top:-10px;">${negocio.nombre}</p>
-          ${activa
-            ? `<div class="estado">Tarjeta registrada. Se cobra automáticamente $${precioProAplicable.toLocaleString("es-CO")} COP cada mes.</div>
-               <p>Próximo cobro: ${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "pendiente"}</p>
-               <p>¿Cambiaste de tarjeta? Registra una nueva abajo y reemplazará la anterior.</p>`
-            : `<p>Registra tu tarjeta una sola vez. <b>No se te cobra nada en este paso</b> — solo queda guardada para el cobro automático de $${precioProAplicable.toLocaleString("es-CO")} COP/mes.</p>`
-          }
-          <form method="POST" action="/suscripcion/${slug}/registrar?key=${req.query.key}">
-            <script
-              src="https://checkout.wompi.co/widget.js"
-              data-render="button"
-              data-widget-operation="tokenize"
-              data-public-key="${process.env.WOMPI_PUBLIC_KEY}">
-            </script>
-          </form>
+          <p style="margin-top:-6px;">${negocio.nombre}</p>
+
+          ${esAnual ? `
+            <div class="estado ok">Plan Pro anual — pago único, sin cobros automáticos.</div>
+            <p>Vence el <b>${negocio.proAnualHasta ? new Date(negocio.proAnualHasta).toLocaleDateString("es-CO") : "—"}</b>. Como ya pagaste el año completo, no hay nada que cobrar ni cancelar — simplemente no se renueva sola cuando termine, a menos que vuelvas a pagar.</p>
+            <p style="font-size:0.78rem;">¿Quieres bajar a Plan Básico antes de esa fecha de todas formas?</p>
+            <form method="POST" action="/suscripcion/${slug}/bajar-anticipado?key=${req.query.key}" onsubmit="return confirm('¿Seguro que quieres bajar a Plan Básico ahora? Pierdes el resto de tu Plan Pro anual ya pagado, no se reembolsa.');">
+              <button type="submit" class="btn btn-peligro">Bajar a Plan Básico ahora</button>
+            </form>
+          ` : activa ? `
+            <div class="estado ok">Tarjeta registrada. Se cobra automáticamente $${precioProAplicable.toLocaleString("es-CO")} COP cada mes.</div>
+            <p>Próximo cobro: <b>${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "pendiente"}</b></p>
+            <p style="font-size:0.8rem;">¿Cambiaste de tarjeta? Registra una nueva abajo y reemplaza la anterior.</p>
+            <form method="POST" action="/suscripcion/${slug}/registrar?key=${req.query.key}">
+              <script src="https://checkout.wompi.co/widget.js" data-render="button" data-widget-operation="tokenize" data-public-key="${process.env.WOMPI_PUBLIC_KEY || ""}"></script>
+            </form>
+            <div class="divisor"></div>
+            <form method="POST" action="/suscripcion/${slug}/cancelar?key=${req.query.key}" onsubmit="return confirm('¿Seguro que quieres cancelar? Sigues teniendo Pro hasta el ${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "final del período ya pagado"}, después bajas a Básico automáticamente, sin cobros nuevos.');">
+              <button type="submit" class="btn btn-peligro">Cancelar suscripción</button>
+            </form>
+          ` : cancelada ? `
+            <div class="estado cancelada">Cancelada — sigues en Pro hasta el <b>${new Date(sus.vigenteHasta).toLocaleDateString("es-CO")}</b>, después bajas a Básico sola, sin que hagas nada más.</div>
+            <p>¿Cambiaste de opinión? Vuelve a registrar tu tarjeta para seguir en Pro sin interrupción.</p>
+            <form method="POST" action="/suscripcion/${slug}/registrar?key=${req.query.key}">
+              <script src="https://checkout.wompi.co/widget.js" data-render="button" data-widget-operation="tokenize" data-public-key="${process.env.WOMPI_PUBLIC_KEY || ""}"></script>
+            </form>
+          ` : `
+            <p>Registra tu tarjeta una sola vez. <b>No se te cobra nada en este paso</b> — solo queda guardada para el cobro automático de $${precioProAplicable.toLocaleString("es-CO")} COP/mes.</p>
+            <form method="POST" action="/suscripcion/${slug}/registrar?key=${req.query.key}">
+              <script src="https://checkout.wompi.co/widget.js" data-render="button" data-widget-operation="tokenize" data-public-key="${process.env.WOMPI_PUBLIC_KEY || ""}"></script>
+            </form>
+          `}
+
+          <a class="btn btn-secundario" href="/mi-panel/${slug}?key=${req.query.key}" style="margin-top:18px;">&larr; Volver a mi panel</a>
         </div>
       </body>
     </html>
@@ -7572,7 +7624,48 @@ app.post("/suscripcion/:slug/registrar", async (req, res) => {
   }
 });
 
-// Cobra automáticamente la mensualidad a TODOS los negocios Pro cuya fecha de
+// Cancela la suscripción mensual: deja de cobrar en el futuro, pero el
+// negocio sigue en Pro hasta el final de lo que ya pagó (vigenteHasta =
+// la fecha del próximo cobro que ya no va a pasar). Después de esa fecha,
+// esPro() lo baja a Básico solo, sin que nadie tenga que hacer nada más.
+app.post("/suscripcion/:slug/cancelar", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  const sus = negocio.suscripcion;
+  if (!sus || !sus.activa) {
+    return res.redirect(`/suscripcion/${slug}?key=${req.query.key}`);
+  }
+  guardarCambiosNegocio(slug, negocio, {
+    suscripcion: { ...sus, activa: false, vigenteHasta: sus.proximoCobro || new Date().toISOString() },
+  });
+  registrarAuditoria(slug, negocio, `Cancelaste tu suscripción Pro (sigues activo hasta ${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "hoy"})`);
+  res.redirect(`/suscripcion/${slug}?key=${req.query.key}`);
+});
+
+// Baja a Básico de inmediato a un negocio con Plan Pro anual, antes de que
+// se cumpla el año que ya pagó — sin reembolso (ya se explica en el botón).
+// Es la excepción: en todo lo demás, el anual no tiene nada que "cancelar"
+// porque no cobra solo, es un pago único que ya se hizo.
+app.post("/suscripcion/:slug/bajar-anticipado", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+    return res.status(401).send("No autorizado.");
+  }
+  if (negocio.billingType !== "anual") {
+    return res.status(400).send("Esto es solo para negocios con Plan Pro anual.");
+  }
+  guardarCambiosNegocio(slug, negocio, { plan: "basico" });
+  registrarAuditoria(slug, negocio, "Bajaste a Plan Básico antes de que terminara tu Plan Pro anual");
+  res.redirect(`/mi-panel/${slug}?key=${req.query.key}`);
+});
+
+
 // próximo cobro ya llegó. Visítala con un cron diario o mensual (igual que
 // /notificar/:slug) — solo cobra a quien realmente le toque ese día:
 // https://tu-dominio.com/cobrar-suscripciones?key=TU_CLAVE
