@@ -67,7 +67,10 @@ const CONTROL_TEMA_GLOBAL = `
     #tapin-theme-toggle{position:fixed;right:16px;bottom:16px;z-index:99999;width:48px;height:48px;border:1px solid rgba(255,255,255,.45);border-radius:50%;padding:0;background:#0d432b;color:#fff;font:700 21px/1 'Segoe UI Emoji','Segoe UI',sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.28);cursor:pointer;display:flex;align-items:center;justify-content:center;}
     #tapin-theme-toggle:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.34);}
     body .tabla-pro th:first-child,body .tabla-pro td:first-child{text-align:center!important;}
-    body .tabla-pro td{padding-top:15px!important;padding-bottom:15px!important;}
+    body .tabla-pro td{padding-top:12px!important;padding-bottom:12px!important;}
+    body .precios-grid{align-items:stretch!important;}
+    body .precios-grid>.precio-card{display:flex!important;flex-direction:column!important;height:auto!important;}
+    body .precios-grid>.precio-card>.tabla-precios{flex:1;}
     body .tabla-pro tr:not(:first-child):hover td{filter:brightness(.97);}
     body .tabla-pro tr.fila-empresa td{background:#fbf1d8!important;color:#624a08!important;font-weight:800!important;border-top:2px solid #e8ad32!important;}
     html.tapin-dark{color-scheme:dark;--ink:#f4faf6;--forest:#438b67;--forest2:#256448;--cream:#071f16;--paper:#1b5139;--muted:#d0e0d6;--line:#5c8a70;--gold:#e8ad32;--gold2:#f7d77d;}
