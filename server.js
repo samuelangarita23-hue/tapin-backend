@@ -122,6 +122,9 @@ const CONTROL_TEMA_GLOBAL = `
     html.tapin-dark body[data-tapin-page="negocio"] :is(.tabla-actividad,table) th{background:#164631!important;color:#fff!important;border-color:#72a088!important;}
     html.tapin-dark body[data-tapin-page="negocio"] :is(.tabla-actividad,table) td{background:#1b5139!important;color:#f4faf6!important;border-color:#72a088!important;}
     html.tapin-dark body[data-tapin-page="negocio"] :is(.tabla-actividad,table) tr:nth-child(even) td{background:#15442f!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .chart-card .tabla-actividad{background:transparent!important;border:none!important;border-radius:0!important;box-shadow:none!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .seccion-actividad{margin-top:38px!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .seccion-actividad>.card-titulo{margin-bottom:14px!important;}
     html.tapin-dark body[data-tapin-page="negocio"] .chart-card :is(div,span,p){color:#dcebe1!important;}
     html.tapin-dark body[data-tapin-page="negocio"] .chart-card :is(b,strong){color:#fff!important;}
     html.tapin-dark body[data-tapin-page="negocio"] :is(.btn-herramienta,.panel-acciones a),html.tapin-dark body[data-tapin-page="admin"] :is(.card-actions a,.btn-pais){background:#f3efe3!important;color:#163a2a!important;border:1px solid #d8cfba!important;box-shadow:0 5px 12px rgba(0,0,0,.18)!important;}
@@ -131,6 +134,10 @@ const CONTROL_TEMA_GLOBAL = `
     html.tapin-dark body[data-tapin-page="admin"] .ultimo-toque b,html.tapin-dark body[data-tapin-page="negocio"] .ultimo-toque b{color:#fff!important;}
     html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-vacio{color:#173b2b!important;background:#dedbcd!important;}
     html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-activo{color:#fff!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-1{background:#2d6f4e!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-2{background:#398d62!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-3{background:#4caf78!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-4{background:#72d59b!important;color:#092719!important;}
     html.tapin-dark body[data-tapin-page="descubre"] #mapa *{border-color:initial!important;}
     html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-popup-tip,.leaflet-control-zoom a,.leaflet-control-attribution){background:#17432f!important;color:#f4faf6!important;border-color:#5c8a70!important;}
     html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-control-zoom a,.leaflet-control-attribution) *{color:#f4faf6!important;}
@@ -3193,7 +3200,8 @@ app.get("/mi-panel/:slug", (req, res) => {
                 ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
                 ${calendario.dias.map((v, i) => {
                   const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
-                  return `<div class="cal-dia ${v === 0 ? "cal-vacio" : "cal-activo"}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:5px;
+                  const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
+                  return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:5px;
                           background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
                           display:flex;align-items:center;justify-content:center;font-size:0.6rem;
                           color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
@@ -3320,7 +3328,7 @@ app.get("/mi-panel/:slug", (req, res) => {
           </div>
           `}
 
-          <div class="seccion">
+          <div class="seccion seccion-actividad">
             <div class="card-titulo">Actividad reciente</div>
             <div class="chart-card" style="margin-top:0;">
               <table class="tabla-actividad">
