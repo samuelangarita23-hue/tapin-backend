@@ -68,10 +68,9 @@ const CONTROL_TEMA_GLOBAL = `
     #tapin-theme-toggle:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.34);}
     html.tapin-dark{color-scheme:dark;--ink:#f4faf6;--forest:#438b67;--forest2:#256448;--cream:#071f16;--paper:#1b5139;--muted:#d0e0d6;--line:#5c8a70;--gold:#e8ad32;--gold2:#f7d77d;}
     html.tapin-dark body{background:#071f16!important;color:#f4faf6!important;}
-    html.tapin-dark body *{color:#eef5f0!important;border-color:#5c8a70!important;}
     html.tapin-dark body :is(.site-header,.box,.card,.seccion,.form-card,.chart-card,.metric,.plan,.flujo,.precio-card,.nota,.tarjeta-info,.reco,.faq-item,table){background:#1b5139!important;color:#f4faf6!important;border:1px solid #5c8a70!important;box-shadow:0 14px 30px rgba(0,0,0,.34);}
     html.tapin-dark body :is(.paso,.chart-card .reco,.form-card input,.form-card select,.form-card textarea){background:#0f3525!important;border-color:#46745b!important;box-shadow:0 7px 16px rgba(0,0,0,.2);}
-    html.tapin-dark body :is(h1,h2,h3,h4,strong,b,.card-titulo,.seccion-titulo,.titulo-pagina){color:#f4faf6!important;}
+    html.tapin-dark body :is(h1,h2,h3,h4,.card-titulo,.seccion-titulo,.titulo-pagina){color:#f4faf6!important;}
     html.tapin-dark body :is(p,.nota,.subtitulo,.seccion-sub,.flujo-descripcion,.paso p,.acceso p,td,th,label,.metric-lbl){color:#c2d1c7!important;}
     html.tapin-dark body :is(input,select,textarea){background:#0d2b1e!important;color:#f4faf6!important;border-color:#668f78!important;}
     html.tapin-dark body :is(input,textarea)::placeholder{color:#8fa598!important;}
@@ -100,14 +99,23 @@ const CONTROL_TEMA_GLOBAL = `
     html.tapin-dark body .tarjeta-google span:nth-child(2),html.tapin-dark body .tarjeta-google span:nth-child(6){color:#EA4335!important;}
     html.tapin-dark body .tarjeta-google span:nth-child(3){color:#FBBC05!important;}
     html.tapin-dark body .tarjeta-google span:nth-child(5){color:#34A853!important;}
-    html.tapin-dark body a{color:#ffdc7a!important;}
+    html.tapin-dark body a{color:#ffdc7a;}
+    html.tapin-dark body .google-login{background:#fff!important;color:#27312b!important;border-color:#d7ddd9!important;box-shadow:none!important;}
+    html.tapin-dark body .google-login svg path{border-color:transparent!important;}
     html.tapin-dark #tapin-theme-toggle{background:#ffdc7a;color:#062e1e;border-color:#f0b83e;}
     html.tapin-dark body[data-tapin-page="principal"] :is(#como-funciona,#precios){background:rgba(27,81,57,.62)!important;border:1px solid #5c8a70!important;}
     html.tapin-dark body[data-tapin-page="principal"] :is(#accesos,#preguntas){background:rgba(8,43,29,.72)!important;border:1px solid #416c55!important;}
     html.tapin-dark body[data-tapin-page="admin"],html.tapin-dark body[data-tapin-page="negocio"]{background:#071f16!important;}
     html.tapin-dark body[data-tapin-page="admin"] :is(.content,.contenido),html.tapin-dark body[data-tapin-page="negocio"] :is(.content,.contenido){background:transparent!important;}
-    html.tapin-dark body[data-tapin-page="admin"] :is(button,.btn),html.tapin-dark body[data-tapin-page="negocio"] :is(button,.btn){background:#e8ad32!important;color:#062e1e!important;border-color:#f7d77d!important;}
-    html.tapin-dark body[data-tapin-page="admin"] :is(button,.btn) *,html.tapin-dark body[data-tapin-page="negocio"] :is(button,.btn) *{color:#062e1e!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(button[type="submit"],.btn),html.tapin-dark body[data-tapin-page="negocio"] :is(button[type="submit"],.btn){background:#e8ad32!important;color:#062e1e!important;border-color:#f7d77d!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(button[type="submit"],.btn) *,html.tapin-dark body[data-tapin-page="negocio"] :is(button[type="submit"],.btn) *{color:#062e1e!important;}
+    html.tapin-dark body :is(.ver-clave,.icono-toggle){background:transparent!important;color:#d6e4db!important;border:none!important;box-shadow:none!important;transform:none!important;}
+    html.tapin-dark body .ver-clave{position:absolute!important;right:4px!important;top:4px!important;bottom:4px!important;width:36px!important;height:auto!important;padding:0!important;margin:0!important;border-radius:7px!important;}
+    html.tapin-dark body[data-tapin-page="admin"] .seccion,html.tapin-dark body[data-tapin-page="negocio"] .seccion{background:transparent!important;border:none!important;box-shadow:none!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(.resumen-box,.negocio-card,.pais-card,.chart-card),html.tapin-dark body[data-tapin-page="negocio"] :is(.resumen-box,.negocio-card,.chart-card){background:#123a29!important;color:#f4faf6!important;border:1px solid #4f7d64!important;box-shadow:0 8px 20px rgba(0,0,0,.22)!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(.resumen-num,.resumen-lbl,.card-total,.card-total span),html.tapin-dark body[data-tapin-page="negocio"] :is(.resumen-num,.resumen-lbl,.card-total,.card-total span){color:#f4faf6!important;}
+    html.tapin-dark body :is(.spark-bar,.hora-barra){background:#62c28d!important;box-shadow:0 0 0 1px rgba(255,255,255,.08);}
+    html.tapin-dark body[data-tapin-page="admin"] .sparkline>div>div:not(.spark-bar),html.tapin-dark body[data-tapin-page="negocio"] .sparkline>div>div:not(.spark-bar){color:#e6f1ea!important;}
     html.tapin-dark body[data-tapin-page="descubre"] #mapa *{border-color:initial!important;}
     html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-popup-tip,.leaflet-control-zoom a,.leaflet-control-attribution){background:#17432f!important;color:#f4faf6!important;border-color:#5c8a70!important;}
     html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-control-zoom a,.leaflet-control-attribution) *{color:#f4faf6!important;}
@@ -976,7 +984,7 @@ function barraSemana(dias7) {
       return `
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;height:100%;">
           <div style="font-size:0.75rem;font-weight:700;color:${MARCA.textoSuave};line-height:1;">${v}</div>
-          <div style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
+          <div class="spark-bar" style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
           <div style="font-size:0.62rem;color:#999;text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
         </div>`;
     })
@@ -5660,7 +5668,7 @@ app.get("/mis-negocios", (req, res) => {
     </form>`;
 
   const bloqueLogin = `
-    <a href="/auth/google/iniciar" style="display:flex;align-items:center;justify-content:center;gap:10px;
+    <a class="google-login" href="/auth/google/iniciar" style="display:flex;align-items:center;justify-content:center;gap:10px;
        width:100%;box-sizing:border-box;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
        padding:13px;font-weight:700;font-size:0.9rem;color:${MARCA.texto};text-decoration:none;margin-bottom:14px;">
       <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -6038,7 +6046,7 @@ app.get("/cliente", (req, res) => {
           <div class="panel activo" id="panel-login">
             <h2>Bienvenido de vuelta</h2>
             <p>Entra para ver tus favoritos y tu historial de reseñas.</p>
-            <a href="/auth/google/iniciar?tipo=cliente" style="display:flex;align-items:center;justify-content:center;gap:10px;
+            <a class="google-login" href="/auth/google/iniciar?tipo=cliente" style="display:flex;align-items:center;justify-content:center;gap:10px;
                width:100%;box-sizing:border-box;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
                padding:13px;font-weight:700;font-size:0.9rem;color:${MARCA.texto};text-decoration:none;margin-bottom:14px;">
               <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
