@@ -66,31 +66,32 @@ const CONTROL_TEMA_GLOBAL = `
   <style>
     #tapin-theme-toggle{position:fixed;right:16px;bottom:16px;z-index:99999;width:48px;height:48px;border:1px solid rgba(255,255,255,.45);border-radius:50%;padding:0;background:#0d432b;color:#fff;font:700 21px/1 'Segoe UI Emoji','Segoe UI',sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.28);cursor:pointer;display:flex;align-items:center;justify-content:center;}
     #tapin-theme-toggle:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.34);}
-    html.tapin-dark{color-scheme:dark;--ink:#f4faf6;--forest:#3b805e;--forest2:#205e42;--cream:#0b3424;--paper:#17432f;--muted:#c8dacf;--line:#3f6a54;--gold:#e8ad32;--gold2:#f7d77d;}
-    html.tapin-dark body{background:#0b3424!important;color:#f4faf6!important;}
-    html.tapin-dark body *{color:#eef5f0!important;border-color:#385445!important;}
-    html.tapin-dark body :is(.site-header,.box,.card,.seccion,.form-card,.chart-card,.metric,.plan,.paso,.flujo,.precio-card,.nota,.tarjeta-info,.reco,table){background:#17432f!important;color:#f4faf6!important;border-color:#3f6a54!important;box-shadow:0 10px 24px rgba(0,0,0,.24);}
+    html.tapin-dark{color-scheme:dark;--ink:#f4faf6;--forest:#438b67;--forest2:#256448;--cream:#071f16;--paper:#1b5139;--muted:#d0e0d6;--line:#5c8a70;--gold:#e8ad32;--gold2:#f7d77d;}
+    html.tapin-dark body{background:#071f16!important;color:#f4faf6!important;}
+    html.tapin-dark body *{color:#eef5f0!important;border-color:#5c8a70!important;}
+    html.tapin-dark body :is(.site-header,.box,.card,.seccion,.form-card,.chart-card,.metric,.plan,.flujo,.precio-card,.nota,.tarjeta-info,.reco,.faq-item,table){background:#1b5139!important;color:#f4faf6!important;border:1px solid #5c8a70!important;box-shadow:0 14px 30px rgba(0,0,0,.34);}
+    html.tapin-dark body :is(.paso,.chart-card .reco,.form-card input,.form-card select,.form-card textarea){background:#0f3525!important;border-color:#46745b!important;box-shadow:0 7px 16px rgba(0,0,0,.2);}
     html.tapin-dark body :is(h1,h2,h3,h4,strong,b,.card-titulo,.seccion-titulo,.titulo-pagina){color:#f4faf6!important;}
     html.tapin-dark body :is(p,.nota,.subtitulo,.seccion-sub,.flujo-descripcion,.paso p,.acceso p,td,th,label,.metric-lbl){color:#c2d1c7!important;}
-    html.tapin-dark body :is(input,select,textarea){background:#0c1912!important;color:#f4faf6!important;border-color:#496755!important;}
+    html.tapin-dark body :is(input,select,textarea){background:#0d2b1e!important;color:#f4faf6!important;border-color:#668f78!important;}
     html.tapin-dark body :is(input,textarea)::placeholder{color:#8fa598!important;}
-    html.tapin-dark body :is(td,th){background:#17432f!important;}
-    html.tapin-dark body .tabla-precios tr:nth-child(even) td{background:#123a28!important;}
-    html.tapin-dark body .tabla-precios tr:last-child td{background:#24573e!important;color:#f2f8f4!important;}
+    html.tapin-dark body :is(td,th){background:#1b5139!important;}
+    html.tapin-dark body .tabla-precios tr:nth-child(even) td{background:#103625!important;}
+    html.tapin-dark body .tabla-precios tr:last-child td{background:#2a684a!important;color:#fff!important;}
     html.tapin-dark body :is(.paso-num,.metric-num){background:#294637!important;color:#fff!important;}
     html.tapin-dark body :is(.check,.eyebrow){color:#ffdc7a!important;}
     html.tapin-dark body :is(.topbar,.site-order){background:#0b2a1d!important;color:#fff!important;}
-    html.tapin-dark body .hero{background:linear-gradient(145deg,#286a4b 0%,#205e42 48%,#174b35 100%)!important;color:#fff!important;}
+    html.tapin-dark body .hero{background:linear-gradient(145deg,#347e5b 0%,#286f4f 48%,#205b41 100%)!important;color:#fff!important;}
     html.tapin-dark body :is(.hero,.topbar,.site-order) *{color:#fff!important;}
     html.tapin-dark body :is(.hero-cta-main,.plan-anual,.plan-anual-badge,.plan-badge,.acceso-badge){background:#f0b83e!important;color:#062e1e!important;}
     html.tapin-dark body :is(.hero-cta-main,.plan-anual,.plan-anual-badge,.plan-badge,.acceso-badge) *{color:#062e1e!important;}
     html.tapin-dark body .paso-pro-badge{background:#2f7655!important;color:#fff!important;}
-    html.tapin-dark body .acceso{border-color:#385445!important;}
+    html.tapin-dark body .acceso{border:1px solid #6b957e!important;box-shadow:0 14px 30px rgba(0,0,0,.34);}
     html.tapin-dark body .acceso-1{background:linear-gradient(135deg,#0d3b29,#236346)!important;color:#fff!important;}
-    html.tapin-dark body .acceso-3{background:#17432f!important;color:#f4faf6!important;}
+    html.tapin-dark body .acceso-3{background:#1b5139!important;color:#f4faf6!important;}
     html.tapin-dark body .acceso-4{background:linear-gradient(135deg,#ffdc7a,#f0b83e)!important;color:#062e1e!important;}
     html.tapin-dark body .acceso-4 :is(h3,p,span){color:#062e1e!important;}
-    html.tapin-dark body .flujo-pro{background:linear-gradient(135deg,#17432f,#3a311d)!important;border-color:#e8ad32!important;}
+    html.tapin-dark body .flujo-pro{background:linear-gradient(135deg,#1b5139,#46391e)!important;border:2px solid #e8ad32!important;}
     html.tapin-dark body :is(.site-brand,.logo,.topbar>div:first-child) svg [fill]{fill:#fff!important;}
     html.tapin-dark body :is(.site-brand,.logo,.topbar>div:first-child) svg [stroke]{stroke:#fff!important;}
     html.tapin-dark body .tarjeta-nfc{background:#fff!important;}
@@ -6840,6 +6841,15 @@ app.get("/", (req, res) => {
 
           .nota{background:#edf2ed;border-radius:20px;padding:26px 30px;color:var(--forest);line-height:1.6;font-size:.92rem;margin-bottom:70px;}
 
+          .faq{margin:20px auto 90px;max-width:860px;}
+          .faq-list{display:grid;gap:14px;margin-top:38px;}
+          .faq-item{background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 18px rgba(9,49,30,.05);overflow:hidden;}
+          .faq-item summary{list-style:none;cursor:pointer;padding:21px 58px 21px 24px;font-weight:800;font-size:.96rem;position:relative;color:var(--ink);}
+          .faq-item summary::-webkit-details-marker{display:none;}
+          .faq-item summary::after{content:'+';position:absolute;right:24px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:var(--cream);display:flex;align-items:center;justify-content:center;color:var(--forest);font-size:1.2rem;}
+          .faq-item[open] summary::after{content:'−';background:var(--gold);color:var(--ink);}
+          .faq-item p{margin:0;padding:0 24px 22px;color:var(--muted);font-size:.9rem;line-height:1.65;max-width:760px;}
+
           .contacto{text-align:center;padding:20px 0 40px;}
           .cta{display:inline-block;background:var(--forest);color:#fff;text-decoration:none;padding:16px 30px;border-radius:999px;font-weight:700;box-shadow:0 12px 22px rgba(9,67,43,.18);}
 
@@ -6870,6 +6880,7 @@ app.get("/", (req, res) => {
             <a href="#como-funciona">Cómo funciona</a>
             <a href="#accesos">Accesos</a>
             <a href="#precios">Precios</a>
+            <a href="#preguntas">Preguntas</a>
             <a class="site-order" href="/pedido">Pedir tarjeta</a>
           </nav>
         </header>
@@ -7010,6 +7021,45 @@ app.get("/", (req, res) => {
                   }).join("")}
                 </table>
               </div>
+            </div>
+          </div>
+
+          <div class="faq" id="preguntas">
+            <div class="seccion-titulo">Dudas frecuentes</div>
+            <div class="seccion-sub">Lo esencial antes de pedir y activar tu tarjeta Tapin.</div>
+            <div class="faq-list">
+              <details class="faq-item">
+                <summary>¿Necesito instalar una aplicación?</summary>
+                <p>No. Tapin funciona desde el navegador del celular, sin instalaciones ni configuraciones complicadas para tus clientes.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Cómo usa el cliente la tarjeta?</summary>
+                <p>Acerca su celular a la tarjeta mediante NFC o escanea el código QR. El enlace se abre en segundos para continuar con la reseña.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Cómo activo mi Tapin cuando lo recibo?</summary>
+                <p>Recibes un código de activación, completas los datos de tu negocio y conectas tu perfil de Google. El proceso está diseñado para hacerse en pocos minutos.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Cuál es la diferencia entre la tarjeta y el Plan Pro?</summary>
+                <p>La compra básica incluye la tarjeta física, el envío y el acceso esencial. El Plan Pro añade el filtro de calificaciones, retroalimentación privada, alertas, estadísticas detalladas, reportes y otras herramientas avanzadas.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Necesito una tarjeta Tapin para contratar el Plan Pro?</summary>
+                <p>Sí. La mensualidad Pro funciona sobre una tarjeta Tapin activa. Primero debes tener y activar tu tarjeta para poder utilizar las funciones Pro.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Qué hace el filtro exclusivo del Plan Pro?</summary>
+                <p>Las experiencias positivas continúan hacia Google Reviews. Las negativas se convierten en retroalimentación privada y generan una alerta para que el negocio pueda atenderlas. Sin Plan Pro, este filtro no está disponible.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Qué incluye el reporte mensual Pro?</summary>
+                <p>Incluye tus estadísticas completas, actividad, horas pico, subidas y caídas, análisis de resultados y comparación frente a otros negocios de tu sector.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Cómo funcionan los pagos del Plan Pro?</summary>
+                <p>Puedes elegir mensualidad con renovación automática o pago anual. La suscripción mensual se puede cancelar desde el panel y permanece activa hasta terminar el período ya pagado.</p>
+              </details>
             </div>
           </div>
 
