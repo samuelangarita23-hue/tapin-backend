@@ -77,7 +77,8 @@ const CONTROL_TEMA_GLOBAL = `
     html.tapin-dark body :is(td,th){background:#1b5139!important;}
     html.tapin-dark body .tabla-precios tr:nth-child(even) td{background:#103625!important;}
     html.tapin-dark body .tabla-precios tr:last-child td{background:#2a684a!important;color:#fff!important;}
-    html.tapin-dark body :is(.paso-num,.metric-num){background:#294637!important;color:#fff!important;}
+    html.tapin-dark body .paso-num{background:#294637!important;color:#fff!important;}
+    html.tapin-dark body .metric-num{background:transparent!important;color:#fff!important;box-shadow:none!important;}
     html.tapin-dark body :is(.check,.eyebrow){color:#ffdc7a!important;}
     html.tapin-dark body :is(.topbar,.site-order){background:#0b2a1d!important;color:#fff!important;}
     html.tapin-dark body .hero{background:linear-gradient(145deg,#347e5b 0%,#286f4f 48%,#205b41 100%)!important;color:#fff!important;}
@@ -108,8 +109,8 @@ const CONTROL_TEMA_GLOBAL = `
     html.tapin-dark body[data-tapin-page="principal"] :is(#accesos,#preguntas){background:rgba(8,43,29,.72)!important;border:1px solid #416c55!important;}
     html.tapin-dark body[data-tapin-page="admin"],html.tapin-dark body[data-tapin-page="negocio"]{background:#071f16!important;}
     html.tapin-dark body[data-tapin-page="admin"] :is(.content,.contenido),html.tapin-dark body[data-tapin-page="negocio"] :is(.content,.contenido){background:transparent!important;}
-    html.tapin-dark body[data-tapin-page="admin"] :is(button[type="submit"],.btn),html.tapin-dark body[data-tapin-page="negocio"] :is(button[type="submit"],.btn){background:#e8ad32!important;color:#062e1e!important;border-color:#f7d77d!important;}
-    html.tapin-dark body[data-tapin-page="admin"] :is(button[type="submit"],.btn) *,html.tapin-dark body[data-tapin-page="negocio"] :is(button[type="submit"],.btn) *{color:#062e1e!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(button[type="submit"],.btn),html.tapin-dark body[data-tapin-page="negocio"] :is(button[type="submit"],.btn){background:#f3efe3!important;color:#163a2a!important;border-color:#d8cfba!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(button[type="submit"],.btn) *,html.tapin-dark body[data-tapin-page="negocio"] :is(button[type="submit"],.btn) *{color:#163a2a!important;}
     html.tapin-dark body :is(.ver-clave,.icono-toggle){background:transparent!important;color:#d6e4db!important;border:none!important;box-shadow:none!important;transform:none!important;}
     html.tapin-dark body .ver-clave{position:absolute!important;right:4px!important;top:4px!important;bottom:4px!important;width:36px!important;height:auto!important;padding:0!important;margin:0!important;border-radius:7px!important;}
     html.tapin-dark body[data-tapin-page="admin"] .seccion,html.tapin-dark body[data-tapin-page="negocio"] .seccion{background:transparent!important;border:none!important;box-shadow:none!important;}
@@ -123,8 +124,13 @@ const CONTROL_TEMA_GLOBAL = `
     html.tapin-dark body[data-tapin-page="negocio"] :is(.tabla-actividad,table) tr:nth-child(even) td{background:#15442f!important;}
     html.tapin-dark body[data-tapin-page="negocio"] .chart-card :is(div,span,p){color:#dcebe1!important;}
     html.tapin-dark body[data-tapin-page="negocio"] .chart-card :is(b,strong){color:#fff!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] :is(.btn-herramienta,.panel-acciones a),html.tapin-dark body[data-tapin-page="admin"] :is(.card-actions a,.btn-pais){background:#d99819!important;color:#082719!important;border:1px solid #f2c35a!important;box-shadow:0 5px 12px rgba(0,0,0,.18)!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] :is(.btn-herramienta,.panel-acciones a):hover,html.tapin-dark body[data-tapin-page="admin"] :is(.card-actions a,.btn-pais):hover{background:#f0b83e!important;color:#062e1e!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] :is(.btn-herramienta,.panel-acciones a),html.tapin-dark body[data-tapin-page="admin"] :is(.card-actions a,.btn-pais){background:#f3efe3!important;color:#163a2a!important;border:1px solid #d8cfba!important;box-shadow:0 5px 12px rgba(0,0,0,.18)!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] :is(.btn-herramienta,.panel-acciones a):hover,html.tapin-dark body[data-tapin-page="admin"] :is(.card-actions a,.btn-pais):hover{background:#fffaf0!important;color:#0b2f20!important;border-color:#e8ad32!important;}
+    html.tapin-dark body[data-tapin-page="admin"] .sector-badge,html.tapin-dark body[data-tapin-page="negocio"] .sector-badge{color:#8ce3b2!important;}
+    html.tapin-dark body[data-tapin-page="admin"] .ultimo-toque,html.tapin-dark body[data-tapin-page="negocio"] .ultimo-toque{color:#cfe1d6!important;}
+    html.tapin-dark body[data-tapin-page="admin"] .ultimo-toque b,html.tapin-dark body[data-tapin-page="negocio"] .ultimo-toque b{color:#fff!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-vacio{color:#173b2b!important;background:#dedbcd!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-activo{color:#fff!important;}
     html.tapin-dark body[data-tapin-page="descubre"] #mapa *{border-color:initial!important;}
     html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-popup-tip,.leaflet-control-zoom a,.leaflet-control-attribution){background:#17432f!important;color:#f4faf6!important;border-color:#5c8a70!important;}
     html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-control-zoom a,.leaflet-control-attribution) *{color:#f4faf6!important;}
@@ -3187,7 +3193,7 @@ app.get("/mi-panel/:slug", (req, res) => {
                 ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
                 ${calendario.dias.map((v, i) => {
                   const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
-                  return `<div title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:5px;
+                  return `<div class="cal-dia ${v === 0 ? "cal-vacio" : "cal-activo"}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:5px;
                           background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
                           display:flex;align-items:center;justify-content:center;font-size:0.6rem;
                           color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
