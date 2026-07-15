@@ -102,6 +102,18 @@ const CONTROL_TEMA_GLOBAL = `
     html.tapin-dark body .tarjeta-google span:nth-child(5){color:#34A853!important;}
     html.tapin-dark body a{color:#ffdc7a!important;}
     html.tapin-dark #tapin-theme-toggle{background:#ffdc7a;color:#062e1e;border-color:#f0b83e;}
+    html.tapin-dark body[data-tapin-page="principal"] :is(#como-funciona,#precios){background:rgba(27,81,57,.62)!important;border:1px solid #5c8a70!important;}
+    html.tapin-dark body[data-tapin-page="principal"] :is(#accesos,#preguntas){background:rgba(8,43,29,.72)!important;border:1px solid #416c55!important;}
+    html.tapin-dark body[data-tapin-page="admin"],html.tapin-dark body[data-tapin-page="negocio"]{background:#071f16!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(.content,.contenido),html.tapin-dark body[data-tapin-page="negocio"] :is(.content,.contenido){background:transparent!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(button,.btn),html.tapin-dark body[data-tapin-page="negocio"] :is(button,.btn){background:#e8ad32!important;color:#062e1e!important;border-color:#f7d77d!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(button,.btn) *,html.tapin-dark body[data-tapin-page="negocio"] :is(button,.btn) *{color:#062e1e!important;}
+    html.tapin-dark body[data-tapin-page="descubre"] #mapa *{border-color:initial!important;}
+    html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-popup-tip,.leaflet-control-zoom a,.leaflet-control-attribution){background:#17432f!important;color:#f4faf6!important;border-color:#5c8a70!important;}
+    html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-control-zoom a,.leaflet-control-attribution) *{color:#f4faf6!important;}
+    html.tapin-dark body[data-tapin-page="descubre"] .chip-cat.activo{background:#e8ad32!important;color:#062e1e!important;border-color:#f7d77d!important;}
+    html.tapin-dark body[data-tapin-page="descubre"] .chip-cat.activo *{color:#062e1e!important;}
+    html.tapin-dark body[data-tapin-page="descubre"] :is(.popup-link,.popup-fav.activo){background:#e8ad32!important;color:#062e1e!important;}
   </style>
   <button id="tapin-theme-toggle" type="button" aria-label="Activar tema oscuro" title="Activar tema oscuro">🌙</button>
   <script>
@@ -130,6 +142,12 @@ app.use((req, res, next) => {
   const enviar = res.send.bind(res);
   res.send = (contenido) => {
     if (typeof contenido === "string" && /<\/body>/i.test(contenido) && !contenido.includes('id="tapin-theme-toggle"')) {
+      let pagina = "general";
+      if (req.path === "/") pagina = "principal";
+      else if (req.path === "/descubre") pagina = "descubre";
+      else if (/^\/(mi-panel|mis-negocios)(\/|$)/.test(req.path) || /^\/editar\/[^/]+/.test(req.path)) pagina = "negocio";
+      else if (/^\/(admin|stats|editar|codigos|auditoria|respaldo)(\/|$)/.test(req.path)) pagina = "admin";
+      contenido = contenido.replace(/<body([^>]*)>/i, `<body$1 data-tapin-page="${pagina}">`);
       contenido = contenido.replace(/<\/body>/i, `${CONTROL_TEMA_GLOBAL}</body>`);
     }
     return enviar(contenido);
@@ -6779,6 +6797,12 @@ app.get("/", (req, res) => {
           .seccion-titulo{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2.2rem,4vw,3.4rem);line-height:1.03;letter-spacing:-.05em;text-align:center;margin:0 0 16px;color:var(--ink);}
           .seccion-sub{text-align:center;color:var(--muted);max-width:560px;margin:0 auto 50px;font-size:1rem;}
 
+          #como-funciona,#accesos,#precios,.faq{padding:68px 40px;border-radius:34px;margin-bottom:76px;}
+          #como-funciona,#precios{background:rgba(255,255,255,.42);border:1px solid rgba(222,220,204,.75);}
+          #accesos{background:rgba(232,239,230,.62);border:1px solid rgba(202,218,202,.8);}
+          .faq{background:rgba(247,239,214,.58);border:1px solid rgba(226,208,158,.7);max-width:none;}
+          #accesos .accesos{margin-bottom:0;}
+
           .flujo{border-radius:28px;padding:34px 30px;margin-bottom:28px;}
           .flujo-basico{background:#edf2ed;border:1px solid #d5e1d7;}
           .flujo-pro{background:linear-gradient(135deg,#fff 35%,#f9f1dd);border:2px solid var(--gold);box-shadow:0 16px 30px rgba(139,96,12,.1);}
@@ -6862,6 +6886,7 @@ app.get("/", (req, res) => {
             .site-order{padding:10px 15px;}
             .hero h1{font-size:2.4rem;}
             .contenido{padding:60px 20px;}
+            #como-funciona,#accesos,#precios,.faq{padding:46px 20px;border-radius:24px;margin-bottom:48px;}
             .stats-strip{grid-template-columns:1fr;}
             .stats-strip div{border-right:none;border-bottom:1px solid var(--line);}
             .stats-strip div:last-child{border-bottom:none;}
@@ -7034,7 +7059,7 @@ app.get("/", (req, res) => {
               </details>
               <details class="faq-item">
                 <summary>¿Cómo usa el cliente la tarjeta?</summary>
-                <p>Acerca su celular a la tarjeta mediante NFC o escanea el código QR. El enlace se abre en segundos para continuar con la reseña.</p>
+                <p>Acerca su celular a la tarjeta mediante NFC. El enlace se abre en segundos para continuar con la reseña.</p>
               </details>
               <details class="faq-item">
                 <summary>¿Cómo activo mi Tapin cuando lo recibo?</summary>
