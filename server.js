@@ -66,8 +66,8 @@ const CONTROL_TEMA_GLOBAL = `
   <style>
     #tapin-theme-toggle{position:fixed;right:16px;bottom:16px;z-index:99999;width:48px;height:48px;border:1px solid rgba(255,255,255,.45);border-radius:50%;padding:0;background:#0d432b;color:#fff;font:700 21px/1 'Segoe UI Emoji','Segoe UI',sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.28);cursor:pointer;display:flex;align-items:center;justify-content:center;}
     #tapin-theme-toggle:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.34);}
-    html.tapin-dark{color-scheme:dark;--ink:#f4faf6;--forest:#2f7655;--forest2:#174c35;--cream:#0a140f;--paper:#14241b;--muted:#c2d1c7;--line:#385445;--gold:#e8ad32;--gold2:#f7d77d;}
-    html.tapin-dark body{background:#0a140f!important;color:#f4faf6!important;}
+    html.tapin-dark{color-scheme:dark;--ink:#f4faf6;--forest:#2f7655;--forest2:#174c35;--cream:#050b08;--paper:#14241b;--muted:#c2d1c7;--line:#385445;--gold:#e8ad32;--gold2:#f7d77d;}
+    html.tapin-dark body{background:radial-gradient(circle at 50% 0,#10251a 0,#07100b 42%,#040806 100%) fixed!important;color:#f4faf6!important;}
     html.tapin-dark body *{color:#eef5f0!important;border-color:#385445!important;}
     html.tapin-dark body :is(.site-header,.box,.card,.seccion,.form-card,.chart-card,.metric,.plan,.paso,.flujo,.precio-card,.nota,.tarjeta-info,.reco,table){background:#14241b!important;color:#f4faf6!important;border-color:#385445!important;box-shadow:0 10px 24px rgba(0,0,0,.28);}
     html.tapin-dark body :is(h1,h2,h3,h4,strong,b,.card-titulo,.seccion-titulo,.titulo-pagina){color:#f4faf6!important;}
