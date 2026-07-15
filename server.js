@@ -132,12 +132,15 @@ const CONTROL_TEMA_GLOBAL = `
     html.tapin-dark body[data-tapin-page="admin"] .sector-badge,html.tapin-dark body[data-tapin-page="negocio"] .sector-badge{color:#8ce3b2!important;}
     html.tapin-dark body[data-tapin-page="admin"] .ultimo-toque,html.tapin-dark body[data-tapin-page="negocio"] .ultimo-toque{color:#cfe1d6!important;}
     html.tapin-dark body[data-tapin-page="admin"] .ultimo-toque b,html.tapin-dark body[data-tapin-page="negocio"] .ultimo-toque b{color:#fff!important;}
+    html.tapin-dark body[data-tapin-page="admin"] .card-ultimo{color:#cfe1d6!important;border-top-color:#72a088!important;}
+    html.tapin-dark body[data-tapin-page="admin"] .card-ultimo b{color:#fff!important;}
     html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-vacio{color:#173b2b!important;background:#dedbcd!important;}
     html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-activo{color:#fff!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-1{background:#2d6f4e!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-2{background:#398d62!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-3{background:#4caf78!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-4{background:#72d59b!important;color:#092719!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-1{background:#78d7a1!important;color:#092719!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-2{background:#4caf78!important;color:#092719!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-3{background:#34875d!important;color:#fff!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-4{background:#174f36!important;color:#fff!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-leyenda{color:#cfe1d6!important;}
     html.tapin-dark body[data-tapin-page="descubre"] #mapa *{border-color:initial!important;}
     html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-popup-tip,.leaflet-control-zoom a,.leaflet-control-attribution){background:#17432f!important;color:#f4faf6!important;border-color:#5c8a70!important;}
     html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-control-zoom a,.leaflet-control-attribution) *{color:#f4faf6!important;}
@@ -3207,6 +3210,7 @@ app.get("/mi-panel/:slug", (req, res) => {
                           color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
                 }).join("")}
               </div>
+              <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:12px;">Más oscuro = más toques</div>
             </div>
           </div>
 
