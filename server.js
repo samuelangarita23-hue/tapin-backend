@@ -1033,6 +1033,40 @@ function proyeccionMes(eventos, negocio) {
   };
 }
 
+function proyeccionPeriodo(eventos, negocio, periodo) {
+  const ahora = new Date();
+  const configuraciones = {
+    dia: { etiqueta: "1 día", inicio: new Date(ahora.getTime() - 86400000), fin: new Date(ahora.getTime() + 86400000) },
+    semana: { etiqueta: "1 semana", inicio: new Date(ahora.getTime() - 7 * 86400000), fin: new Date(ahora.getTime() + 7 * 86400000) },
+    mes: { etiqueta: "1 mes", inicio: new Date(ahora.getFullYear(), ahora.getMonth(), 1), fin: new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0, 23, 59, 59) },
+    semestre: { etiqueta: "6 meses", inicio: new Date(ahora.getFullYear(), ahora.getMonth() < 6 ? 0 : 6, 1), fin: new Date(ahora.getFullYear(), ahora.getMonth() < 6 ? 6 : 12, 0, 23, 59, 59) },
+    anio: { etiqueta: "1 año", inicio: new Date(ahora.getFullYear(), 0, 1), fin: new Date(ahora.getFullYear(), 11, 31, 23, 59, 59) },
+  };
+  const config = configuraciones[periodo] || configuraciones.mes;
+  const transcurridos = Math.max(1, Math.ceil((ahora - config.inicio) / 86400000));
+  const restantes = Math.max(0, Math.ceil((config.fin - ahora) / 86400000));
+  const totalDias = Math.max(1, Math.ceil((config.fin - config.inicio) / 86400000));
+  const toquesPeriodo = eventos.filter((e) => {
+    const fecha = new Date(e.fechaISO);
+    return fecha >= config.inicio && fecha <= ahora;
+  }).length;
+  const suficiente = periodo === "dia" ? toquesPeriodo >= 1 : toquesPeriodo >= 3;
+  const promedio = toquesPeriodo / transcurridos;
+  const proyectado = Math.max(toquesPeriodo, Math.round(promedio * totalDias));
+  return {
+    suficiente,
+    periodo,
+    etiqueta: config.etiqueta,
+    nombrePeriodo: config.etiqueta,
+    toquesMes: toquesPeriodo,
+    proyectado,
+    promedio: Math.round(promedio * 10) / 10,
+    minimo: suficiente ? Math.max(toquesPeriodo, Math.round(proyectado * 0.85)) : 0,
+    maximo: suficiente ? Math.round(proyectado * 1.15) : 0,
+    restantes,
+  };
+}
+
 function barraSemana(dias7) {
   const max = Math.max(1, ...dias7);
   const nombresDias = [];
@@ -3076,7 +3110,9 @@ app.get("/mi-panel/:slug", (req, res) => {
   const calendario = calendarioMes(eventos, negocio);
   const meta = progresoMeta(eventos, negocio.metaMensual);
   const comparativoAnio = compararAnioAnterior(eventos, negocio);
-  const proyeccion = proyeccionMes(eventos, negocio);
+  const opcionesProyeccion = ["dia", "semana", "mes", "semestre", "anio"];
+  const periodoProyeccion = opcionesProyeccion.includes(req.query.proyeccion) ? req.query.proyeccion : "mes";
+  const proyeccion = proyeccionPeriodo(eventos, negocio, periodoProyeccion);
   const soloLectura = req.query.key === negocio.claveSoloLectura && negocio.claveSoloLectura;
 
   res.send(`
@@ -3253,7 +3289,10 @@ app.get("/mi-panel/:slug", (req, res) => {
           </div>
 
           <div class="seccion">
-            <div class="card-titulo">Proyeccion del mes <span class="suave">${proyeccion.nombreMes}</span></div>
+            <div class="card-titulo">Proyeccion <span class="suave">${proyeccion.nombrePeriodo}</span></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px;">
+              ${[["dia","1 día"],["semana","1 semana"],["mes","1 mes"],["semestre","6 meses"],["anio","1 año"]].map(([valor, texto]) => `<a href="/mi-panel/${slug}?key=${encodeURIComponent(req.query.key)}&proyeccion=${valor}" style="text-decoration:none;font-size:0.72rem;font-weight:700;padding:7px 10px;border-radius:999px;border:1px solid ${periodoProyeccion === valor ? MARCA.verde : MARCA.borde};background:${periodoProyeccion === valor ? MARCA.verdeClaro : "#fff"};color:${MARCA.verdeOscuro};">${texto}</a>`).join("")}
+            </div>
             <div class="chart-card" style="margin-top:0;">
               ${proyeccion.suficiente ? `
                 <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;text-align:center;">
