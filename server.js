@@ -14,9 +14,187 @@ const app = express();
 // siempre da "http" aunque el sitio real sea https — y eso rompe cualquier
 // cosa que arme una URL completa a partir de req.protocol (como el login de
 // Google, que exige que el redirect_uri coincida exactamente con https).
+// Limitador de intentos simple, en memoria (sin librerías ni base de datos
+// aparte) — protege login de cliente, acceso de administrador, y registro
+// contra alguien probando contraseñas o claves sin parar. Se resetea si el
+// servidor se reinicia, lo cual es aceptable para este tamaño de proyecto.
+const intentosPorIP = {};
+function limitarIntentos(maxIntentos, ventanaMinutos) {
+  return (req, res, next) => {
+    const ip = req.ip || "desconocida";
+    const clave = `${ip}:${req.path}`;
+    const ahora = Date.now();
+    const ventanaMs = ventanaMinutos * 60 * 1000;
+    if (!intentosPorIP[clave]) intentosPorIP[clave] = [];
+    intentosPorIP[clave] = intentosPorIP[clave].filter((t) => ahora - t < ventanaMs);
+    if (intentosPorIP[clave].length >= maxIntentos) {
+      return res.status(429).send("Demasiados intentos. Espera unos minutos e inténtalo de nuevo.");
+    }
+    intentosPorIP[clave].push(ahora);
+    next();
+  };
+}
+// Limpieza periódica para que este objeto no crezca sin control con el tiempo.
+setInterval(() => {
+  const ahora = Date.now();
+  for (const clave in intentosPorIP) {
+    intentosPorIP[clave] = intentosPorIP[clave].filter((t) => ahora - t < 30 * 60 * 1000);
+    if (intentosPorIP[clave].length === 0) delete intentosPorIP[clave];
+  }
+}, 10 * 60 * 1000);
+
 app.set("trust proxy", 1);
+
+// Encabezados de seguridad básicos en cada respuesta — sin librerías extra.
+// No cambian nada visual ni de comportamiento, solo le dicen al navegador
+// que sea más estricto (no dejar que Tapin se cargue dentro de un iframe
+// ajeno, no adivinar tipos de archivo, etc.).
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Strict-Transport-Security", "max-age=15552000; includeSubDomains");
+  next();
+});
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json()); // necesario para recibir el webhook de Wompi (manda JSON)
+
+// Selector de tema disponible en todas las páginas HTML. Solo cambia la
+// apariencia y recuerda la preferencia en el navegador; no altera datos,
+// sesiones, rutas ni la lógica de negocio.
+const CONTROL_TEMA_GLOBAL = `
+  <style>
+    #tapin-theme-toggle{position:fixed;right:16px;bottom:16px;z-index:99999;width:48px;height:48px;border:1px solid rgba(255,255,255,.45);border-radius:50%;padding:0;background:#0d432b;color:#fff;font:700 21px/1 'Segoe UI Emoji','Segoe UI',sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.28);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+    #tapin-theme-toggle:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.34);}
+    body .tabla-pro th:first-child,body .tabla-pro td:first-child{text-align:center!important;}
+    body .tabla-pro td{padding-top:12px!important;padding-bottom:12px!important;}
+    body .precios-grid{align-items:stretch!important;}
+    body .precios-grid>.precio-card{display:flex!important;flex-direction:column!important;height:auto!important;}
+    body .precios-grid>.precio-card>.tabla-precios{flex:1;}
+    body .tabla-pro tr:not(:first-child):hover td{filter:brightness(.97);}
+    body .tabla-pro tr.fila-empresa td{background:#fbf1d8!important;color:#624a08!important;font-weight:800!important;border-top:2px solid #e8ad32!important;}
+    html.tapin-dark{color-scheme:dark;--ink:#f4faf6;--forest:#438b67;--forest2:#256448;--cream:#071f16;--paper:#1b5139;--muted:#d0e0d6;--line:#5c8a70;--gold:#e8ad32;--gold2:#f7d77d;}
+    html.tapin-dark body{background:#071f16!important;color:#f4faf6!important;}
+    html.tapin-dark body :is(.site-header,.box,.card,.seccion,.form-card,.chart-card,.metric,.plan,.flujo,.precio-card,.nota,.tarjeta-info,.reco,.faq-item,table){background:#1b5139!important;color:#f4faf6!important;border:1px solid #5c8a70!important;box-shadow:0 14px 30px rgba(0,0,0,.34);}
+    html.tapin-dark body :is(.paso,.chart-card .reco,.form-card input,.form-card select,.form-card textarea){background:#0f3525!important;border-color:#46745b!important;box-shadow:0 7px 16px rgba(0,0,0,.2);}
+    html.tapin-dark body :is(h1,h2,h3,h4,.card-titulo,.seccion-titulo,.titulo-pagina){color:#f4faf6!important;}
+    html.tapin-dark body :is(p,.nota,.subtitulo,.seccion-sub,.flujo-descripcion,.paso p,.acceso p,td,th,label,.metric-lbl){color:#c2d1c7!important;}
+    html.tapin-dark body :is(input,select,textarea){background:#0d2b1e!important;color:#f4faf6!important;border-color:#668f78!important;}
+    html.tapin-dark body :is(input,textarea)::placeholder{color:#8fa598!important;}
+    html.tapin-dark body :is(td,th){background:#1b5139!important;}
+    html.tapin-dark body .tabla-precios tr:nth-child(even) td{background:#103625!important;}
+    html.tapin-dark body .tabla-precios tr:last-child td{background:#2a684a!important;color:#fff!important;}
+    html.tapin-dark body .tabla-pro tr.fila-empresa td{background:#f3efe3!important;color:#163a2a!important;border-top-color:#e8ad32!important;}
+    html.tapin-dark body .paso-num{background:#294637!important;color:#fff!important;}
+    html.tapin-dark body .metric-num{background:transparent!important;color:#fff!important;box-shadow:none!important;}
+    html.tapin-dark body :is(.check,.eyebrow){color:#ffdc7a!important;}
+    html.tapin-dark body :is(.topbar,.site-order){background:#0b2a1d!important;color:#fff!important;}
+    html.tapin-dark body .hero{background:linear-gradient(145deg,#347e5b 0%,#286f4f 48%,#205b41 100%)!important;color:#fff!important;}
+    html.tapin-dark body :is(.hero,.topbar,.site-order) *{color:#fff!important;}
+    html.tapin-dark body :is(.hero-cta-main,.plan-anual,.plan-anual-badge,.plan-badge,.acceso-badge){background:#f0b83e!important;color:#062e1e!important;}
+    html.tapin-dark body :is(.hero-cta-main,.plan-anual,.plan-anual-badge,.plan-badge,.acceso-badge) *{color:#062e1e!important;}
+    html.tapin-dark body .paso-pro-badge{background:#2f7655!important;color:#fff!important;}
+    html.tapin-dark body .acceso{border:1px solid #6b957e!important;box-shadow:0 14px 30px rgba(0,0,0,.34);}
+    html.tapin-dark body .acceso-1{background:linear-gradient(135deg,#0d3b29,#236346)!important;color:#fff!important;}
+    html.tapin-dark body .acceso-3{background:#dbe8df!important;color:#0b3424!important;border-color:#a9c2b3!important;}
+    html.tapin-dark body .acceso-3 :is(h3,p,span,div){color:#0b3424!important;}
+    html.tapin-dark body .acceso-4{background:linear-gradient(135deg,#ffdc7a,#f0b83e)!important;color:#062e1e!important;}
+    html.tapin-dark body .acceso-4 :is(h3,p,span){color:#062e1e!important;}
+    html.tapin-dark body .flujo-pro{background:linear-gradient(135deg,#1b5139,#46391e)!important;border:2px solid #e8ad32!important;}
+    html.tapin-dark body :is(.site-brand,.logo,.topbar>div:first-child) svg [fill]{fill:#fff!important;}
+    html.tapin-dark body :is(.site-brand,.logo,.topbar>div:first-child) svg [stroke]{stroke:#fff!important;}
+    html.tapin-dark body .tarjeta-nfc{background:#fff!important;}
+    html.tapin-dark body .tarjeta-nfc *{color:#062e1e!important;}
+    html.tapin-dark body .tarjeta-google span:nth-child(1),html.tapin-dark body .tarjeta-google span:nth-child(4){color:#4285F4!important;}
+    html.tapin-dark body .tarjeta-google span:nth-child(2),html.tapin-dark body .tarjeta-google span:nth-child(6){color:#EA4335!important;}
+    html.tapin-dark body .tarjeta-google span:nth-child(3){color:#FBBC05!important;}
+    html.tapin-dark body .tarjeta-google span:nth-child(5){color:#34A853!important;}
+    html.tapin-dark body a{color:#ffdc7a;}
+    html.tapin-dark body .google-login{background:#fff!important;color:#27312b!important;border-color:#d7ddd9!important;box-shadow:none!important;}
+    html.tapin-dark body .google-login svg path{border-color:transparent!important;}
+    html.tapin-dark #tapin-theme-toggle{background:#ffdc7a;color:#062e1e;border-color:#f0b83e;}
+    html.tapin-dark body[data-tapin-page="principal"] :is(#como-funciona,#precios){background:rgba(27,81,57,.62)!important;border:1px solid #5c8a70!important;}
+    html.tapin-dark body[data-tapin-page="principal"] :is(#accesos,#preguntas){background:rgba(8,43,29,.72)!important;border:1px solid #416c55!important;}
+    html.tapin-dark body[data-tapin-page="admin"],html.tapin-dark body[data-tapin-page="negocio"]{background:#071f16!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(.content,.contenido),html.tapin-dark body[data-tapin-page="negocio"] :is(.content,.contenido){background:transparent!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(button[type="submit"],.btn),html.tapin-dark body[data-tapin-page="negocio"] :is(button[type="submit"],.btn){background:#f3efe3!important;color:#163a2a!important;border-color:#d8cfba!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(button[type="submit"],.btn) *,html.tapin-dark body[data-tapin-page="negocio"] :is(button[type="submit"],.btn) *{color:#163a2a!important;}
+    html.tapin-dark body :is(.ver-clave,.icono-toggle){background:transparent!important;color:#d6e4db!important;border:none!important;box-shadow:none!important;transform:none!important;}
+    html.tapin-dark body .ver-clave{position:absolute!important;right:4px!important;top:4px!important;bottom:4px!important;width:36px!important;height:auto!important;padding:0!important;margin:0!important;border-radius:7px!important;}
+    html.tapin-dark body[data-tapin-page="admin"] .seccion,html.tapin-dark body[data-tapin-page="negocio"] .seccion{background:transparent!important;border:none!important;box-shadow:none!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(.resumen-box,.negocio-card,.pais-card,.chart-card),html.tapin-dark body[data-tapin-page="negocio"] :is(.resumen-box,.negocio-card,.chart-card){background:#123a29!important;color:#f4faf6!important;border:1px solid #4f7d64!important;box-shadow:0 8px 20px rgba(0,0,0,.22)!important;}
+    html.tapin-dark body[data-tapin-page="admin"] :is(.resumen-num,.resumen-lbl,.card-total,.card-total span),html.tapin-dark body[data-tapin-page="negocio"] :is(.resumen-num,.resumen-lbl,.card-total,.card-total span){color:#f4faf6!important;}
+    html.tapin-dark body :is(.spark-bar,.hora-barra){background:#62c28d!important;box-shadow:0 0 0 1px rgba(255,255,255,.08);}
+    html.tapin-dark body[data-tapin-page="admin"] .sparkline>div>div:not(.spark-bar),html.tapin-dark body[data-tapin-page="negocio"] .sparkline>div>div:not(.spark-bar){color:#e6f1ea!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] :is(.tabla-actividad,table){border:1px solid #72a088!important;background:#0d3021!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] :is(.tabla-actividad,table) th{background:#164631!important;color:#fff!important;border-color:#72a088!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] :is(.tabla-actividad,table) td{background:#1b5139!important;color:#f4faf6!important;border-color:#72a088!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] :is(.tabla-actividad,table) tr:nth-child(even) td{background:#15442f!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .chart-card .tabla-actividad{background:transparent!important;border:none!important;border-radius:0!important;box-shadow:none!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .seccion-actividad{margin-top:38px!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .seccion-actividad>.card-titulo{margin-bottom:14px!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .chart-card :is(div,span,p){color:#dcebe1!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .chart-card :is(b,strong){color:#fff!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] :is(.btn-herramienta,.panel-acciones a),html.tapin-dark body[data-tapin-page="admin"] :is(.card-actions a,.btn-pais){background:#f3efe3!important;color:#163a2a!important;border:1px solid #d8cfba!important;box-shadow:0 5px 12px rgba(0,0,0,.18)!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] :is(.btn-herramienta,.panel-acciones a):hover,html.tapin-dark body[data-tapin-page="admin"] :is(.card-actions a,.btn-pais):hover{background:#fffaf0!important;color:#0b2f20!important;border-color:#e8ad32!important;}
+    html.tapin-dark body[data-tapin-page="admin"] .sector-badge,html.tapin-dark body[data-tapin-page="negocio"] .sector-badge{color:#8ce3b2!important;}
+    html.tapin-dark body[data-tapin-page="admin"] .ultimo-toque,html.tapin-dark body[data-tapin-page="negocio"] .ultimo-toque{color:#cfe1d6!important;}
+    html.tapin-dark body[data-tapin-page="admin"] .ultimo-toque b,html.tapin-dark body[data-tapin-page="negocio"] .ultimo-toque b{color:#fff!important;}
+    html.tapin-dark body[data-tapin-page="admin"] .card-ultimo{color:#cfe1d6!important;border-top-color:#72a088!important;}
+    html.tapin-dark body[data-tapin-page="admin"] .card-ultimo b{color:#fff!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-vacio{color:#173b2b!important;background:#dedbcd!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-activo{color:#fff!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-1{background:#78d7a1!important;color:#092719!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-2{background:#4caf78!important;color:#092719!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-3{background:#34875d!important;color:#fff!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-4{background:#174f36!important;color:#fff!important;}
+    html.tapin-dark body[data-tapin-page="negocio"] .cal-leyenda{color:#cfe1d6!important;}
+    html.tapin-dark body[data-tapin-page="descubre"] #mapa *{border-color:initial!important;}
+    html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-popup-tip,.leaflet-control-zoom a,.leaflet-control-attribution){background:#17432f!important;color:#f4faf6!important;border-color:#5c8a70!important;}
+    html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-control-zoom a,.leaflet-control-attribution) *{color:#f4faf6!important;}
+    html.tapin-dark body[data-tapin-page="descubre"] .chip-cat.activo{background:#e8ad32!important;color:#062e1e!important;border-color:#f7d77d!important;}
+    html.tapin-dark body[data-tapin-page="descubre"] .chip-cat.activo *{color:#062e1e!important;}
+    html.tapin-dark body[data-tapin-page="descubre"] :is(.popup-link,.popup-fav.activo){background:#e8ad32!important;color:#062e1e!important;}
+  </style>
+  <button id="tapin-theme-toggle" type="button" aria-label="Activar tema oscuro" title="Activar tema oscuro">🌙</button>
+  <script>
+    (() => {
+      const raiz = document.documentElement;
+      const boton = document.getElementById("tapin-theme-toggle");
+      let oscuro = false;
+      try { oscuro = localStorage.getItem("tapin-tema") === "oscuro"; } catch (_) {}
+      const aplicar = () => {
+        raiz.classList.toggle("tapin-dark", oscuro);
+        boton.textContent = oscuro ? "☀️" : "🌙";
+        const descripcion = oscuro ? "Activar tema claro" : "Activar tema oscuro";
+        boton.setAttribute("aria-label", descripcion);
+        boton.setAttribute("title", descripcion);
+      };
+      aplicar();
+      boton.addEventListener("click", () => {
+        oscuro = !oscuro;
+        aplicar();
+        try { localStorage.setItem("tapin-tema", oscuro ? "oscuro" : "claro"); } catch (_) {}
+      });
+    })();
+  </script>`;
+
+app.use((req, res, next) => {
+  const enviar = res.send.bind(res);
+  res.send = (contenido) => {
+    if (typeof contenido === "string" && /<\/body>/i.test(contenido) && !contenido.includes('id="tapin-theme-toggle"')) {
+      let pagina = "general";
+      if (req.path === "/") pagina = "principal";
+      else if (req.path === "/descubre") pagina = "descubre";
+      else if (/^\/(mi-panel|mis-negocios)(\/|$)/.test(req.path) || /^\/editar\/[^/]+/.test(req.path)) pagina = "negocio";
+      else if (/^\/(admin|stats|editar|codigos|auditoria|respaldo)(\/|$)/.test(req.path)) pagina = "admin";
+      contenido = contenido.replace(/<body([^>]*)>/i, `<body$1 data-tapin-page="${pagina}">`);
+      contenido = contenido.replace(/<\/body>/i, `${CONTROL_TEMA_GLOBAL}</body>`);
+    }
+    return enviar(contenido);
+  };
+  next();
+});
 
 // tapin.page se redirige automáticamente a tapincol.com (el dominio nuevo y
 // principal de aquí en adelante) — así las tarjetas físicas grabadas con
@@ -480,7 +658,7 @@ function iniciarSesionCliente(res, clienteId, recordar = true) {
   // Si "recordar" está marcado, la sesión dura 30 días. Si no, es una cookie
   // de sesión normal — se borra sola al cerrar el navegador.
   const maxAge = recordar ? `Max-Age=${30 * 24 * 60 * 60}; ` : "";
-  res.setHeader("Set-Cookie", `tapin_sesion=${token}; HttpOnly; Path=/; ${maxAge}SameSite=Lax`);
+  res.setHeader("Set-Cookie", `tapin_sesion=${token}; HttpOnly; Secure; Path=/; ${maxAge}SameSite=Lax`);
 }
 
 function generarCodigo() {
@@ -529,6 +707,20 @@ function esPro(negocio) {
   return true;
 }
 
+// Escapa HTML para que texto escrito por clientes (comentarios de quejas,
+// nombres, etc.) nunca se interprete como código — sin esto, alguien podría
+// escribir <script> en un comentario y que se ejecute cuando el negocio abra
+// su panel o su correo de alerta. Se usa en TODO texto libre de usuario que
+// se inserta en HTML.
+function escaparHtml(texto) {
+  return String(texto == null ? "" : texto)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // Valida que un link realmente sea de Google Maps/Reseñas, para no dejar
 // pasar por error un link equivocado que rompería la redirección de reseñas.
 function esLinkGoogleValido(url) {
@@ -558,7 +750,7 @@ function ponerCookieSesion(res, slug, clave) {
   const valor = encodeURIComponent(clave);
   res.setHeader(
     "Set-Cookie",
-    `tapin_sesion_${slug}=${valor}; Max-Age=${60 * 60 * 24 * 30}; Path=/; HttpOnly; SameSite=Lax`
+    `tapin_sesion_${slug}=${valor}; Max-Age=${60 * 60 * 24 * 30}; Path=/; HttpOnly; Secure; SameSite=Lax`
   );
 }
 // Da la clave efectiva a usar: la de la URL si vino, si no la de la cookie de
@@ -810,37 +1002,6 @@ function progresoMeta(eventos, metaMensual) {
   return { toquesMes, metaMensual, pct: Math.min(100, Math.round((toquesMes / metaMensual) * 100)) };
 }
 
-// Proyección sencilla y transparente del cierre del mes actual. No intenta
-// adivinar el futuro: toma los toques reales registrados desde el día 1,
-// calcula el promedio diario y lo lleva hasta el último día del mes.
-// Con menos de 3 días o menos de 3 toques se muestra como insuficiente para
-// evitar presentar una cifra engañosa a un negocio recién activado.
-function proyeccionMes(eventos, negocio) {
-  const ahora = new Date();
-  const anio = ahora.getFullYear();
-  const mes = ahora.getMonth();
-  const inicioMes = new Date(anio, mes, 1);
-  const finMes = new Date(anio, mes + 1, 0);
-  const diasDelMes = finMes.getDate();
-  const diaActual = ahora.getDate();
-  const eventosMes = eventos.filter((e) => {
-    const fecha = new Date(e.fechaISO);
-    return fecha >= inicioMes && fecha <= ahora;
-  });
-  const toquesMes = eventosMes.length;
-  const suficiente = diaActual >= 3 && toquesMes >= 3;
-  const promedioDiario = toquesMes / Math.max(1, diaActual);
-  const proyectado = Math.max(toquesMes, Math.round(promedioDiario * diasDelMes));
-  const diasRestantes = Math.max(0, diasDelMes - diaActual);
-  const rangoMin = suficiente ? Math.max(toquesMes, Math.round(proyectado * 0.85)) : null;
-  const rangoMax = suficiente ? Math.round(proyectado * 1.15) : null;
-  const nombreMes = ahora.toLocaleDateString("es-CO", { month: "long", year: "numeric", timeZone: zonaDe(negocio) });
-  return {
-    suficiente, nombreMes, toquesMes, diaActual, diasDelMes, diasRestantes,
-    promedioDiario: Math.round(promedioDiario * 10) / 10, proyectado, rangoMin, rangoMax,
-  };
-}
-
 function barraSemana(dias7) {
   const max = Math.max(1, ...dias7);
   const nombresDias = [];
@@ -852,21 +1013,12 @@ function barraSemana(dias7) {
   }
   return dias7
     .map((v, i) => {
-      const alturaPct = v === 0 ? 8 : Math.max(16, Math.round((v / max) * 100));
-      const esPico = v === max && v > 0;
-      const esHoy = i === dias7.length - 1;
-      const relleno = esPico
-        ? "linear-gradient(180deg,#195B40 0%,#0B3D2A 100%)"
-        : esHoy
-          ? "linear-gradient(180deg,#4F9672 0%,#1F6749 100%)"
-          : "linear-gradient(180deg,#77A98C 0%,#347659 100%)";
+      const alturaPx = 6 + Math.round((v / max) * 46);
       return `
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px;flex:1;height:100%;min-width:0;">
-          <div style="font-size:0.72rem;font-weight:${esPico ? "800" : "700"};color:${esPico ? MARCA.verdeOscuro : MARCA.textoSuave};line-height:1;">${v}</div>
-          <div style="height:52px;width:100%;max-width:30px;display:flex;align-items:flex-end;border-radius:7px 7px 3px 3px;background:#EDF2EE;overflow:hidden;">
-            <div style="width:100%;height:${alturaPct}%;background:${relleno};border-radius:6px 6px 2px 2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.2);"></div>
-          </div>
-          <div style="font-size:0.62rem;color:${esHoy ? MARCA.verdeOscuro : "#718078"};font-weight:${esHoy ? "800" : "600"};text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;height:100%;">
+          <div style="font-size:0.75rem;font-weight:700;color:${MARCA.textoSuave};line-height:1;">${v}</div>
+          <div class="spark-bar" style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
+          <div style="font-size:0.62rem;color:#999;text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
         </div>`;
     })
     .join("");
@@ -878,10 +1030,8 @@ function barraHoras(porHora, picoHora) {
   const max = Math.max(1, ...porHora);
   return porHora
     .map((v, h) => {
-      const alturaPx = v === 0 ? 5 : Math.max(12, Math.round((v / max) * 64));
-      const color = h === picoHora && v > 0
-        ? "linear-gradient(180deg,#195B40 0%,#0B3D2A 100%)"
-        : "linear-gradient(180deg,#6FA486 0%,#2F7355 100%)";
+      const alturaPx = 4 + Math.round((v / max) * 64);
+      const color = h === picoHora && v > 0 ? MARCA.oro : MARCA.verde;
       return `<div style="flex:1;height:${alturaPx}px;background:${color};border-radius:2px 2px 0 0;" title="${h}:00 — ${v} toques"></div>`;
     })
     .join("");
@@ -955,8 +1105,8 @@ function guardarQueja(slug, comentario, negocio, telefono = "") {
       negocio.email,
       `⚠️ Nueva queja privada en ${negocio.nombre}`,
       `<p>Un cliente dejó una calificación negativa y este comentario privado:</p>
-       <p style="background:#F8F4EC;padding:14px;border-radius:8px;">"${comentario}"</p>
-       ${telefono ? `<p>Teléfono de contacto: <b>${telefono}</b></p>` : ""}
+       <p style="background:#F8F4EC;padding:14px;border-radius:8px;">"${escaparHtml(comentario)}"</p>
+       ${telefono ? `<p>Teléfono de contacto: <b>${escaparHtml(telefono)}</b></p>` : ""}
        <p>Puedes verla y marcarla como contactada/resuelta en tu panel Pro.</p>`
     ).catch((err) => console.error("[alerta queja] Error enviando correo:", err.message));
   }
@@ -1063,6 +1213,21 @@ function promedioSector(categoria, slugActual, datos) {
   }, 0);
   return Math.round(total / pares.length);
 }
+
+// Lista blanca de frases válidas de testimonio — se usa tanto para mostrar
+// los chips en /calificar como para VALIDAR que lo que llega a /testimonio
+// (que viaja como parámetro en la URL) sea de verdad una de estas frases y
+// no texto arbitrario. Sin esto, alguien podría armar un link con cualquier
+// texto en "?frase=" y ese texto terminaría metido sin control en el prompt
+// que le mandamos a la IA para generar el caption (inyección de prompt).
+const FRASES_POR_CATEGORIA = {
+  restaurante: ["Excelente atención", "Muy buena comida", "Ambiente increíble", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
+  peluqueria: ["Excelente atención", "Quedé feliz con el resultado", "Ambiente muy agradable", "Rápido y puntual", "Lo recomiendo 100%", "Volveré seguro"],
+  tienda: ["Excelente atención", "Buenos precios", "Gran variedad", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
+  clinica: ["Excelente atención", "Muy profesionales", "Instalaciones impecables", "Puntualidad", "Lo recomiendo 100%", "Volveré seguro"],
+  otro: ["Excelente atención", "Muy buen servicio", "Ambiente increíble", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
+};
+const TODAS_LAS_FRASES_VALIDAS = new Set(Object.values(FRASES_POR_CATEGORIA).flat());
 
 // ---------- Rutas ----------
 
@@ -1174,14 +1339,7 @@ app.get("/calificar/:slug", (req, res) => {
       return res.redirect(302, negocio.googleUrl);
     }
 
-    const frasesPorCategoria = {
-      restaurante: ["Excelente atención", "Muy buena comida", "Ambiente increíble", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
-      peluqueria: ["Excelente atención", "Quedé feliz con el resultado", "Ambiente muy agradable", "Rápido y puntual", "Lo recomiendo 100%", "Volveré seguro"],
-      tienda: ["Excelente atención", "Buenos precios", "Gran variedad", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
-      clinica: ["Excelente atención", "Muy profesionales", "Instalaciones impecables", "Puntualidad", "Lo recomiendo 100%", "Volveré seguro"],
-      otro: ["Excelente atención", "Muy buen servicio", "Ambiente increíble", "Rápido y eficiente", "Lo recomiendo 100%", "Volveré seguro"],
-    };
-    const frases = frasesPorCategoria[negocio.categoria] || frasesPorCategoria.otro;
+    const frases = FRASES_POR_CATEGORIA[negocio.categoria] || FRASES_POR_CATEGORIA.otro;
     const chips = frases
       .map(
         (f) =>
@@ -1344,9 +1502,9 @@ app.post("/calificar/:slug", async (req, res) => {
           <h2 style="color:#C0392B;margin-bottom:4px;">Un cliente no tuvo una buena experiencia</h2>
           <p style="color:#666;font-size:0.9rem;margin-top:0;">${horaLocal}</p>
           <div style="background:#FBEFE9;border-left:3px solid #C0392B;padding:14px 16px;border-radius:8px;margin:16px 0;">
-            <p style="margin:0;color:#16201C;">"${comentario}"</p>
+            <p style="margin:0;color:#16201C;">"${escaparHtml(comentario)}"</p>
           </div>
-          ${telefono ? `<p><b>Teléfono para contactarlo:</b> <a href="tel:${telefono}">${telefono}</a></p>` : `<p style="color:#888;">No dejó teléfono de contacto.</p>`}
+          ${telefono ? `<p><b>Teléfono para contactarlo:</b> <a href="tel:${encodeURIComponent(telefono)}">${escaparHtml(telefono)}</a></p>` : `<p style="color:#888;">No dejó teléfono de contacto.</p>`}
           <p style="font-size:0.85rem;color:#888;margin-top:24px;">Entre más rápido respondas, más probable es convertir esto en un cliente recuperado en vez de una reseña negativa pública.</p>
         </div>
       `
@@ -1375,7 +1533,11 @@ app.get("/testimonio/:slug", (req, res) => {
 
   const frase = req.query.frase || "";
   const valor = parseInt(req.query.valor, 10) || 5;
-  if (frase && esPro(negocio)) guardarTestimonio(slug, frase, valor, negocio);
+  // Solo se guarda si es EXACTAMENTE una de las frases predefinidas — nunca
+  // texto libre. Esto es lo que evita que alguien arme un link con cualquier
+  // cosa en "?frase=" y ese texto termine sin control dentro del prompt que
+  // se le manda a la IA más adelante, al generar el caption de esa tarjeta.
+  if (frase && esPro(negocio) && TODAS_LAS_FRASES_VALIDAS.has(frase)) guardarTestimonio(slug, frase, valor, negocio);
 
   res.redirect(302, negocio.googleUrl);
 });
@@ -1488,6 +1650,7 @@ app.post("/editar/nuevo", (req, res) => {
     },
   };
   guardarCodigos(codigos);
+  registrarAuditoriaGlobal("crear_negocio", `Negocio "${nombre}" (${slug}) creado directamente desde /editar/nuevo`, req);
 
   res.redirect(`/editar?key=${req.query.key}`);
 });
@@ -1547,10 +1710,15 @@ app.post("/editar/:slug", (req, res) => {
     lng: lng ? parseFloat(lng) : null,
   };
   guardarCodigos(codigos);
+  const planCambio = negocioActual.plan !== (plan === "pro" ? "pro" : "basico");
+  registrarAuditoriaGlobal(
+    "editar_negocio",
+    `Negocio "${nombre}" (${slug}) editado desde /editar${planCambio ? ` — plan cambiado de "${negocioActual.plan}" a "${plan === "pro" ? "pro" : "basico"}"` : ""}`,
+    req
+  );
 
   res.redirect(`/editar?key=${req.query.key}`);
 });
-
 // Pantalla de confirmación antes de quitar una tarjeta (para evitar borrados accidentales).
 app.get("/editar/:slug/quitar", (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
@@ -1613,6 +1781,7 @@ app.post("/editar/:slug/quitar", (req, res) => {
   codigos[slug].desactivado = true;
   codigos[slug].desactivadoEl = new Date().toISOString();
   guardarCodigos(codigos);
+  registrarAuditoriaGlobal("quitar_negocio", `Negocio "${negocio.nombre}" (${slug}) desactivado desde /editar`, req);
 
   res.redirect(`/editar?key=${req.query.key}`);
 });
@@ -1836,6 +2005,7 @@ app.post("/codigos/generar", async (req, res) => {
   }
 
   guardarCodigos(codigos);
+  registrarAuditoriaGlobal("generar_codigos", `${cantidad} código(s) generado(s)${proIncluido ? ` con Plan Pro ${planProTipo} incluido` : ""}${email ? ` — enviados a ${email}` : ""}`, req);
 
   if (email && nuevos.length > 0) {
     const base = `${req.protocol}://${req.get("host")}`;
@@ -2287,19 +2457,19 @@ app.get("/stats", (req, res) => {
 
           /* Resumen global */
           .resumen-grid{display:flex;gap:14px;flex-wrap:wrap;}
-          .resumen-box{background:linear-gradient(145deg,#fff,#F4F8F3);border:1px solid ${MARCA.borde};border-radius:18px;padding:23px 16px;text-align:center;
-                       box-shadow:0 8px 18px rgba(11,61,44,0.06);flex:1;min-width:140px;}
+          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px 16px;text-align:center;
+                       box-shadow:0 1px 2px rgba(11,61,44,0.04);flex:1;min-width:140px;}
           .resumen-num{font-size:2rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
           .resumen-lbl{font-size:0.74rem;color:${MARCA.textoSuave};margin-top:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
-          .chart-card{background:linear-gradient(145deg,#fff,#FBFCF9);border:1px solid ${MARCA.borde};border-radius:22px;padding:24px;margin-top:16px;
-                      box-shadow:0 12px 26px rgba(11,61,44,0.07);}
-          .chart-card-titulo{font-size:0.82rem;font-weight:800;color:${MARCA.verdeOscuro};margin-bottom:18px;text-align:left;}
+          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px 24px;margin-top:16px;
+                      box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .chart-card-titulo{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:18px;text-align:center;}
           .sparkline-grande{height:120px;max-width:520px;margin:0 auto;}
 
           /* Lista de negocios */
           .lista-negocios{display:flex;flex-direction:column;gap:16px;}
-          .card{background:linear-gradient(145deg,#fff,#FBFCF9);border-radius:22px;padding:25px;box-shadow:0 6px 16px rgba(11,61,44,0.05), 0 14px 30px rgba(11,61,44,0.06);border:1px solid ${MARCA.borde};transition:box-shadow .2s,transform .2s,border-color .2s;}
-          .card:hover{box-shadow:0 8px 20px rgba(11,61,44,0.08), 0 18px 38px rgba(11,61,44,0.11);transform:translateY(-3px);border-color:#AFC8B5;}
+          .card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 1px 2px rgba(11,61,44,0.04), 0 8px 24px rgba(11,61,44,0.06);border:1px solid ${MARCA.borde};transition:box-shadow .2s;}
+          .card:hover{box-shadow:0 1px 2px rgba(11,61,44,0.05), 0 12px 32px rgba(11,61,44,0.10);}
           .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
           .card-nombre{font-weight:700;font-size:1.08rem;letter-spacing:-0.01em;}
           .badge-pro{background:${MARCA.oro};color:#fff;font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:100px;letter-spacing:0.04em;vertical-align:middle;}
@@ -2308,7 +2478,7 @@ app.get("/stats", (req, res) => {
           .card-total{text-align:right;font-size:1.7rem;font-weight:700;color:${MARCA.verde};line-height:1;}
           .card-total span{display:block;font-size:0.6rem;font-weight:600;color:${MARCA.textoSuave};margin-top:4px;letter-spacing:0.04em;text-transform:uppercase;}
           .card-metrics{display:flex;gap:12px;margin-bottom:26px;max-width:340px;}
-          .metric{background:linear-gradient(145deg,#EAF4EC,#DDEEE2);border:1px solid #D0E5D5;border-radius:14px;padding:13px 14px;flex:1;text-align:center;}
+          .metric{background:${MARCA.verdeClaro};border-radius:12px;padding:12px 14px;flex:1;text-align:center;}
           .metric-num{font-size:1.3rem;font-weight:700;color:${MARCA.verdeOscuro};}
           .metric-lbl{font-size:0.68rem;color:${MARCA.verde};margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
           .sparkline{display:flex;align-items:flex-end;gap:5px;height:92px;margin-bottom:16px;max-width:300px;}
@@ -2320,22 +2490,22 @@ app.get("/stats", (req, res) => {
           .card-ultimo{font-size:0.82rem;color:${MARCA.textoSuave};margin-bottom:16px;padding-top:14px;border-top:1px solid ${MARCA.borde};}
           .card-ultimo b{color:${MARCA.texto};}
           .card-actions{display:flex;flex-wrap:wrap;gap:8px;}
-          .card-actions a{color:${MARCA.verdeOscuro};font-weight:800;text-decoration:none;font-size:0.74rem;
-                          white-space:nowrap;background:${MARCA.verdeClaro};border:1px solid #CDE2D2;padding:8px 12px;border-radius:999px;transition:transform .16s,background .16s,box-shadow .16s;}
-          .card-actions a:hover{background:${MARCA.verde};color:#fff;transform:translateY(-2px);box-shadow:0 7px 14px rgba(11,61,44,.16);}
+          .card-actions a{color:${MARCA.verdeOscuro};font-weight:600;text-decoration:none;font-size:0.74rem;
+                          white-space:nowrap;background:${MARCA.verdeClaro};padding:6px 12px;border-radius:100px;}
+          .card-actions a:hover{background:${MARCA.verde};color:#fff;}
           .seccion-pais{margin-bottom:36px;}
           .pais-header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;
                        border-bottom:2px solid ${MARCA.verdeOscuro};padding-bottom:10px;margin-bottom:18px;}
           .pais-titulo{font-size:1.15rem;font-weight:800;color:${MARCA.verdeOscuro};}
           .pais-conteo{font-size:0.78rem;color:${MARCA.textoSuave};font-weight:600;}
           .botones-paises{display:flex;flex-wrap:wrap;justify-content:center;margin-bottom:28px;}
-          .btn-pais{background:#fff;border:1px solid ${MARCA.borde};color:${MARCA.texto};font-weight:800;
-                    font-size:0.82rem;padding:10px 18px;border-radius:999px;text-decoration:none;
-                    margin:0 8px 8px 0;display:inline-block;box-shadow:0 4px 10px rgba(11,61,44,.04);transition:transform .16s,box-shadow .16s,border-color .16s;}
-          .btn-pais:hover{border-color:${MARCA.verdeOscuro};background:${MARCA.verdeClaro};transform:translateY(-2px);box-shadow:0 9px 16px rgba(11,61,44,.1);}
+          .btn-pais{background:#fff;border:1px solid ${MARCA.borde};color:${MARCA.texto};font-weight:700;
+                    font-size:0.82rem;padding:9px 18px;border-radius:100px;text-decoration:none;
+                    margin:0 8px 8px 0;display:inline-block;}
+          .btn-pais:hover{border-color:${MARCA.verdeOscuro};background:${MARCA.verdeClaro};}
           .topbar-nav{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:flex-end;}
-          .topbar-nav a{color:#fff;font-size:0.78rem;font-weight:800;text-decoration:none;white-space:nowrap;padding:8px 11px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.12);transition:background .16s,transform .16s;}
-          .topbar-nav a:hover{color:#fff;background:rgba(255,255,255,.2);transform:translateY(-1px);}
+          .topbar-nav a{color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;white-space:nowrap;}
+          .topbar-nav a:hover{color:#fff;text-decoration:underline;}
           @media (max-width:640px){
             .topbar{flex-direction:column;align-items:flex-start;gap:10px;padding:16px 20px;}
             .topbar-nav{justify-content:flex-start;width:100%;}
@@ -2352,6 +2522,8 @@ app.get("/stats", (req, res) => {
             <a href="/descubre" target="_blank">Mapa público</a>
             <a href="/editar?key=${key}">Editar negocios</a>
             <a href="/codigos?key=${key}">+ Generar tarjetas</a>
+            <a href="/auditoria?key=${key}">Auditoría</a>
+            <a href="/respaldo?key=${key}">Respaldo</a>
           </div>
         </div>
         <div class="content">
@@ -2476,8 +2648,8 @@ app.get("/quejas/:slug", (req, res) => {
       const estado = q.estado || "pendiente";
       return `<tr>
         <td data-label="Fecha">${q.fechaLegible}</td>
-        <td data-label="Comentario">${q.comentario}</td>
-        <td data-label="Teléfono">${q.telefono ? `<a href="tel:${q.telefono}">${q.telefono}</a>` : "—"}</td>
+        <td data-label="Comentario">${escaparHtml(q.comentario)}</td>
+        <td data-label="Teléfono">${q.telefono ? `<a href="tel:${encodeURIComponent(q.telefono)}">${escaparHtml(q.telefono)}</a>` : "—"}</td>
         <td data-label="Estado"><span style="background:${fondos[estado]};color:${colores[estado]};padding:4px 10px;border-radius:100px;font-size:0.74rem;font-weight:700;">${estado}</span></td>
         <td data-label="Nota">
           <form method="POST" action="/quejas/${slug}/nota?key=${req.query.key}" style="display:flex;gap:4px;">
@@ -2488,8 +2660,14 @@ app.get("/quejas/:slug", (req, res) => {
           </form>
         </td>
         <td data-label="Acción">
-          ${estado !== "contactado" ? `<a href="/quejas/${slug}/estado?key=${req.query.key}&i=${i}&estado=contactado" style="margin-right:8px;">Marcar contactado</a>` : ""}
-          ${estado !== "resuelto" ? `<a href="/quejas/${slug}/estado?key=${req.query.key}&i=${i}&estado=resuelto">Marcar resuelto</a>` : ""}
+          ${estado !== "contactado" ? `<form method="POST" action="/quejas/${slug}/estado?key=${req.query.key}" style="display:inline;">
+              <input type="hidden" name="i" value="${i}"><input type="hidden" name="estado" value="contactado">
+              <button type="submit" style="background:none;border:none;color:${MARCA.verde};font-weight:600;font-size:0.82rem;cursor:pointer;padding:0;margin-right:8px;text-decoration:underline;">Marcar contactado</button>
+            </form>` : ""}
+          ${estado !== "resuelto" ? `<form method="POST" action="/quejas/${slug}/estado?key=${req.query.key}" style="display:inline;">
+              <input type="hidden" name="i" value="${i}"><input type="hidden" name="estado" value="resuelto">
+              <button type="submit" style="background:none;border:none;color:${MARCA.verde};font-weight:600;font-size:0.82rem;cursor:pointer;padding:0;text-decoration:underline;">Marcar resuelto</button>
+            </form>` : ""}
         </td>
       </tr>`;
     })
@@ -2545,15 +2723,15 @@ app.get("/quejas/:slug", (req, res) => {
 
 // Cambia el estado de una queja (pendiente -> contactado -> resuelto), para llevar
 // el seguimiento de recuperación de clientes insatisfechos.
-app.get("/quejas/:slug/estado", (req, res) => {
+app.post("/quejas/:slug/estado", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado.");
   }
-  const i = parseInt(req.query.i, 10);
-  const nuevoEstado = req.query.estado;
+  const i = parseInt(req.body.i, 10);
+  const nuevoEstado = req.body.estado;
   if (!["contactado", "resuelto", "pendiente"].includes(nuevoEstado)) {
     return res.status(400).send("Estado inválido.");
   }
@@ -2604,9 +2782,14 @@ app.get("/contenido/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio)) {
+  if (!autorizadoProNegocio(req, negocio, slug)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
+  const claveUsada = claveEfectiva(req, slug);
+  req.query.key = claveUsada;
+  const volverHref = claveUsada === ADMIN_KEY
+    ? `/stats?key=${encodeURIComponent(claveUsada)}`
+    : `/mi-panel/${slug}?key=${encodeURIComponent(claveUsada)}`;
 
   if (!esPro(negocio)) {
     return res.status(402).send(
@@ -2664,7 +2847,7 @@ app.get("/contenido/:slug", (req, res) => {
         </style>
       </head>
       <body>
-        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="${volverHref}">&larr; Volver al panel</a></div>
         <div class="content">
           <div class="eyebrow">Marketing automático · ${negocio.nombre}</div>
           <h1 class="titulo-pagina">Contenido para redes</h1>
@@ -2822,7 +3005,6 @@ app.get("/mi-panel/:slug", (req, res) => {
   const calendario = calendarioMes(eventos, negocio);
   const meta = progresoMeta(eventos, negocio.metaMensual);
   const comparativoAnio = compararAnioAnterior(eventos, negocio);
-  const proyeccion = proyeccionMes(eventos, negocio);
   const soloLectura = req.query.key === negocio.claveSoloLectura && negocio.claveSoloLectura;
 
   res.send(`
@@ -2855,52 +3037,32 @@ app.get("/mi-panel/:slug", (req, res) => {
                        display:flex;align-items:center;justify-content:space-between;
                        padding-left:10px;border-left:3px solid ${MARCA.verde};}
           .card-titulo span.suave{font-weight:600;color:${MARCA.oro};font-size:0.72rem;}
-          .accion-panel{display:inline-flex!important;align-items:center;justify-content:center;min-height:38px;
-                         border-radius:10px!important;padding:9px 15px!important;box-shadow:none!important;
-                         background:${MARCA.verdeOscuro}!important;border-color:${MARCA.verdeOscuro}!important;color:#fff!important;
-                         transition:border-color .16s ease,background .16s ease,color .16s ease!important;}
-          .accion-panel:hover{transform:none;background:${MARCA.verde}!important;border-color:${MARCA.verde}!important;}
-          .accion-panel.accion-principal{background:${MARCA.verdeOscuro}!important;border-color:${MARCA.verdeOscuro}!important;color:#fff!important;}
-          .accion-panel.accion-principal:hover{background:${MARCA.verde}!important;border-color:${MARCA.verde}!important;}
-          .accion-panel:focus-visible,.btn-herramienta:focus-visible,.btn-reporte-pdf:focus-visible{outline:3px solid rgba(201,162,75,.5);outline-offset:3px;}
 
           .resumen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:16px 8px;text-align:center;
-                       box-shadow:none;border-top:3px solid ${MARCA.verdeOscuro};}
+          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:14px 8px;text-align:center;
+                       box-shadow:0 1px 2px rgba(11,61,44,0.04);}
           .resumen-num{font-size:1.5rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
           .resumen-lbl{font-size:0.64rem;color:${MARCA.textoSuave};margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.02em;}
 
-          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;padding:20px;margin-top:12px;
-                      box-shadow:none;box-sizing:border-box;}
+          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px 18px;margin-top:12px;
+                      box-shadow:0 1px 2px rgba(11,61,44,0.04);box-sizing:border-box;}
           .grid-2 .chart-card{height:100%;}
-          .chart-card-titulo{font-size:0.78rem;font-weight:800;letter-spacing:.025em;color:${MARCA.verdeOscuro};margin-bottom:16px;text-align:left;}
+          .chart-card-titulo{font-size:0.78rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:12px;text-align:center;}
           .sparkline{display:flex;align-items:flex-end;gap:5px;}
-          .sparkline-grande{height:98px;padding:4px 2px 2px;}
+          .sparkline-grande{height:70px;}
 
           .ultimo-toque{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};margin-top:10px;}
           .ultimo-toque b{color:${MARCA.texto};}
-          .proyeccion-grid{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;text-align:center;}
-          .proyeccion-kicker{font-size:0.68rem;color:${MARCA.textoSuave};font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
-          .proyeccion-num{font-size:1.65rem;font-weight:800;color:${MARCA.verdeOscuro};line-height:1.1;margin-top:6px;}
-          .proyeccion-destacada{color:${MARCA.verde};}
-          .proyeccion-label{font-size:0.72rem;color:${MARCA.textoSuave};margin-top:4px;}
-          .proyeccion-flecha{font-size:1.4rem;color:${MARCA.oro};font-weight:800;}
-          .proyeccion-rango{text-align:center;margin-top:16px;padding-top:12px;border-top:1px solid ${MARCA.borde};font-size:0.75rem;color:${MARCA.textoSuave};}
-          .proyeccion-rango b{color:${MARCA.verdeOscuro};}
-          .proyeccion-nota{text-align:center;font-size:0.7rem;color:${MARCA.textoSuave};margin-top:8px;line-height:1.45;}
-          .proyeccion-vacia{text-align:center;color:${MARCA.textoSuave};font-size:0.82rem;line-height:1.5;}
-          .proyeccion-vacia p{margin:8px 0 0;}
-          @media (max-width:480px){.proyeccion-grid{gap:6px;}.proyeccion-num{font-size:1.35rem;}.proyeccion-flecha{font-size:1.1rem;}}
 
           .reco{background:${MARCA.verdeClaro};border-left:3px solid ${MARCA.verde};border-radius:8px;padding:12px 14px;
                 font-size:0.83rem;margin-bottom:8px;color:${MARCA.verdeOscuro};}
 
-          .horas-chart{display:flex;align-items:flex-end;gap:3px;height:70px;padding:4px 0 0;border-bottom:1px solid ${MARCA.borde};}
+          .horas-chart{display:flex;align-items:flex-end;gap:2px;height:60px;}
           .horas-labels{display:flex;justify-content:space-between;font-size:0.6rem;color:${MARCA.textoSuave};margin-top:6px;}
           .horas-nota{text-align:center;font-size:0.76rem;color:${MARCA.textoSuave};margin-top:10px;}
           .horas-nota b{color:${MARCA.texto};}
 
-          .sentimiento-barra{display:flex;height:16px;border-radius:100px;overflow:hidden;background:${MARCA.borde};box-shadow:inset 0 1px 2px rgba(0,0,0,.08);}
+          .sentimiento-barra{display:flex;height:14px;border-radius:100px;overflow:hidden;background:${MARCA.borde};}
           .sentimiento-leyenda{display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:0.78rem;color:${MARCA.textoSuave};}
           .sentimiento-leyenda span{display:flex;align-items:center;gap:6px;}
           .sentimiento-leyenda i{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
@@ -2915,14 +3077,14 @@ app.get("/mi-panel/:slug", (req, res) => {
           .tabla-actividad tr:last-child td{border-bottom:none;}
 
           .fila-herramientas{display:flex;gap:10px;flex-wrap:wrap;}
-          .btn-herramienta{flex:1;min-width:140px;background:${MARCA.verdeOscuro};border:1px solid ${MARCA.verdeOscuro};border-radius:10px;
-                           padding:12px 14px;text-decoration:none;color:#fff;font-size:0.82rem;font-weight:700;
-                           text-align:center;box-shadow:none;transition:border-color .18s,background .18s;}
-          .btn-herramienta:hover{border-color:${MARCA.verde};transform:none;box-shadow:none;background:${MARCA.verde};}
+          .btn-herramienta{flex:1;min-width:140px;background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;
+                           padding:12px 14px;text-decoration:none;color:${MARCA.texto};font-size:0.82rem;font-weight:700;
+                           text-align:center;box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .btn-herramienta:hover{border-color:${MARCA.verde};}
           .btn-reporte-pdf{display:flex;align-items:center;justify-content:space-between;gap:12px;
-                           background:${MARCA.verdeOscuro};color:#fff;border-radius:10px;padding:16px 20px;
+                           background:${MARCA.verdeOscuro};color:#fff;border-radius:14px;padding:16px 20px;
                            text-decoration:none;margin-top:12px;}
-          .btn-reporte-pdf b{font-size:0.92rem;}.btn-reporte-pdf:hover{transform:none;box-shadow:none;background:${MARCA.verde};}
+          .btn-reporte-pdf b{font-size:0.92rem;}
           .btn-reporte-pdf span{font-size:0.76rem;color:#CFE3D6;display:block;margin-top:2px;}
           .btn-reporte-pdf .flecha{font-size:1.3rem;flex-shrink:0;}
         </style>
@@ -2948,26 +3110,26 @@ app.get("/mi-panel/:slug", (req, res) => {
               ${soloLectura ? `<span style="display:inline-block;margin-left:6px;padding:5px 14px;border-radius:100px;font-size:0.72rem;font-weight:700;background:#F3F1EC;color:${MARCA.textoSuave};">Solo lectura</span>` : ""}
             </div>
             ${!soloLectura ? `
-            <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-              <a class="accion-panel" href="/mi-panel/${slug}/editar?key=${req.query.key}"
+            <div class="panel-acciones" style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+              <a href="/mi-panel/${slug}/editar?key=${req.query.key}"
                  style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
                         border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;
                         transition:border-color .15s;">
                 Editar mi negocio
               </a>
-              <a class="accion-panel" href="/mi-panel/${slug}/clave?key=${req.query.key}"
+              <a href="/mi-panel/${slug}/clave?key=${req.query.key}"
                  style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
                         border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;">
                 Cambiar mi clave
               </a>
               ${esPro(negocio) ? `
-              <a class="accion-panel" href="/suscripcion/${slug}?key=${req.query.key}"
+              <a href="/suscripcion/${slug}?key=${req.query.key}"
                  style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
                         border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;">
                 Mi suscripción
               </a>
               ` : ""}
-              <a class="accion-panel accion-principal" href="/mi-panel/${slug}/configuracion?key=${req.query.key}"
+              <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}"
                  style="font-size:0.78rem;font-weight:700;color:#fff;background:${MARCA.oro};
                         border:1.5px solid ${MARCA.oro};border-radius:100px;padding:9px 18px;text-decoration:none;">
                 Configuración
@@ -3008,34 +3170,6 @@ app.get("/mi-panel/:slug", (req, res) => {
               <div class="sparkline sparkline-grande">${barraSemana(r.dias7)}</div>
             </div>
             <div class="ultimo-toque">Último toque: <b>${ultimoTexto}</b></div>
-          </div>
-
-          <div class="seccion">
-            <div class="card-titulo">Proyección del mes <span class="suave">${proyeccion.nombreMes}</span></div>
-            <div class="chart-card proyeccion-card" style="margin-top:0;">
-              ${proyeccion.suficiente ? `
-                <div class="proyeccion-grid">
-                  <div>
-                    <div class="proyeccion-kicker">Hasta hoy</div>
-                    <div class="proyeccion-num">${proyeccion.toquesMes}</div>
-                    <div class="proyeccion-label">toques registrados</div>
-                  </div>
-                  <div class="proyeccion-flecha">→</div>
-                  <div>
-                    <div class="proyeccion-kicker">Proyección al cierre</div>
-                    <div class="proyeccion-num proyeccion-destacada">${proyeccion.proyectado}</div>
-                    <div class="proyeccion-label">toques estimados</div>
-                  </div>
-                </div>
-                <div class="proyeccion-rango">Rango orientativo: <b>${proyeccion.rangoMin}–${proyeccion.rangoMax}</b> toques · promedio actual <b>${proyeccion.promedioDiario}/día</b></div>
-                <div class="proyeccion-nota">Si mantienes el ritmo actual durante los ${proyeccion.diasRestantes} días restantes, esta sería la estimación. Es una referencia, no una garantía.</div>
-              ` : `
-                <div class="proyeccion-vacia">
-                  <div class="proyeccion-kicker">Todavía estamos reuniendo datos</div>
-                  <p>Cuando haya al menos 3 días y 3 toques registrados este mes, aquí verás una estimación del cierre basada en tu ritmo real.</p>
-                </div>
-              `}
-            </div>
           </div>
 
           ${meta ? `
@@ -3082,12 +3216,14 @@ app.get("/mi-panel/:slug", (req, res) => {
                 ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
                 ${calendario.dias.map((v, i) => {
                   const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
-                  return `<div title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:5px;
+                  const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
+                  return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:5px;
                           background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
                           display:flex;align-items:center;justify-content:center;font-size:0.6rem;
                           color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
                 }).join("")}
               </div>
+              <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:12px;">Más oscuro = más toques</div>
             </div>
           </div>
 
@@ -3209,7 +3345,7 @@ app.get("/mi-panel/:slug", (req, res) => {
           </div>
           `}
 
-          <div class="seccion">
+          <div class="seccion seccion-actividad">
             <div class="card-titulo">Actividad reciente</div>
             <div class="chart-card" style="margin-top:0;">
               <table class="tabla-actividad">
@@ -3703,7 +3839,7 @@ app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
     .map(([id, c]) => {
       const listo = fid.metaSellos && c.sellos >= fid.metaSellos;
       return `<tr style="${listo ? `background:${MARCA.verdeClaro};` : ""}">
-        <td>${c.nombre || id}</td>
+        <td>${escaparHtml(c.nombre || id)}</td>
         <td>${id}</td>
         <td>${c.sellos || 0} / ${fid.metaSellos || "—"}</td>
         <td>${listo
@@ -4788,7 +4924,7 @@ app.get("/enviar-resumenes-quejas", async (req, res) => {
     }
 
     const filas = quejas
-      .map((q) => `<li style="margin-bottom:10px;"><b>${q.fechaLegible}</b><br>"${q.comentario}"${q.telefono ? `<br>Tel: ${q.telefono}` : ""}</li>`)
+      .map((q) => `<li style="margin-bottom:10px;"><b>${q.fechaLegible}</b><br>"${escaparHtml(q.comentario)}"${q.telefono ? `<br>Tel: ${escaparHtml(q.telefono)}` : ""}</li>`)
       .join("");
     try {
       await enviarEmail(
@@ -4918,6 +5054,12 @@ app.get("/reportes-guardados/:slug/:mes.pdf", (req, res) => {
   if (!autorizadoProNegocio(req, negocio, slug)) {
     return res.status(401).send("No autorizado.");
   }
+  // Valida que "mes" tenga exactamente el formato AAAA-MM esperado — sin esto,
+  // alguien podría meter "../../../algo" en la URL e intentar leer archivos
+  // fuera de la carpeta de reportes (path traversal).
+  if (!/^\d{4}-\d{2}$/.test(mes)) {
+    return res.status(400).send("Formato de mes inválido.");
+  }
 
   const archivo = path.join(DATA_DIR, "reportes", slug, `${mes}.pdf`);
   if (!fs.existsSync(archivo)) {
@@ -4950,6 +5092,130 @@ app.get("/stats.json", (req, res) => {
   res.json(resultado);
 });
 
+// ---------- Respaldo manual de todos los datos ----------
+// No hay backup automático de los archivos JSON (viven solo en el disco de
+// Render) — esto te da un botón para descargar TODO en un solo archivo
+// cuando quieras, sin depender de ninguna librería nueva que instalar.
+// Recomendado: descárgalo a mano cada tanto, o prográmalo en cron-job.org
+// para que te lo mande por correo cada semana (ver /respaldo-correo abajo).
+// Visítalo así: https://tu-dominio.com/respaldo?key=TU_CLAVE
+// Muestra el registro de acciones administrativas sensibles (crear/editar/
+// quitar negocios, generar códigos) — quién hizo qué y cuándo, para tener
+// rastro si algo raro pasa o simplemente para acordarte de tus propios cambios.
+// Visítalo así: https://tu-dominio.com/auditoria?key=TU_CLAVE
+app.get("/auditoria", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  let registros = [];
+  try {
+    if (fs.existsSync(AUDITORIA_GLOBAL_FILE)) registros = JSON.parse(fs.readFileSync(AUDITORIA_GLOBAL_FILE, "utf8"));
+  } catch {
+    registros = [];
+  }
+  const filas = registros
+    .slice()
+    .reverse()
+    .slice(0, 300)
+    .map((r) => `<tr>
+        <td>${escaparHtml(r.fechaLegible)}</td>
+        <td><span class="pill">${escaparHtml(r.accion)}</span></td>
+        <td>${escaparHtml(r.detalle)}</td>
+        <td class="ip">${escaparHtml(r.ip || "—")}</td>
+      </tr>`)
+    .join("");
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Auditoría — Tapin</title>
+        <style>
+          ${ESTILO_BASE}
+          table{border-collapse:collapse;width:100%;background:#fff;border-radius:12px;overflow:hidden;border:1px solid ${MARCA.borde};}
+          th,td{padding:11px 16px;text-align:left;font-size:0.84rem;border-bottom:1px solid ${MARCA.borde};}
+          th{background:${MARCA.verdeOscuro};color:#fff;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;}
+          .pill{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};padding:3px 10px;border-radius:100px;font-size:0.72rem;font-weight:700;}
+          .ip{font-family:monospace;font-size:0.76rem;color:${MARCA.textoSuave};}
+        </style>
+      </head>
+      <body>
+        <div class="topbar">
+          <div>${logoSvg("#FFFFFF", 30)}</div>
+          <a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a>
+        </div>
+        <div class="content">
+          <div class="eyebrow">Seguridad</div>
+          <h1 class="titulo-pagina">Auditoría del sistema</h1>
+          <div class="subtitulo">Las últimas ${Math.min(300, registros.length)} acciones administrativas registradas (de ${registros.length} en total).</div>
+          <table>
+            <tr><th>Fecha</th><th>Acción</th><th>Detalle</th><th>IP</th></tr>
+            ${filas || "<tr><td colspan='4'>Todavía no hay acciones registradas.</td></tr>"}
+          </table>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.get("/respaldo", (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  const archivos = ["data.json", "codigos.json", "clientes.json", "sesiones-clientes.json", "pedidos.json", "tokens.json"];
+  const respaldo = { generadoEl: new Date().toISOString() };
+  for (const archivo of archivos) {
+    const ruta = path.join(DATA_DIR, archivo);
+    try {
+      respaldo[archivo] = fs.existsSync(ruta) ? JSON.parse(fs.readFileSync(ruta, "utf8")) : null;
+    } catch (err) {
+      respaldo[archivo] = { errorLeyendo: err.message };
+    }
+  }
+  const nombreArchivo = `respaldo-tapin-${new Date().toISOString().slice(0, 10)}.json`;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${nombreArchivo}"`);
+  res.send(JSON.stringify(respaldo, null, 2));
+});
+
+// Igual que /respaldo, pero te lo manda por correo en vez de descargarlo —
+// pensado para programarlo en cron-job.org una vez a la semana, así el
+// respaldo te llega solo sin que tengas que acordarte de entrar a bajarlo.
+// Visítalo así: https://tu-dominio.com/respaldo-correo?key=TU_CLAVE
+app.get("/respaldo-correo", async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const destino = req.query.a || process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+  if (!destino) {
+    return res.status(400).send("Falta a quién mandarlo — agrega &a=tu@correo.com o configura ADMIN_EMAIL/EMAIL_USER en Render.");
+  }
+  const archivos = ["data.json", "codigos.json", "clientes.json", "sesiones-clientes.json", "pedidos.json", "tokens.json"];
+  const respaldo = { generadoEl: new Date().toISOString() };
+  for (const archivo of archivos) {
+    const ruta = path.join(DATA_DIR, archivo);
+    try {
+      respaldo[archivo] = fs.existsSync(ruta) ? JSON.parse(fs.readFileSync(ruta, "utf8")) : null;
+    } catch (err) {
+      respaldo[archivo] = { errorLeyendo: err.message };
+    }
+  }
+  const contenido = Buffer.from(JSON.stringify(respaldo, null, 2), "utf8");
+  const nombreArchivo = `respaldo-tapin-${new Date().toISOString().slice(0, 10)}.json`;
+  const resultado = await enviarEmail(
+    destino,
+    `Respaldo de datos Tapin — ${new Date().toLocaleDateString("es-CO")}`,
+    `<p>Adjunto va el respaldo completo de todos tus datos (negocios, códigos, clientes, pedidos) en formato JSON.</p>
+     <p style="font-size:0.82rem;color:#888;">Guárdalo en un lugar seguro — tiene información sensible de tus negocios y clientes.</p>`,
+    [{ filename: nombreArchivo, content: contenido }]
+  );
+  if (resultado.ok) {
+    res.send(`Respaldo enviado a ${destino}.`);
+  } else {
+    res.status(500).send("No se pudo enviar: " + resultado.motivo);
+  }
+});
 // ---------- Dashboard de clientes: mapa de calor público ----------
 // Calcula una "reputación" aproximada de un negocio a partir de sus quejas
 // privadas vs. su total de toques (no tenemos un conteo directo de "positivos",
@@ -5169,14 +5435,17 @@ app.get("/conoce", (req, res) => {
                 <div class="plan-anual-badge">10% más barato</div>
               </div>
               <ul>
+                <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
                 <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
+                <li><span class="check">✓</span> Filtro de calificaciones y retroalimentación privada — lo negativo nunca se publica</li>
                 <li><span class="check">✓</span> Alerta instantánea por correo ante retroalimentación negativa</li>
                 <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
                 <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
                 <li><span class="check">✓</span> Reportes en CSV, PDF y Word — te los enviamos por correo cuando los necesites</li>
                 <li><span class="check">✓</span> Generador de contenido para redes sociales</li>
                 <li><span class="check">✓</span> Comparación contra el promedio de tu categoría</li>
+                <li><span class="check">✓</span> Recomendaciones automáticas para tu negocio</li>
+                <li><span class="check">✓</span> Programa de fidelización de clientes</li>
               </ul>
             </div>
           </div>
@@ -5196,13 +5465,9 @@ app.get("/conoce", (req, res) => {
             </div>
             <div class="precio-card">
               <div class="precio-card-titulo">Suscripción Plan Pro</div>
-              <table class="tabla-precios">
-                <tr><th>Tarjetas activas</th><th>Precio c/u / mes</th></tr>
-                ${ESCALONES_PRO.slice().reverse().map((e, i, arr) => {
-                  const siguiente = arr[i + 1];
-                  const rango = siguiente ? `${e.minimo}-${siguiente.minimo - 1}` : `${e.minimo}+`;
-                  return `<tr><td>${rango}</td><td>$${e.precio.toLocaleString("es-CO")}</td></tr>`;
-                }).join("")}
+              <table class="tabla-precios tabla-pro">
+                <tr><th>Tarjetas activas</th><th>Precio mensual</th></tr>
+                ${filasTablaProHtml()}
               </table>
             </div>
           </div>
@@ -5215,7 +5480,7 @@ app.get("/conoce", (req, res) => {
         </main>
         <footer class="site-footer">
           <span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span>
-          <span><a href="mailto:hola@tapincol.com">hola@tapincol.com</a><a href="https://wa.me/573003489609" target="_blank">WhatsApp</a></span>
+          <span><a href="mailto:tapin.notificaciones@gmail.com">tapin.notificaciones@gmail.com</a><a href="https://wa.me/573003489609" target="_blank">WhatsApp</a></span>
         </footer>
       </body>
     </html>
@@ -5439,7 +5704,7 @@ app.get("/mis-negocios", (req, res) => {
     </form>`;
 
   const bloqueLogin = `
-    <a href="/auth/google/iniciar" style="display:flex;align-items:center;justify-content:center;gap:10px;
+    <a class="google-login" href="/auth/google/iniciar" style="display:flex;align-items:center;justify-content:center;gap:10px;
        width:100%;box-sizing:border-box;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
        padding:13px;font-weight:700;font-size:0.9rem;color:${MARCA.texto};text-decoration:none;margin-bottom:14px;">
       <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -5817,7 +6082,7 @@ app.get("/cliente", (req, res) => {
           <div class="panel activo" id="panel-login">
             <h2>Bienvenido de vuelta</h2>
             <p>Entra para ver tus favoritos y tu historial de reseñas.</p>
-            <a href="/auth/google/iniciar?tipo=cliente" style="display:flex;align-items:center;justify-content:center;gap:10px;
+            <a class="google-login" href="/auth/google/iniciar?tipo=cliente" style="display:flex;align-items:center;justify-content:center;gap:10px;
                width:100%;box-sizing:border-box;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
                padding:13px;font-weight:700;font-size:0.9rem;color:${MARCA.texto};text-decoration:none;margin-bottom:14px;">
               <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -5881,7 +6146,7 @@ app.get("/cliente", (req, res) => {
   `);
 });
 
-app.post("/cliente/registro", (req, res) => {
+app.post("/cliente/registro", limitarIntentos(10, 15), (req, res) => {
   const nombre = (req.body.nombre || "").trim();
   const email = (req.body.email || "").trim().toLowerCase();
   const password = req.body.password || "";
@@ -5909,7 +6174,7 @@ app.post("/cliente/registro", (req, res) => {
   res.redirect("/cuenta");
 });
 
-app.post("/cliente/login", (req, res) => {
+app.post("/cliente/login", limitarIntentos(8, 15), (req, res) => {
   const email = (req.body.email || "").trim().toLowerCase();
   const password = req.body.password || "";
   const recordar = req.body.recordar === "si";
@@ -5931,7 +6196,7 @@ app.get("/cliente/salir", (req, res) => {
     delete sesiones[cookies.tapin_sesion];
     guardarSesionesClientes(sesiones);
   }
-  res.setHeader("Set-Cookie", "tapin_sesion=; HttpOnly; Path=/; Max-Age=0");
+  res.setHeader("Set-Cookie", "tapin_sesion=; HttpOnly; Secure; Path=/; Max-Age=0");
   res.redirect("/");
 });
 
@@ -6145,30 +6410,30 @@ app.get("/cuenta", (req, res) => {
           ${ESTILO_BASE}
           .content{max-width:640px;}
           .hero-cuenta{background:linear-gradient(135deg, ${MARCA.verdeOscuro} 0%, #0F5132 100%);
-                       border-radius:24px;padding:34px 30px;color:#fff;margin-bottom:30px;position:relative;overflow:hidden;box-shadow:0 16px 32px rgba(11,61,44,.2);}
+                       border-radius:20px;padding:32px 28px;color:#fff;margin-bottom:28px;position:relative;overflow:hidden;}
           .hero-cuenta::before{content:"";position:absolute;top:-40%;right:-15%;width:220px;height:220px;
                                 border-radius:50%;background:radial-gradient(circle, rgba(201,162,75,0.35), transparent 70%);}
           .hero-saludo{font-size:1.5rem;font-weight:800;position:relative;}
           .hero-email{color:#CFE3D8;font-size:0.85rem;margin-top:2px;position:relative;}
           .hero-stats{display:flex;gap:12px;margin-top:22px;position:relative;flex-wrap:wrap;}
-          .hero-stat{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,.12);border-radius:15px;padding:13px 16px;flex:1;min-width:96px;}
+          .hero-stat{background:rgba(255,255,255,0.12);border-radius:14px;padding:12px 16px;flex:1;min-width:96px;}
           .hero-stat-num{font-size:1.4rem;font-weight:800;}
           .hero-stat-lbl{font-size:0.66rem;color:#CFE3D8;text-transform:uppercase;letter-spacing:0.04em;margin-top:2px;}
 
           .seccion-titulo{font-size:1.05rem;font-weight:800;margin:32px 0 14px;color:${MARCA.texto};
                            display:flex;align-items:center;gap:8px;}
 
-          .fav-card{background:linear-gradient(145deg,#fff,#FBFCF9);border:1px solid ${MARCA.borde};border-radius:18px;padding:17px;
-                    display:flex;align-items:center;gap:14px;margin-bottom:11px;box-shadow:0 5px 12px rgba(11,61,44,.04);transition:box-shadow .18s,transform .18s,border-color .18s;}
-          .fav-card:hover{box-shadow:0 13px 24px rgba(11,61,44,0.1);transform:translateY(-3px);border-color:#ACC5B2;}
+          .fav-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px;
+                    display:flex;align-items:center;gap:14px;margin-bottom:10px;transition:box-shadow .15s,transform .15s;}
+          .fav-card:hover{box-shadow:0 6px 18px rgba(11,61,44,0.08);transform:translateY(-1px);}
           .fav-icono{width:42px;height:42px;border-radius:11px;background:${MARCA.verdeClaro};display:flex;
                      align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;}
           .fav-info{flex:1;min-width:0;}
           .fav-nombre{font-weight:700;font-size:0.95rem;}
           .fav-cat{color:${MARCA.textoSuave};font-size:0.78rem;text-transform:capitalize;}
           .fav-acciones{display:flex;gap:6px;flex-shrink:0;}
-          .fav-acciones a{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;
-                          text-decoration:none;font-size:0.9rem;background:${MARCA.crema};color:${MARCA.texto};border:1px solid ${MARCA.borde};transition:transform .18s,background .18s;}
+          .fav-acciones a{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+                          text-decoration:none;font-size:0.9rem;background:${MARCA.crema};color:${MARCA.texto};}
           .fav-acciones .quitar{color:${MARCA.rojo};}
           .fav-acciones a:hover{background:${MARCA.verdeClaro};}
 
@@ -6188,9 +6453,9 @@ app.get("/cuenta", (req, res) => {
           .vacio-msg a{color:${MARCA.verde};font-weight:700;}
 
           .fid-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;}
-          .fid-card{background:linear-gradient(145deg,#fff,#FBFCF9);border:1px solid ${MARCA.borde};border-radius:18px;padding:17px;
-                    cursor:pointer;box-shadow:0 5px 12px rgba(11,61,44,.04);transition:border-color .18s,box-shadow .18s,transform .18s;}
-          .fid-card:hover{box-shadow:0 13px 24px rgba(11,61,44,.1);transform:translateY(-3px);}
+          .fid-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px;
+                    cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+          .fid-card:hover{box-shadow:0 4px 16px rgba(11,61,44,0.07);}
           .fid-card.fid-lista{border-color:${MARCA.oro};border-width:1.5px;}
           .fid-fila{display:flex;align-items:center;gap:14px;}
           .fid-anillo-wrap{position:relative;width:56px;height:56px;flex-shrink:0;}
@@ -6209,9 +6474,8 @@ app.get("/cuenta", (req, res) => {
           .fid-detalle-nota{font-size:0.74rem;color:#8A6300;margin-top:8px;font-weight:600;}
 
           .top-acciones{display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;}
-          .icono-toggle{width:38px;height:38px;border-radius:12px;background:#fff;border:1px solid ${MARCA.borde};
-                        display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.95rem;box-shadow:0 4px 10px rgba(11,61,44,.05);transition:transform .18s,box-shadow .18s;}
-          .icono-toggle:hover{transform:translateY(-2px);box-shadow:0 9px 16px rgba(11,61,44,.1);}
+          .icono-toggle{width:34px;height:34px;border-radius:50%;background:#fff;border:1px solid ${MARCA.borde};
+                        display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.95rem;}
 
           .insignias-fila{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:26px;}
           .insignia{background:#fff;border:1px solid ${MARCA.borde};border-radius:100px;padding:6px 14px;
@@ -6225,10 +6489,10 @@ app.get("/cuenta", (req, res) => {
                               border-radius:10px;font-size:0.85rem;}
 
           .reco-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:26px;}
-          .reco-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:15px;box-shadow:0 5px 12px rgba(11,61,44,.04);}
+          .reco-card{background:#fff;border:1px dashed ${MARCA.borde};border-radius:12px;padding:14px;}
           .reco-nombre{font-weight:700;font-size:0.85rem;}
           .reco-cat{color:${MARCA.textoSuave};font-size:0.72rem;text-transform:capitalize;margin-bottom:6px;}
-          .reco-card a{display:inline-flex;margin-top:3px;font-size:0.76rem;color:${MARCA.verdeOscuro};font-weight:800;text-decoration:none;background:${MARCA.verdeClaro};padding:7px 10px;border-radius:999px;}
+          .reco-card a{font-size:0.76rem;color:${MARCA.verde};font-weight:700;text-decoration:none;}
 
           #mini-mapa{height:180px;border-radius:14px;margin-bottom:26px;border:1px solid ${MARCA.borde};}
 
@@ -6267,7 +6531,7 @@ app.get("/cuenta", (req, res) => {
           </div>
 
           <div class="hero-cuenta">
-            <div class="hero-saludo">Hola, ${cliente.nombre.split(" ")[0]}</div>
+            <div class="hero-saludo">Hola, ${escaparHtml(cliente.nombre.split(" ")[0])}</div>
             <div class="hero-email">${cliente.email}</div>
             <div class="hero-stats">
               <div class="hero-stat"><div class="hero-stat-num">${favoritos.length}</div><div class="hero-stat-lbl">Favoritos</div></div>
@@ -6431,7 +6695,7 @@ app.get("/perfil/:clienteId", (req, res) => {
 
   res.send(`
     <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Favoritos de ${cliente.nombre.split(" ")[0]} — Tapin</title>
+    <title>Favoritos de ${escaparHtml(cliente.nombre.split(" ")[0])} — Tapin</title>
     <style>
       ${ESTILO_BASE}
       .fav-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px;
@@ -6443,7 +6707,7 @@ app.get("/perfil/:clienteId", (req, res) => {
       <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
       <div class="content">
         <div class="eyebrow">Lista pública</div>
-        <h1 class="titulo-pagina">Favoritos de ${cliente.nombre.split(" ")[0]}</h1>
+        <h1 class="titulo-pagina">Favoritos de ${escaparHtml(cliente.nombre.split(" ")[0])}</h1>
         <div class="subtitulo">Negocios recomendados en Tapin</div>
         ${filas || "<p>Todavía no tiene negocios favoritos guardados.</p>"}
       </div>
@@ -6537,7 +6801,6 @@ app.get("/", (req, res) => {
           .site-brand{display:flex;align-items:center;}
           .site-nav{display:flex;gap:32px;align-items:center;}
           .site-nav a{font-size:.88rem;color:var(--ink);text-decoration:none;font-weight:500;}
-          .site-login{border:1px solid var(--forest);color:var(--forest)!important;padding:11px 18px;border-radius:999px;font-weight:800!important;}
           .site-order{background:var(--forest);color:#fff!important;padding:12px 20px;border-radius:999px;font-weight:700!important;}
 
           .hero{background:linear-gradient(155deg,var(--forest2) 0%,var(--forest) 45%,#082c1c 100%);color:#fff;padding:80px 24px 60px;text-align:center;position:relative;overflow:hidden;}
@@ -6578,22 +6841,30 @@ app.get("/", (req, res) => {
           .seccion-titulo{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2.2rem,4vw,3.4rem);line-height:1.03;letter-spacing:-.05em;text-align:center;margin:0 0 16px;color:var(--ink);}
           .seccion-sub{text-align:center;color:var(--muted);max-width:560px;margin:0 auto 50px;font-size:1rem;}
 
-          .pasos{display:flex;flex-wrap:wrap;gap:20px;margin-bottom:110px;}
+          #como-funciona,#accesos,#precios,.faq{padding:68px 40px;border-radius:34px;margin-bottom:76px;}
+          #como-funciona,#precios{background:rgba(255,255,255,.42);border:1px solid rgba(222,220,204,.75);}
+          #accesos{background:rgba(232,239,230,.62);border:1px solid rgba(202,218,202,.8);}
+          .faq{background:rgba(247,239,214,.58);border:1px solid rgba(226,208,158,.7);max-width:none;}
+          #accesos .accesos{margin-bottom:0;}
+
+          .flujo{border-radius:28px;padding:34px 30px;margin-bottom:28px;}
+          .flujo-basico{background:#edf2ed;border:1px solid #d5e1d7;}
+          .flujo-pro{background:linear-gradient(135deg,#fff 35%,#f9f1dd);border:2px solid var(--gold);box-shadow:0 16px 30px rgba(139,96,12,.1);}
+          .flujo-cabecera{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+          .flujo-cabecera h3{font-family:'Playfair Display',Georgia,serif;font-size:1.65rem;margin:0;color:var(--ink);}
+          .flujo-etiqueta{font-size:.66rem;font-weight:900;letter-spacing:.07em;padding:6px 11px;border-radius:999px;text-transform:uppercase;background:var(--paper);color:var(--forest);}
+          .flujo-pro .flujo-etiqueta{background:var(--forest);color:#fff;}
+          .flujo-descripcion{color:var(--muted);font-size:.9rem;margin:0 0 24px;}
+          .pasos{display:flex;flex-wrap:wrap;gap:16px;margin:0;}
           .paso{flex:1;min-width:230px;background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:30px 26px;box-shadow:0 10px 20px rgba(9,49,30,.05);}
+          .paso.paso-pro{border:1px solid #e6c774;background:var(--paper);position:relative;}
+          .paso-pro-badge{position:absolute;right:18px;top:18px;background:var(--forest);color:#fff;font-size:.62rem;font-weight:900;letter-spacing:.06em;padding:6px 10px;border-radius:999px;text-transform:uppercase;}
           .paso-num{width:38px;height:38px;border-radius:50%;background:#edf1ed;color:var(--forest);font-size:.8rem;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:18px;}
           .paso h3{font-family:'Playfair Display',Georgia,serif;font-size:1.25rem;margin:0 0 8px;color:var(--ink);}
           .paso p{font-size:.88rem;color:var(--muted);line-height:1.55;margin:0;}
 
-          .marketing-section{margin:0 0 72px;padding:48px;border:1px solid var(--line);border-radius:30px;background:linear-gradient(135deg,#fffef9 0%,#f4f0df 100%);box-shadow:0 16px 34px rgba(9,49,30,.06);}
-          .marketing-eyebrow{display:inline-flex;align-items:center;gap:8px;background:#e4eee5;color:var(--forest);border-radius:999px;padding:7px 12px;font-size:.68rem;font-weight:900;letter-spacing:.1em;}
-          .marketing-copy h2{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2rem,3.6vw,3rem);line-height:1.04;letter-spacing:-.045em;color:var(--ink);margin:17px 0 14px;}
-          .marketing-copy>p{color:var(--muted);font-size:1rem;line-height:1.65;margin:0 0 24px;max-width:510px;}
-          .activation-steps{display:grid;gap:12px;margin:0 0 28px;}.activation-step{display:flex;align-items:center;gap:12px;color:var(--ink);font-size:.9rem;font-weight:650;}.activation-step b{flex:0 0 29px;width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:var(--forest);color:#fff;font-size:.72rem;}
-          .marketing-cta{display:inline-block;border-radius:999px;background:var(--forest);color:#fff;padding:14px 22px;text-decoration:none;font-size:.9rem;font-weight:800;box-shadow:0 10px 20px rgba(9,67,43,.17);}
-          .tech-section{margin:0 0 110px;padding:48px;border-radius:30px;background:linear-gradient(135deg,#0b4b31,#082c1c);box-shadow:0 16px 34px rgba(9,49,30,.12);}.tech-section .marketing-eyebrow{background:rgba(232,166,35,.18);color:#f6cf66;}.tech-section .marketing-copy h2{color:#fff;}.tech-section .marketing-copy>p{color:#cfe3d8;}.tech-benefits{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:26px;}.tech-benefit{border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:15px 13px;font-size:.78rem;line-height:1.35;color:#cfe3d8;background:rgba(255,255,255,.07);}.tech-benefit b{display:block;color:#fff;font-size:.84rem;margin-bottom:5px;}
-
-          .accesos{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-bottom:110px;}
-          .acceso{border-radius:24px;padding:32px 28px;text-decoration:none;color:var(--ink);position:relative;overflow:hidden;box-shadow:0 14px 28px rgba(9,49,30,.08);transition:transform .2s ease,box-shadow .2s ease;min-height:210px;display:flex;flex-direction:column;}
+          .accesos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:1fr;gap:18px;margin-bottom:110px;align-items:stretch;}
+          .acceso{border-radius:24px;padding:32px 28px;text-decoration:none;color:var(--ink);position:relative;overflow:hidden;box-shadow:0 14px 28px rgba(9,49,30,.08);transition:transform .2s ease,box-shadow .2s ease;min-height:240px;height:100%;display:flex;flex-direction:column;align-self:stretch;}
           .acceso:hover{transform:translateY(-6px);box-shadow:0 22px 40px rgba(9,49,30,.16);}
           .acceso-1{background:linear-gradient(135deg,#0a3e29,#146542);color:#fff;}
           .acceso-2{background:linear-gradient(145deg,#fffef8,#fbf1d8);border:2px solid var(--gold);}
@@ -6638,6 +6909,15 @@ app.get("/", (req, res) => {
 
           .nota{background:#edf2ed;border-radius:20px;padding:26px 30px;color:var(--forest);line-height:1.6;font-size:.92rem;margin-bottom:70px;}
 
+          .faq{margin:20px auto 90px;max-width:860px;}
+          .faq-list{display:grid;gap:14px;margin-top:38px;}
+          .faq-item{background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 18px rgba(9,49,30,.05);overflow:hidden;}
+          .faq-item summary{list-style:none;cursor:pointer;padding:21px 58px 21px 24px;font-weight:800;font-size:.96rem;position:relative;color:var(--ink);}
+          .faq-item summary::-webkit-details-marker{display:none;}
+          .faq-item summary::after{content:'+';position:absolute;right:24px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:var(--cream);display:flex;align-items:center;justify-content:center;color:var(--forest);font-size:1.2rem;}
+          .faq-item[open] summary::after{content:'−';background:var(--gold);color:var(--ink);}
+          .faq-item p{margin:0;padding:0 24px 22px;color:var(--muted);font-size:.9rem;line-height:1.65;max-width:760px;}
+
           .contacto{text-align:center;padding:20px 0 40px;}
           .cta{display:inline-block;background:var(--forest);color:#fff;text-decoration:none;padding:16px 30px;border-radius:999px;font-weight:700;box-shadow:0 12px 22px rgba(9,67,43,.18);}
 
@@ -6646,15 +6926,16 @@ app.get("/", (req, res) => {
 
           @media(max-width:760px){
             .site-header{height:64px;}
-            .site-nav{gap:9px;}.site-nav a:not(.site-order):not(.site-login){display:none;}
-            .site-login,.site-order{padding:10px 13px;font-size:.78rem!important;}
+            .site-nav a:not(.site-order){display:none;}
+            .site-order{padding:10px 15px;}
             .hero h1{font-size:2.4rem;}
             .contenido{padding:60px 20px;}
+            #como-funciona,#accesos,#precios,.faq{padding:46px 20px;border-radius:24px;margin-bottom:48px;}
             .stats-strip{grid-template-columns:1fr;}
             .stats-strip div{border-right:none;border-bottom:1px solid var(--line);}
             .stats-strip div:last-child{border-bottom:none;}
             .accesos{grid-template-columns:1fr;}
-            .marketing-section,.tech-section{padding:28px;margin-bottom:72px;}.tech-benefits{grid-template-columns:1fr;}
+            .flujo{padding:28px 20px;}
             .planes,.precios-grid{flex-direction:column;}
             .site-footer{flex-direction:column;}
             .site-footer span:last-child{display:flex;gap:16px;margin-top:6px;}
@@ -6666,16 +6947,15 @@ app.get("/", (req, res) => {
           <a class="site-brand" href="/" aria-label="Tapin inicio">${logoSvg(MARCA.verdeOscuro, 25)}</a>
           <nav class="site-nav" aria-label="Navegación principal">
             <a href="#como-funciona">Cómo funciona</a>
-            <a href="#tecnologia">Tecnolog&iacute;a NFC</a>
-            <a href="#activar">Activar tarjeta</a>
+            <a href="#accesos">Accesos</a>
             <a href="#precios">Precios</a>
-            <a class="site-login" href="#accesos">Iniciar sesi&oacute;n</a>
+            <a href="#preguntas">Preguntas</a>
             <a class="site-order" href="/pedido">Pedir tarjeta</a>
           </nav>
         </header>
 
         <div class="hero">
-          <div class="hero-kicker">HECHO EN COLOMBIA · SIN APPS · SIN FRICCIÓN</div>
+          <div class="hero-kicker">HECHO EN COLOMBIA · SIN COMPLICACIONES · SIN FRICCIÓN</div>
           <h1>Más reseñas. Mejor reputación.</h1>
           <p>Tapin convierte cada visita a tu negocio en una reseña de Google. El cliente acerca su celular a tu tarjeta y listo.</p>
           <div class="hero-cta-row">
@@ -6705,61 +6985,53 @@ app.get("/", (req, res) => {
 
         <div class="contenido">
           <div class="stats-strip">
-            <div><strong>Sin apps</strong><span>Funciona desde cualquier celular</span></div>
+            <div><strong>Sin complicaciones</strong><span>Funciona desde cualquier celular</span></div>
             <div><strong>1 toque</strong><span>Para abrir tu enlace de reseñas</span></div>
             <div><strong>En segundos</strong><span>Listo para usar al recibirlo</span></div>
           </div>
 
           <div id="como-funciona">
-            <div class="seccion-titulo">Tres pasos. Cero fricción.</div>
-            <div class="seccion-sub">Diseñado para que pedir una reseña sea natural para tus clientes.</div>
-            <div class="pasos">
-              <div class="paso"><div class="paso-num">1</div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta, se abre una página simple donde el cliente califica su experiencia.</p></div>
-              <div class="paso"><div class="paso-num">2</div><h3>Si calificó bien, va directo a Google</h3><p>Lo mandamos automáticamente a dejar la reseña pública en tu perfil de Google.</p></div>
-              <div class="paso"><div class="paso-num">3</div><h3>Si calificó mal, queda privado</h3><p>Ese comentario llega directo a ti — nunca se vuelve una reseña negativa pública.</p></div>
+            <div class="seccion-titulo">Así funciona Tapin</div>
+            <div class="seccion-sub">El proceso es fácil. La diferencia está en el filtro de calificaciones, que es exclusivo del Plan Pro.</div>
+
+            <div class="flujo flujo-basico">
+              <div class="flujo-cabecera"><span class="flujo-etiqueta">Sin Plan Pro</span><h3>Con tu tarjeta Tapin</h3></div>
+              <p class="flujo-descripcion">El cliente va directamente a dejar su reseña. Este recorrido no incluye el filtro de calificaciones.</p>
+              <div class="pasos">
+                <div class="paso"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
+                <div class="paso"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código y completas los datos de tu negocio en pocos minutos.</p></div>
+                <div class="paso"><div class="paso-num">3</div><h3>El cliente toca la tarjeta</h3><p>Solo acerca su celular a la tarjeta Tapin para abrir el enlace.</p></div>
+                <div class="paso"><div class="paso-num">4</div><h3>Deja su reseña en Google Reviews</h3><p>El último paso lleva al cliente a publicar su reseña directamente en Google Reviews.</p></div>
+              </div>
+            </div>
+
+            <div class="flujo flujo-pro">
+              <div class="flujo-cabecera"><span class="flujo-etiqueta">Con Plan Pro</span><h3>Con filtro de calificaciones</h3></div>
+              <p class="flujo-descripcion"><b>Este filtro solo está incluido en el Plan Pro:</b> separa las experiencias positivas y convierte las negativas en retroalimentación privada para el negocio.</p>
+              <div class="pasos">
+                <div class="paso paso-pro"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
+                <div class="paso paso-pro"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código, completas los datos y activas el Plan Pro.</p></div>
+                <div class="paso paso-pro"><div class="paso-num">3</div><h3>El cliente toca y califica</h3><p>Al acercar el celular, se abre una página sencilla para calificar la experiencia.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">4</div><h3>El filtro separa la calificación</h3><p>Las experiencias positivas siguen hacia Google y las negativas se reciben de forma privada.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">5</div><h3>Reseña pública o retroalimentación privada</h3><p>Si fue positiva, el cliente deja su reseña en Google Reviews; si fue negativa, el negocio la recibe de forma privada y obtiene una alerta instantánea.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">6</div><h3>Recibe el reporte mensual</h3><p>El último paso es un reporte mensual con todas tus estadísticas y análisis: horas pico, subidas, caídas y comparación con otros negocios de tu sector.</p></div>
+              </div>
             </div>
           </div>
-
-          <section id="activar" class="marketing-section">
-            <div class="marketing-copy">
-              <div class="marketing-eyebrow">ACTIVA TU TARJETA</div>
-              <h2>Rec&iacute;bela, act&iacute;vala y empieza a recibir rese&ntilde;as.</h2>
-              <p>Tu Tapin llega lista para que la pongas a trabajar. Solo registra el c&oacute;digo de tu tarjeta, agrega la informaci&oacute;n de tu negocio y conecta tu enlace de Google.</p>
-              <div class="activation-steps">
-                <div class="activation-step"><b>1</b>Encuentra el c&oacute;digo de activaci&oacute;n de tu tarjeta.</div>
-                <div class="activation-step"><b>2</b>Configura los datos y el enlace de rese&ntilde;as de tu negocio.</div>
-                <div class="activation-step"><b>3</b>Ub&iacute;cala donde tus clientes la vean y empiecen a tocar.</div>
-              </div>
-              <a class="marketing-cta" href="/mis-negocios">Activar mi tarjeta &rarr;</a>
-            </div>
-          </section>
-
-          <section id="tecnologia" class="tech-section">
-            <div class="marketing-copy">
-              <div class="marketing-eyebrow">TECNOLOG&Iacute;A NFC</div>
-              <h2>La forma m&aacute;s simple de llevar clientes a Google.</h2>
-              <p>Tapin usa NFC, la tecnolog&iacute;a de proximidad que ya tienen los celulares modernos. Cuando una persona acerca su celular a la tarjeta, abrimos tu experiencia de rese&ntilde;as al instante.</p>
-              <div class="tech-benefits">
-                <div class="tech-benefit"><b>Sin aplicaciones</b>El cliente no descarga ni instala nada.</div>
-                <div class="tech-benefit"><b>En segundos</b>Un toque abre tu enlace de rese&ntilde;as.</div>
-                <div class="tech-benefit"><b>Siempre contigo</b>Una tarjeta f&iacute;sica, clara y lista para tu local.</div>
-              </div>
-            </div>
-          </section>
 
           <div id="accesos">
             <div class="seccion-titulo">Elige cómo continuar</div>
             <div class="seccion-sub">Encuentra el acceso que necesitas.</div>
             <div class="accesos">
               <a class="acceso acceso-1" href="/pedido"><div class="acceso-badge">RECOMENDADO</div><div class="acceso-icono">✦</div><h3>Pedir tarjeta</h3><p>Solicita tu Tapin y recíbela configurada para tu negocio.</p><span class="acceso-flecha">Quiero mi Tapin →</span></a>
-              <a class="acceso acceso-2" href="/cliente"><div class="acceso-badge">CLIENTES</div><div class="acceso-icono">◯</div><h3>Soy cliente</h3><p>Guarda favoritos y lleva tu historial de reseñas.</p><span class="acceso-flecha">Ir a mi cuenta →</span></a>
               <a class="acceso acceso-3" href="/mis-negocios"><div class="acceso-icono">▣</div><h3>Tengo un negocio</h3><p>Activa tu tarjeta o entra al panel de tu negocio.</p><span class="acceso-flecha">Entrar a mi negocio →</span></a>
+              <a class="acceso acceso-4" href="/descubre"><div class="acceso-icono">⌖</div><h3>Descubrir negocios</h3><p>Explora el mapa de negocios que ya usan Tapin.</p><span class="acceso-flecha">Ver el mapa →</span></a>
             </div>
           </div>
 
           <div id="precios">
             <div class="seccion-titulo">Lo que cuesta, sin letra pequeña</div>
-            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres retroalimentación privada, reportes y más.</div>
+            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres el filtro, retroalimentación privada, reportes y más. Para pagar la mensualidad Pro primero debes tener una tarjeta Tapin.</div>
             <div class="planes">
               <div class="plan">
                 <div class="plan-nombre">Pago único</div>
@@ -6780,11 +7052,16 @@ app.get("/", (req, res) => {
                   <div class="plan-anual-badge">10% más barato</div>
                 </div>
                 <ul>
+                  <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
                   <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                  <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
+                  <li><span class="check">✓</span> Filtro de calificaciones y retroalimentación privada</li>
                   <li><span class="check">✓</span> Alerta instantánea ante retroalimentación negativa</li>
-                  <li><span class="check">✓</span> Reporte mensual automático</li>
-                  <li><span class="check">✓</span> Generador de contenido para redes</li>
+                  <li><span class="check">✓</span> Historial detallado de cada toque y estadísticas completas</li>
+                  <li><span class="check">✓</span> Reporte PDF mensual con horas pico, subidas y caídas</li>
+                  <li><span class="check">✓</span> Comparación y análisis frente a negocios del mismo sector</li>
+                  <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
+                  <li><span class="check">✓</span> Recomendaciones automáticas y generador de contenido para redes</li>
+                  <li><span class="check">✓</span> Programa de fidelización de clientes</li>
                 </ul>
               </div>
             </div>
@@ -6804,15 +7081,50 @@ app.get("/", (req, res) => {
               <div class="precio-card">
                 <div class="precio-card-titulo">Suscripción Plan Pro</div>
                 <div class="precio-card-sub">Precio mensual por tarjeta según cuántas tengas activas</div>
-                <table class="tabla-precios">
-                  <tr><th>Tarjetas activas</th><th>Precio c/u/mes</th></tr>
-                  ${ESCALONES_PRO.slice().reverse().map((e, i, arr) => {
-                    const siguiente = arr[i + 1];
-                    const rango = siguiente ? `${e.minimo}-${siguiente.minimo - 1}` : `${e.minimo}+`;
-                    return `<tr><td>${rango}</td><td>$${e.precio.toLocaleString("es-CO")}</td></tr>`;
-                  }).join("")}
+                <table class="tabla-precios tabla-pro">
+                  <tr><th>Tarjetas activas</th><th>Precio mensual</th></tr>
+                  ${filasTablaProHtml()}
                 </table>
               </div>
+            </div>
+          </div>
+
+          <div class="faq" id="preguntas">
+            <div class="seccion-titulo">Dudas frecuentes</div>
+            <div class="seccion-sub">Lo esencial antes de pedir y activar tu tarjeta Tapin.</div>
+            <div class="faq-list">
+              <details class="faq-item">
+                <summary>¿Necesito instalar una aplicación?</summary>
+                <p>No. Tapin funciona desde el navegador del celular, sin instalaciones ni configuraciones complicadas para tus clientes.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Cómo usa el cliente la tarjeta?</summary>
+                <p>Acerca su celular a la tarjeta mediante NFC. El enlace se abre en segundos para continuar con la reseña.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Cómo activo mi Tapin cuando lo recibo?</summary>
+                <p>Recibes un código de activación, completas los datos de tu negocio y conectas tu perfil de Google. El proceso está diseñado para hacerse en pocos minutos.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Cuál es la diferencia entre la tarjeta y el Plan Pro?</summary>
+                <p>La compra básica incluye la tarjeta física, el envío y el acceso esencial. El Plan Pro añade el filtro de calificaciones, retroalimentación privada, alertas, estadísticas detalladas, reportes y otras herramientas avanzadas.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Necesito una tarjeta Tapin para contratar el Plan Pro?</summary>
+                <p>Sí. La mensualidad Pro funciona sobre una tarjeta Tapin activa. Primero debes tener y activar tu tarjeta para poder utilizar las funciones Pro.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Qué hace el filtro exclusivo del Plan Pro?</summary>
+                <p>Las experiencias positivas continúan hacia Google Reviews. Las negativas se convierten en retroalimentación privada y generan una alerta para que el negocio pueda atenderlas. Sin Plan Pro, este filtro no está disponible.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Qué incluye el reporte mensual Pro?</summary>
+                <p>Incluye tus estadísticas completas, actividad, horas pico, subidas y caídas, análisis de resultados y comparación frente a otros negocios de tu sector.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Cómo funcionan los pagos del Plan Pro?</summary>
+                <p>Puedes elegir mensualidad con renovación automática o pago anual. La suscripción mensual se puede cancelar desde el panel y permanece activa hasta terminar el período ya pagado.</p>
+              </details>
             </div>
           </div>
 
@@ -6822,14 +7134,15 @@ app.get("/", (req, res) => {
             <div class="seccion-titulo" style="margin-bottom:8px;">¿Tienes alguna pregunta?</div>
             <div class="seccion-sub">Estamos aquí para ayudarte. Escríbenos y te respondemos lo antes posible.</div>
             <div class="hero-cta-row" style="justify-content:center;">
-              <a class="hero-cta-main" href="https://wa.me/573003489609" target="_blank">Hablar por WhatsApp &rarr;</a>
+              <a class="hero-cta-main" href="https://wa.me/573003489609" target="_blank">WhatsApp</a>
+              <a class="acceso-flecha" style="border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:15px 26px;text-decoration:none;font-weight:700;font-size:.92rem;" href="mailto:tapin.notificaciones@gmail.com">tapin.notificaciones@gmail.com</a>
             </div>
           </div>
         </div>
 
         <footer class="site-footer">
           <span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span>
-        <span><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/admin">Administrador</a></span>
+          <span><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/descubre">Descubrir negocios</a><a href="/admin">Administrador</a></span>
         </footer>
       </body>
     </html>
@@ -6889,7 +7202,7 @@ app.get("/admin", (req, res) => {
   `);
 });
 
-app.get("/admin/entrar", (req, res) => {
+app.get("/admin/entrar", limitarIntentos(6, 15), (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.redirect("/admin?error=1");
   }
@@ -6908,12 +7221,31 @@ const PRECIO_PRO_ANUAL_COP = 649900; // pago único, cubre 12 meses (~10% más b
 // valor de comparar entre sus propias sedes, así que tiene sentido que pague
 // más por local, no menos. Ya anunciado en /conoce.
 const ESCALONES_PRO = [
-  { minimo: 50, precio: 149900 },
-  { minimo: 25, precio: 129900 },
-  { minimo: 10, precio: 109900 },
+  { minimo: 50, precio: 199900 },
+  { minimo: 25, precio: 159900 },
+  { minimo: 10, precio: 119900 },
   { minimo: 4, precio: 89900 },
   { minimo: 1, precio: PRECIO_PRO_COP },
 ];
+
+// Filas comerciales de la tabla pública. A partir de 100 tarjetas se prepara
+// una cotización empresarial en lugar de publicar una tarifa automática.
+const FILAS_TABLA_PRO = [
+  { rango: "1–3", precio: 59900 },
+  { rango: "4–9", precio: 89900 },
+  { rango: "10–24", precio: 119900 },
+  { rango: "25–49", precio: 159900 },
+  { rango: "50–99", precio: 199900 },
+  { rango: "100+", cotizacion: true },
+];
+
+function filasTablaProHtml() {
+  return FILAS_TABLA_PRO.map((fila) => `
+    <tr class="${fila.cotizacion ? "fila-empresa" : ""}">
+      <td>${fila.rango}</td>
+      <td>${fila.cotizacion ? "Cotización empresarial" : `$${fila.precio.toLocaleString("es-CO")}`}</td>
+    </tr>`).join("");
+}
 
 // Descuento por volumen — Plan D (Redondos: 10/20/30/35/40%). El precio por
 // tarjeta baja según cuántas se pidan de una vez, pero nunca por debajo de
@@ -6946,7 +7278,7 @@ app.get("/pedido", (req, res) => {
           *{box-sizing:border-box;}
           body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
                margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
-          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:820px;width:100%;
+          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:420px;width:100%;
                box-shadow:0 10px 40px rgba(0,0,0,0.08);}
           .logo{margin-bottom:6px;}
           h1{font-size:1.2rem;color:${MARCA.texto};margin:14px 0 4px;}
@@ -6965,16 +7297,8 @@ app.get("/pedido", (req, res) => {
           .pro-opcion input{width:auto;margin:3px 0 0;}
           .pro-opcion .txt{font-size:0.82rem;color:${MARCA.texto};}
           .pro-opcion .txt b{display:block;font-size:0.85rem;margin-bottom:2px;}
-          .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px;}
-          .form-grid .field{min-width:0;}
-          .form-grid .field label{margin-top:0;}
-          .form-grid > label:not(.pro-opcion){grid-column:1;align-self:center;margin-top:0;}
-          .form-grid > input,.form-grid > select{grid-column:2;}
-          .form-grid > .descuento-info{grid-column:1 / -1;}
-          .form-full{grid-column:1 / -1;}
           button{width:100%;background:${MARCA.verde};color:#fff;border:none;padding:14px;border-radius:10px;
                  font-weight:700;font-size:0.95rem;cursor:pointer;}
-          @media (max-width:640px){body{padding:14px;align-items:flex-start;}.box{padding:26px 20px;}.form-grid{grid-template-columns:1fr;gap:0;}.form-full{grid-column:auto;}}
         </style>
       </head>
       <body>
@@ -6984,48 +7308,33 @@ app.get("/pedido", (req, res) => {
           <p>Llena tus datos, paga en línea con Wompi, y te enviamos la tarjeta a tu negocio.</p>
           <div class="precio">Plan Básico — $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP c/u (incluye envío)</div>
           <form method="POST" action="/pedido">
-            <div class="form-grid">
-            <div class="field">
             <label>¿Cuántas tarjetas necesitas?</label>
             <input type="number" name="cantidad" id="input-cantidad" min="1" max="500" value="1" required>
-            </div>
-            <div class="descuento-info form-full" id="descuento-info"></div>
+            <div class="descuento-info" id="descuento-info"></div>
 
-            <div class="field">
             <label>Nombre del negocio</label>
             <input type="text" name="nombreNegocio" required>
-            </div>
 
-            <div class="field">
             <label>Tu correo</label>
             <input type="email" name="email" required>
-            </div>
-            <div class="field">
 
             <label>Teléfono</label>
             <input type="tel" name="telefono" required placeholder="300 000 0000">
-            </div>
-            <div class="field form-full">
 
             <label>Dirección de envío</label>
             <input type="text" name="direccion" required placeholder="Calle/Carrera, número, barrio">
 
-            </div>
-            <div class="field">
             <label>Departamento</label>
             <select name="departamento" id="sel-departamento" required>
               <option value="">Selecciona un departamento...</option>
             </select>
 
-            </div>
-            <div class="field">
             <label>Ciudad</label>
             <input type="text" name="ciudad" id="input-ciudad" list="lista-ciudades" required
                    placeholder="Primero elige el departamento" autocomplete="off" disabled>
             <datalist id="lista-ciudades"></datalist>
 
-            </div>
-            <label class="pro-opcion form-full" style="cursor:pointer;">
+            <label class="pro-opcion" style="cursor:pointer;">
               <input type="checkbox" name="incluirPro" id="check-incluir-pro" value="si" onchange="document.getElementById('opciones-plan-pro').style.display=this.checked?'block':'none';">
               <span class="txt">
                 <b>Incluir Plan Pro</b>
@@ -7033,7 +7342,7 @@ app.get("/pedido", (req, res) => {
               </span>
             </label>
 
-            <div id="opciones-plan-pro" class="form-full" style="display:none;margin:-6px 0 16px;padding-left:4px;">
+            <div id="opciones-plan-pro" style="display:none;margin:-6px 0 16px;padding-left:4px;">
               <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:0.86rem;margin-bottom:8px;cursor:pointer;">
                 <input type="radio" name="planProTipo" value="mensual" checked style="width:auto;margin:0;">
                 Mensual — $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP (primer mes; luego se cobra cada mes aparte)
@@ -7044,8 +7353,7 @@ app.get("/pedido", (req, res) => {
               </label>
             </div>
 
-            <button class="form-full" type="submit">Continuar al pago</button>
-            </div>
+            <button type="submit">Continuar al pago</button>
           </form>
         </div>
 
@@ -7631,6 +7939,29 @@ function registrarAuditoria(slug, negocio, texto) {
   guardarDatos(datos);
 }
 
+// Auditoría a nivel de TODO el sistema (no de un solo negocio) — para
+// acciones que solo el administrador puede hacer: crear/quitar negocios,
+// generar códigos, cambiar planes a mano. Antes no quedaba ningún rastro de
+// quién hizo qué cambio administrativo ni cuándo.
+const AUDITORIA_GLOBAL_FILE = path.join(DATA_DIR, "auditoria-global.json");
+function registrarAuditoriaGlobal(accion, detalle, req) {
+  let registros = [];
+  try {
+    if (fs.existsSync(AUDITORIA_GLOBAL_FILE)) registros = JSON.parse(fs.readFileSync(AUDITORIA_GLOBAL_FILE, "utf8"));
+  } catch {
+    registros = [];
+  }
+  registros.push({
+    accion,
+    detalle,
+    ip: req ? req.ip : null,
+    fechaISO: new Date().toISOString(),
+    fechaLegible: new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" }),
+  });
+  if (registros.length > 5000) registros = registros.slice(-5000); // no crece sin control
+  fs.writeFileSync(AUDITORIA_GLOBAL_FILE, JSON.stringify(registros, null, 2));
+}
+
 // Página donde el dueño de un negocio Pro registra su tarjeta una sola vez,
 // usando el Widget de Wompi en modo "tokenize" (no cobra nada en este paso).
 app.get("/suscripcion/:slug", (req, res) => {
@@ -8049,6 +8380,53 @@ app.get("/terminos", (req, res) => {
   `);
 });
 
+// ---------- Monitoreo básico de errores ----------
+// Antes, un error en cualquier ruta simplemente aparecía en la consola de
+// Render y se perdía ahí — nadie se enteraba hasta que un negocio se quejara.
+// Esto captura cualquier error no manejado y (a) lo deja bien registrado en
+// consola con fecha y ruta, y (b) le manda un correo al admin — pero como
+// máximo uno cada 30 minutos, para no llenarte el correo si algo falla muchas
+// veces seguidas.
+let ultimaAlertaError = 0;
+function avisarErrorCritico(origen, err) {
+  console.error(`[ERROR ${new Date().toISOString()}] ${origen}:`, err && err.stack ? err.stack : err);
+  const ahora = Date.now();
+  if (ahora - ultimaAlertaError < 30 * 60 * 1000) return; // ya se avisó hace poco
+  if (!process.env.EMAIL_USER && !process.env.SENDGRID_API_KEY) return;
+  ultimaAlertaError = ahora;
+  const destino = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+  if (!destino) return;
+  enviarEmail(
+    destino,
+    "⚠️ Error en el servidor de Tapin",
+    `<p>Ocurrió un error en <b>${escaparHtml(origen)}</b>.</p>
+     <pre style="background:#f4f4f4;padding:12px;border-radius:8px;white-space:pre-wrap;font-size:0.82rem;">${escaparHtml(String(err && err.stack ? err.stack : err)).slice(0, 2000)}</pre>
+     <p style="font-size:0.8rem;color:#888;">No se te va a avisar de nuevo por 30 minutos, aunque el error se repita, para no saturarte el correo.</p>`
+  ).catch(() => {});
+}
+
+// Captura errores que ninguna ruta atrapó (por ejemplo, algo que truena dentro
+// de un `.then()` sin `.catch()`) — sin esto, el servidor entero se podía
+// caer en silencio por un error suelto en cualquier parte del código.
+process.on("uncaughtException", (err) => avisarErrorCritico("uncaughtException", err));
+process.on("unhandledRejection", (err) => avisarErrorCritico("unhandledRejection", err));
+
+// Debe ir DESPUÉS de todas las rutas — Express solo la usa cuando algo
+// lanza un error dentro de una ruta y nadie lo atrapó explícitamente.
+app.use((err, req, res, next) => {
+  avisarErrorCritico(`${req.method} ${req.path}`, err);
+  if (res.headersSent) return next(err);
+  res.status(500).send("Ocurrió un error inesperado. Ya quedó registrado para revisarlo.");
+});
+
 app.listen(PORT, () => {
   console.log(`Tapin backend corriendo en el puerto ${PORT}`);
+  if (!process.env.ADMIN_KEY) {
+    console.warn(
+      "\n⚠️  ADVERTENCIA DE SEGURIDAD: no configuraste ADMIN_KEY en las variables de " +
+      "entorno de Render. El panel de administrador está usando la clave por defecto " +
+      "'cambia-esta-clave', que cualquiera puede ver en el código público. Ve a Render " +
+      "→ Environment → agrega ADMIN_KEY con una clave larga y difícil de adivinar.\n"
+    );
+  }
 });
