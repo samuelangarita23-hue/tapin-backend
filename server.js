@@ -7001,23 +7001,31 @@ app.get("/pedido", (req, res) => {
             <label>Tu correo</label>
             <input type="email" name="email" required>
             </div>
+            <div class="field">
 
             <label>Teléfono</label>
             <input type="tel" name="telefono" required placeholder="300 000 0000">
+            </div>
+            <div class="field form-full">
 
             <label>Dirección de envío</label>
             <input type="text" name="direccion" required placeholder="Calle/Carrera, número, barrio">
 
+            </div>
+            <div class="field">
             <label>Departamento</label>
             <select name="departamento" id="sel-departamento" required>
               <option value="">Selecciona un departamento...</option>
             </select>
 
+            </div>
+            <div class="field">
             <label>Ciudad</label>
             <input type="text" name="ciudad" id="input-ciudad" list="lista-ciudades" required
                    placeholder="Primero elige el departamento" autocomplete="off" disabled>
             <datalist id="lista-ciudades"></datalist>
 
+            </div>
             <label class="pro-opcion form-full" style="cursor:pointer;">
               <input type="checkbox" name="incluirPro" id="check-incluir-pro" value="si" onchange="document.getElementById('opciones-plan-pro').style.display=this.checked?'block':'none';">
               <span class="txt">
