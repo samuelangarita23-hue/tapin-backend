@@ -6754,7 +6754,6 @@ app.get("/", (req, res) => {
               <a class="acceso acceso-1" href="/pedido"><div class="acceso-badge">RECOMENDADO</div><div class="acceso-icono">✦</div><h3>Pedir tarjeta</h3><p>Solicita tu Tapin y recíbela configurada para tu negocio.</p><span class="acceso-flecha">Quiero mi Tapin →</span></a>
               <a class="acceso acceso-2" href="/cliente"><div class="acceso-badge">CLIENTES</div><div class="acceso-icono">◯</div><h3>Soy cliente</h3><p>Guarda favoritos y lleva tu historial de reseñas.</p><span class="acceso-flecha">Ir a mi cuenta →</span></a>
               <a class="acceso acceso-3" href="/mis-negocios"><div class="acceso-icono">▣</div><h3>Tengo un negocio</h3><p>Activa tu tarjeta o entra al panel de tu negocio.</p><span class="acceso-flecha">Entrar a mi negocio →</span></a>
-              <a class="acceso acceso-4" href="/descubre"><div class="acceso-icono">⌖</div><h3>Descubrir negocios</h3><p>Explora el mapa de negocios que ya usan Tapin.</p><span class="acceso-flecha">Ver el mapa →</span></a>
             </div>
           </div>
 
@@ -6830,7 +6829,7 @@ app.get("/", (req, res) => {
 
         <footer class="site-footer">
           <span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span>
-          <span><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/descubre">Descubrir negocios</a><a href="/admin">Administrador</a></span>
+        <span><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/admin">Administrador</a></span>
         </footer>
       </body>
     </html>
