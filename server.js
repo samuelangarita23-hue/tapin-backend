@@ -7101,14 +7101,30 @@ app.get("/", (req, res) => {
           .seccion-titulo{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2.2rem,4vw,3.4rem);line-height:1.03;letter-spacing:-.05em;text-align:center;margin:0 0 16px;color:var(--ink);}
           .seccion-sub{text-align:center;color:var(--muted);max-width:560px;margin:0 auto 50px;font-size:1rem;}
 
-          .pasos{display:flex;flex-wrap:wrap;gap:20px;margin-bottom:110px;}
+          #como-funciona,#accesos,#precios,.faq{padding:68px 40px;border-radius:34px;margin-bottom:76px;}
+          #como-funciona,#precios{background:rgba(255,255,255,.42);border:1px solid rgba(222,220,204,.75);}
+          #accesos{background:rgba(232,239,230,.62);border:1px solid rgba(202,218,202,.8);}
+          .faq{background:rgba(247,239,214,.58);border:1px solid rgba(226,208,158,.7);max-width:none;}
+          #accesos .accesos{margin-bottom:0;}
+
+          .flujo{border-radius:28px;padding:34px 30px;margin-bottom:28px;}
+          .flujo-basico{background:#edf2ed;border:1px solid #d5e1d7;}
+          .flujo-pro{background:linear-gradient(135deg,#fff 35%,#f9f1dd);border:2px solid var(--gold);box-shadow:0 16px 30px rgba(139,96,12,.1);}
+          .flujo-cabecera{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+          .flujo-cabecera h3{font-family:'Playfair Display',Georgia,serif;font-size:1.65rem;margin:0;color:var(--ink);}
+          .flujo-etiqueta{font-size:.66rem;font-weight:900;letter-spacing:.07em;padding:6px 11px;border-radius:999px;text-transform:uppercase;background:var(--paper);color:var(--forest);}
+          .flujo-pro .flujo-etiqueta{background:var(--forest);color:#fff;}
+          .flujo-descripcion{color:var(--muted);font-size:.9rem;margin:0 0 24px;}
+          .pasos{display:flex;flex-wrap:wrap;gap:16px;margin:0;}
           .paso{flex:1;min-width:230px;background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:30px 26px;box-shadow:0 10px 20px rgba(9,49,30,.05);}
+          .paso.paso-pro{border:1px solid #e6c774;background:var(--paper);position:relative;}
+          .paso-pro-badge{position:absolute;right:18px;top:18px;background:var(--forest);color:#fff;font-size:.62rem;font-weight:900;letter-spacing:.06em;padding:6px 10px;border-radius:999px;text-transform:uppercase;}
           .paso-num{width:38px;height:38px;border-radius:50%;background:#edf1ed;color:var(--forest);font-size:.8rem;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:18px;}
           .paso h3{font-family:'Playfair Display',Georgia,serif;font-size:1.25rem;margin:0 0 8px;color:var(--ink);}
           .paso p{font-size:.88rem;color:var(--muted);line-height:1.55;margin:0;}
 
-          .accesos{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-bottom:110px;}
-          .acceso{border-radius:24px;padding:32px 28px;text-decoration:none;color:var(--ink);position:relative;overflow:hidden;box-shadow:0 14px 28px rgba(9,49,30,.08);transition:transform .2s ease,box-shadow .2s ease;min-height:210px;display:flex;flex-direction:column;}
+          .accesos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:1fr;gap:18px;margin-bottom:110px;align-items:stretch;}
+          .acceso{border-radius:24px;padding:32px 28px;text-decoration:none;color:var(--ink);position:relative;overflow:hidden;box-shadow:0 14px 28px rgba(9,49,30,.08);transition:transform .2s ease,box-shadow .2s ease;min-height:240px;height:100%;display:flex;flex-direction:column;align-self:stretch;}
           .acceso:hover{transform:translateY(-6px);box-shadow:0 22px 40px rgba(9,49,30,.16);}
           .acceso-1{background:linear-gradient(135deg,#0a3e29,#146542);color:#fff;}
           .acceso-2{background:linear-gradient(145deg,#fffef8,#fbf1d8);border:2px solid var(--gold);}
@@ -7153,6 +7169,15 @@ app.get("/", (req, res) => {
 
           .nota{background:#edf2ed;border-radius:20px;padding:26px 30px;color:var(--forest);line-height:1.6;font-size:.92rem;margin-bottom:70px;}
 
+          .faq{margin:20px auto 90px;max-width:860px;}
+          .faq-list{display:grid;gap:14px;margin-top:38px;}
+          .faq-item{background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 18px rgba(9,49,30,.05);overflow:hidden;}
+          .faq-item summary{list-style:none;cursor:pointer;padding:21px 58px 21px 24px;font-weight:800;font-size:.96rem;position:relative;color:var(--ink);}
+          .faq-item summary::-webkit-details-marker{display:none;}
+          .faq-item summary::after{content:'+';position:absolute;right:24px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:var(--cream);display:flex;align-items:center;justify-content:center;color:var(--forest);font-size:1.2rem;}
+          .faq-item[open] summary::after{content:'−';background:var(--gold);color:var(--ink);}
+          .faq-item p{margin:0;padding:0 24px 22px;color:var(--muted);font-size:.9rem;line-height:1.65;max-width:760px;}
+
           .contacto{text-align:center;padding:20px 0 40px;}
           .cta{display:inline-block;background:var(--forest);color:#fff;text-decoration:none;padding:16px 30px;border-radius:999px;font-weight:700;box-shadow:0 12px 22px rgba(9,67,43,.18);}
 
@@ -7165,10 +7190,12 @@ app.get("/", (req, res) => {
             .site-order{padding:10px 15px;}
             .hero h1{font-size:2.4rem;}
             .contenido{padding:60px 20px;}
+            #como-funciona,#accesos,#precios,.faq{padding:46px 20px;border-radius:24px;margin-bottom:48px;}
             .stats-strip{grid-template-columns:1fr;}
             .stats-strip div{border-right:none;border-bottom:1px solid var(--line);}
             .stats-strip div:last-child{border-bottom:none;}
             .accesos{grid-template-columns:1fr;}
+            .flujo{padding:28px 20px;}
             .planes,.precios-grid{flex-direction:column;}
             .site-footer{flex-direction:column;}
             .site-footer span:last-child{display:flex;gap:16px;margin-top:6px;}
@@ -7182,12 +7209,13 @@ app.get("/", (req, res) => {
             <a href="#como-funciona">Cómo funciona</a>
             <a href="#accesos">Accesos</a>
             <a href="#precios">Precios</a>
+            <a href="#preguntas">Preguntas</a>
             <a class="site-order" href="/pedido">Pedir tarjeta</a>
           </nav>
         </header>
 
         <div class="hero">
-          <div class="hero-kicker">HECHO EN COLOMBIA · SIN APPS · SIN FRICCIÓN</div>
+          <div class="hero-kicker">HECHO EN COLOMBIA · SIN COMPLICACIONES · SIN FRICCIÓN</div>
           <h1>Más reseñas. Mejor reputación.</h1>
           <p>Tapin convierte cada visita a tu negocio en una reseña de Google. El cliente acerca su celular a tu tarjeta y listo.</p>
           <div class="hero-cta-row">
@@ -7217,18 +7245,37 @@ app.get("/", (req, res) => {
 
         <div class="contenido">
           <div class="stats-strip">
-            <div><strong>Sin apps</strong><span>Funciona desde cualquier celular</span></div>
+            <div><strong>Sin complicaciones</strong><span>Funciona desde cualquier celular</span></div>
             <div><strong>1 toque</strong><span>Para abrir tu enlace de reseñas</span></div>
             <div><strong>En segundos</strong><span>Listo para usar al recibirlo</span></div>
           </div>
 
           <div id="como-funciona">
-            <div class="seccion-titulo">Tres pasos. Cero fricción.</div>
-            <div class="seccion-sub">Diseñado para que pedir una reseña sea natural para tus clientes.</div>
-            <div class="pasos">
-              <div class="paso"><div class="paso-num">1</div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta, se abre una página simple donde el cliente califica su experiencia.</p></div>
-              <div class="paso"><div class="paso-num">2</div><h3>Si calificó bien, va directo a Google</h3><p>Lo mandamos automáticamente a dejar la reseña pública en tu perfil de Google.</p></div>
-              <div class="paso"><div class="paso-num">3</div><h3>Si calificó mal, queda privado</h3><p>Ese comentario llega directo a ti — nunca se vuelve una reseña negativa pública.</p></div>
+            <div class="seccion-titulo">Así funciona Tapin</div>
+            <div class="seccion-sub">El proceso es fácil. La diferencia está en el filtro de calificaciones, que es exclusivo del Plan Pro.</div>
+
+            <div class="flujo flujo-basico">
+              <div class="flujo-cabecera"><span class="flujo-etiqueta">Sin Plan Pro</span><h3>Con tu tarjeta Tapin</h3></div>
+              <p class="flujo-descripcion">El cliente va directamente a dejar su reseña. Este recorrido no incluye el filtro de calificaciones.</p>
+              <div class="pasos">
+                <div class="paso"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
+                <div class="paso"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código y completas los datos de tu negocio en pocos minutos.</p></div>
+                <div class="paso"><div class="paso-num">3</div><h3>El cliente toca la tarjeta</h3><p>Solo acerca su celular a la tarjeta Tapin para abrir el enlace.</p></div>
+                <div class="paso"><div class="paso-num">4</div><h3>Deja su reseña en Google Reviews</h3><p>El último paso lleva al cliente a publicar su reseña directamente en Google Reviews.</p></div>
+              </div>
+            </div>
+
+            <div class="flujo flujo-pro">
+              <div class="flujo-cabecera"><span class="flujo-etiqueta">Con Plan Pro</span><h3>Con filtro de calificaciones</h3></div>
+              <p class="flujo-descripcion"><b>Este filtro solo está incluido en el Plan Pro:</b> separa las experiencias positivas y convierte las negativas en retroalimentación privada para el negocio.</p>
+              <div class="pasos">
+                <div class="paso paso-pro"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
+                <div class="paso paso-pro"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código, completas los datos y activas el Plan Pro.</p></div>
+                <div class="paso paso-pro"><div class="paso-num">3</div><h3>El cliente toca y califica</h3><p>Al acercar el celular, se abre una página sencilla para calificar la experiencia.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">4</div><h3>El filtro separa la calificación</h3><p>Las experiencias positivas siguen hacia Google y las negativas se reciben de forma privada.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">5</div><h3>Reseña pública o retroalimentación privada</h3><p>Si fue positiva, el cliente deja su reseña en Google Reviews; si fue negativa, el negocio la recibe de forma privada y obtiene una alerta instantánea.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">6</div><h3>Recibe el reporte mensual</h3><p>El último paso es un reporte mensual con todas tus estadísticas y análisis: horas pico, subidas, caídas y comparación con otros negocios de tu sector.</p></div>
+              </div>
             </div>
           </div>
 
@@ -7237,7 +7284,6 @@ app.get("/", (req, res) => {
             <div class="seccion-sub">Encuentra el acceso que necesitas.</div>
             <div class="accesos">
               <a class="acceso acceso-1" href="/pedido"><div class="acceso-badge">RECOMENDADO</div><div class="acceso-icono">✦</div><h3>Pedir tarjeta</h3><p>Solicita tu Tapin y recíbela configurada para tu negocio.</p><span class="acceso-flecha">Quiero mi Tapin →</span></a>
-              <a class="acceso acceso-2" href="/cliente"><div class="acceso-badge">CLIENTES</div><div class="acceso-icono">◯</div><h3>Soy cliente</h3><p>Guarda favoritos y lleva tu historial de reseñas.</p><span class="acceso-flecha">Ir a mi cuenta →</span></a>
               <a class="acceso acceso-3" href="/mis-negocios"><div class="acceso-icono">▣</div><h3>Tengo un negocio</h3><p>Activa tu tarjeta o entra al panel de tu negocio.</p><span class="acceso-flecha">Entrar a mi negocio →</span></a>
               <a class="acceso acceso-4" href="/descubre"><div class="acceso-icono">⌖</div><h3>Descubrir negocios</h3><p>Explora el mapa de negocios que ya usan Tapin.</p><span class="acceso-flecha">Ver el mapa →</span></a>
             </div>
@@ -7245,7 +7291,7 @@ app.get("/", (req, res) => {
 
           <div id="precios">
             <div class="seccion-titulo">Lo que cuesta, sin letra pequeña</div>
-            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres retroalimentación privada, reportes y más.</div>
+            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres el filtro, retroalimentación privada, reportes y más. Para pagar la mensualidad Pro primero debes tener una tarjeta Tapin.</div>
             <div class="planes">
               <div class="plan">
                 <div class="plan-nombre">Pago único</div>
@@ -7266,11 +7312,16 @@ app.get("/", (req, res) => {
                   <div class="plan-anual-badge">10% más barato</div>
                 </div>
                 <ul>
+                  <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
                   <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                  <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
+                  <li><span class="check">✓</span> Filtro de calificaciones y retroalimentación privada</li>
                   <li><span class="check">✓</span> Alerta instantánea ante retroalimentación negativa</li>
-                  <li><span class="check">✓</span> Reporte mensual automático</li>
-                  <li><span class="check">✓</span> Generador de contenido para redes</li>
+                  <li><span class="check">✓</span> Historial detallado de cada toque y estadísticas completas</li>
+                  <li><span class="check">✓</span> Reporte PDF mensual con horas pico, subidas y caídas</li>
+                  <li><span class="check">✓</span> Comparación y análisis frente a negocios del mismo sector</li>
+                  <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
+                  <li><span class="check">✓</span> Recomendaciones automáticas y generador de contenido para redes</li>
+                  <li><span class="check">✓</span> Programa de fidelización de clientes</li>
                 </ul>
               </div>
             </div>
@@ -7290,15 +7341,50 @@ app.get("/", (req, res) => {
               <div class="precio-card">
                 <div class="precio-card-titulo">Suscripción Plan Pro</div>
                 <div class="precio-card-sub">Precio mensual por tarjeta según cuántas tengas activas</div>
-                <table class="tabla-precios">
-                  <tr><th>Tarjetas activas</th><th>Precio c/u/mes</th></tr>
-                  ${ESCALONES_PRO.slice().reverse().map((e, i, arr) => {
-                    const siguiente = arr[i + 1];
-                    const rango = siguiente ? `${e.minimo}-${siguiente.minimo - 1}` : `${e.minimo}+`;
-                    return `<tr><td>${rango}</td><td>$${e.precio.toLocaleString("es-CO")}</td></tr>`;
-                  }).join("")}
+                <table class="tabla-precios tabla-pro">
+                  <tr><th>Tarjetas activas</th><th>Precio mensual</th></tr>
+                  ${filasTablaProHtml()}
                 </table>
               </div>
+            </div>
+          </div>
+
+          <div class="faq" id="preguntas">
+            <div class="seccion-titulo">Dudas frecuentes</div>
+            <div class="seccion-sub">Lo esencial antes de pedir y activar tu tarjeta Tapin.</div>
+            <div class="faq-list">
+              <details class="faq-item">
+                <summary>¿Necesito instalar una aplicación?</summary>
+                <p>No. Tapin funciona desde el navegador del celular, sin instalaciones ni configuraciones complicadas para tus clientes.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Cómo usa el cliente la tarjeta?</summary>
+                <p>Acerca su celular a la tarjeta mediante NFC. El enlace se abre en segundos para continuar con la reseña.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Cómo activo mi Tapin cuando lo recibo?</summary>
+                <p>Recibes un código de activación, completas los datos de tu negocio y conectas tu perfil de Google. El proceso está diseñado para hacerse en pocos minutos.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Cuál es la diferencia entre la tarjeta y el Plan Pro?</summary>
+                <p>La compra básica incluye la tarjeta física, el envío y el acceso esencial. El Plan Pro añade el filtro de calificaciones, retroalimentación privada, alertas, estadísticas detalladas, reportes y otras herramientas avanzadas.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Necesito una tarjeta Tapin para contratar el Plan Pro?</summary>
+                <p>Sí. La mensualidad Pro funciona sobre una tarjeta Tapin activa. Primero debes tener y activar tu tarjeta para poder utilizar las funciones Pro.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Qué hace el filtro exclusivo del Plan Pro?</summary>
+                <p>Las experiencias positivas continúan hacia Google Reviews. Las negativas se convierten en retroalimentación privada y generan una alerta para que el negocio pueda atenderlas. Sin Plan Pro, este filtro no está disponible.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Qué incluye el reporte mensual Pro?</summary>
+                <p>Incluye tus estadísticas completas, actividad, horas pico, subidas y caídas, análisis de resultados y comparación frente a otros negocios de tu sector.</p>
+              </details>
+              <details class="faq-item">
+                <summary>¿Cómo funcionan los pagos del Plan Pro?</summary>
+                <p>Puedes elegir mensualidad con renovación automática o pago anual. La suscripción mensual se puede cancelar desde el panel y permanece activa hasta terminar el período ya pagado.</p>
+              </details>
             </div>
           </div>
 
@@ -7309,7 +7395,7 @@ app.get("/", (req, res) => {
             <div class="seccion-sub">Estamos aquí para ayudarte. Escríbenos y te respondemos lo antes posible.</div>
             <div class="hero-cta-row" style="justify-content:center;">
               <a class="hero-cta-main" href="https://wa.me/573003489609" target="_blank">WhatsApp</a>
-              <a class="acceso-flecha" style="border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:15px 26px;text-decoration:none;font-weight:700;font-size:.92rem;" href="mailto:hola@tapincol.com">hola@tapincol.com</a>
+              <a class="acceso-flecha" style="border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:15px 26px;text-decoration:none;font-weight:700;font-size:.92rem;" href="mailto:tapin.notificaciones@gmail.com">tapin.notificaciones@gmail.com</a>
             </div>
           </div>
         </div>
@@ -7395,12 +7481,31 @@ const PRECIO_PRO_ANUAL_COP = 649900; // pago único, cubre 12 meses (~10% más b
 // valor de comparar entre sus propias sedes, así que tiene sentido que pague
 // más por local, no menos. Ya anunciado en /conoce.
 const ESCALONES_PRO = [
-  { minimo: 50, precio: 149900 },
-  { minimo: 25, precio: 129900 },
-  { minimo: 10, precio: 109900 },
+  { minimo: 50, precio: 199900 },
+  { minimo: 25, precio: 159900 },
+  { minimo: 10, precio: 119900 },
   { minimo: 4, precio: 89900 },
   { minimo: 1, precio: PRECIO_PRO_COP },
 ];
+
+// Filas comerciales de la tabla pública. A partir de 100 tarjetas se prepara
+// una cotización empresarial en lugar de publicar una tarifa automática.
+const FILAS_TABLA_PRO = [
+  { rango: "1–3", precio: 59900 },
+  { rango: "4–9", precio: 89900 },
+  { rango: "10–24", precio: 119900 },
+  { rango: "25–49", precio: 159900 },
+  { rango: "50–99", precio: 199900 },
+  { rango: "100+", cotizacion: true },
+];
+
+function filasTablaProHtml() {
+  return FILAS_TABLA_PRO.map((fila) => `
+    <tr class="${fila.cotizacion ? "fila-empresa" : ""}">
+      <td>${fila.rango}</td>
+      <td>${fila.cotizacion ? "Cotización empresarial" : `$${fila.precio.toLocaleString("es-CO")}`}</td>
+    </tr>`).join("");
+}
 
 // Descuento por volumen — Plan D (Redondos: 10/20/30/35/40%). El precio por
 // tarjeta baja según cuántas se pidan de una vez, pero nunca por debajo de
