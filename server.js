@@ -626,6 +626,72 @@ function verificarPassword(password, salt, hashGuardado) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// ---------- Clave de acceso de negocio: cifrada con scrypt (igual que las
+// contraseñas de clientes), en vez de guardada en texto plano en codigos.json.
+// Como ya había negocios activos con la clave en texto plano ANTES de este
+// cambio, tieneClaveConfigurada() y claveNegocioValida() saben leer ambos
+// formatos — y en cuanto un negocio viejo entra una vez con su clave de
+// siempre, se migra sola a cifrada en ese mismo momento, sin que el dueño
+// tenga que hacer nada ni se quede sin poder entrar.
+function tieneClaveConfigurada(negocio) {
+  return !!(negocio && (negocio.claveAcceso || negocio.claveAccesoHash));
+}
+function claveNegocioValida(negocio, slug, intento) {
+  if (!intento || !negocio) return false;
+  // Un link de acceso temporal (generado por el propio servidor para correos
+  // o navegación entre sedes) — no es la clave real, es un token aparte.
+  if (typeof intento === "string" && intento.startsWith("tok_")) {
+    const tokens = leerTokensAccesoNegocio();
+    const entrada = tokens[intento];
+    return !!(entrada && entrada.slug === slug && new Date(entrada.expiraEl) > new Date());
+  }
+  if (negocio.claveAccesoHash && negocio.claveAccesoSalt) {
+    return verificarPassword(intento, negocio.claveAccesoSalt, negocio.claveAccesoHash);
+  }
+  // Cuenta vieja, todavía con la clave en texto plano.
+  if (negocio.claveAcceso && intento === negocio.claveAcceso) {
+    if (slug) {
+      const { salt, hash } = crearHashConSal(intento);
+      guardarCambiosNegocio(slug, negocio, { claveAccesoHash: hash, claveAccesoSalt: salt, claveAcceso: undefined });
+    }
+    return true;
+  }
+  return false;
+}
+// Genera la pareja {hash, salt} para guardar una clave de negocio nueva —
+// se usa al activar una tarjeta, al crear un negocio a mano, o al cambiar
+// la clave desde el panel. Nunca se guarda el texto plano después de esto.
+function hashClaveNegocio(claveTextoPlano) {
+  return crearHashConSal(claveTextoPlano);
+}
+
+// Algunos links los arma el SERVIDOR solo, sin que el negocio haya escrito su
+// clave en esa petición (ej: un correo automático de recordatorio, o el link
+// para saltar a "tu otra sede" desde el panel) — antes esos links usaban
+// negocio.claveAcceso directamente. Ahora que la clave está cifrada, el
+// servidor ya no la puede leer de vuelta, así que estos links usan en su
+// lugar un token temporal de un solo propósito, independiente de la clave real.
+const TOKENS_ACCESO_NEGOCIO_FILE = path.join(DATA_DIR, "tokens-acceso-negocio.json");
+function leerTokensAccesoNegocio() {
+  if (!fs.existsSync(TOKENS_ACCESO_NEGOCIO_FILE)) return {};
+  try { return JSON.parse(fs.readFileSync(TOKENS_ACCESO_NEGOCIO_FILE, "utf8")); } catch { return {}; }
+}
+function guardarTokensAccesoNegocio(tokens) {
+  fs.writeFileSync(TOKENS_ACCESO_NEGOCIO_FILE, JSON.stringify(tokens, null, 2));
+}
+function generarLinkAccesoNegocio(slug, diasValidez = 7) {
+  const tokens = leerTokensAccesoNegocio();
+  // limpieza de tokens vencidos, para que el archivo no crezca sin control
+  const ahora = Date.now();
+  for (const t in tokens) {
+    if (new Date(tokens[t].expiraEl).getTime() < ahora) delete tokens[t];
+  }
+  const token = "tok_" + generarToken();
+  tokens[token] = { slug, expiraEl: new Date(ahora + diasValidez * 24 * 60 * 60 * 1000).toISOString() };
+  guardarTokensAccesoNegocio(tokens);
+  return token;
+}
+
 // Lee cookies manualmente del header (sin depender de cookie-parser).
 function leerCookies(req) {
   const header = req.headers.cookie;
@@ -772,8 +838,8 @@ function claveEfectiva(req, slug) {
 function autorizadoProNegocio(req, negocio, slug) {
   const key = slug ? claveEfectiva(req, slug) : req.query.key;
   if (key === ADMIN_KEY) return true;
-  if (!negocio || !negocio.claveAcceso) return false;
-  return key === negocio.claveAcceso && esPro(negocio);
+  if (!tieneClaveConfigurada(negocio)) return false;
+  return claveNegocioValida(negocio, slug, key) && esPro(negocio);
 }
 
 // Detecta tipo de dispositivo de forma simple a partir del user-agent
@@ -1088,7 +1154,7 @@ function barraSemana(dias7) {
       return `
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;height:100%;">
           <div style="font-size:0.75rem;font-weight:700;color:${MARCA.textoSuave};line-height:1;">${v}</div>
-          <div class="spark-bar" style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
+          <div style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
           <div style="font-size:0.62rem;color:#999;text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
         </div>`;
     })
@@ -1540,8 +1606,8 @@ app.get("/calificar/:slug/rapido", (req, res) => {
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const motivo = req.query.motivo || "(sin detalle)";
-  const valor = parseInt(req.query.valor, 10);
-  guardarQueja(slug, motivo, negocio, "", valor);
+  const valorRapido = parseInt(req.query.valor, 10) || null;
+  guardarQueja(slug, motivo, negocio, "", valorRapido);
 
   // La fidelización premia la VISITA, no solo las reseñas positivas — si el
   // cliente tiene sesión iniciada, suma su sello igual que en una calificación buena.
@@ -1571,8 +1637,8 @@ app.post("/calificar/:slug", async (req, res) => {
 
   const comentario = req.body.comentario || "(sin comentario)";
   const telefono = req.body.telefono || "";
-  const valor = parseInt(req.body.valor, 10);
-  guardarQueja(slug, comentario, negocio, telefono, valor);
+  const valorTexto = parseInt(req.body.valor, 10) || null;
+  guardarQueja(slug, comentario, negocio, telefono, valorTexto);
 
   let selloSumado = null;
   if (esPro(negocio) && negocio.fidelizacion) {
@@ -1688,6 +1754,13 @@ app.get("/editar", (req, res) => {
 
           <a class="btn-nuevo" href="/editar/nuevo?key=${key}">+ Agregar negocio nuevo</a>
 
+          ${req.query.claveNueva ? `
+          <div style="background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:0.86rem;">
+            <b>Negocio "${req.query.slugNuevo}" creado.</b> Su clave de panel es: <code style="background:#fff;padding:2px 8px;border-radius:6px;">${escaparHtml(req.query.claveNueva)}</code>
+            — apúntala ahora, no se vuelve a mostrar (queda cifrada de aquí en adelante).
+          </div>
+          ` : ""}
+
           <table>
             <tr><th>Nombre</th><th>Enlace de toque</th><th>Categoría</th><th></th></tr>
             ${filas || "<tr><td colspan='4'>Todavía no hay negocios.</td></tr>"}
@@ -1722,6 +1795,8 @@ app.post("/editar/nuevo", (req, res) => {
     slug = generarCodigo();
   } while (codigos[slug] || NEGOCIOS[slug]);
 
+  const claveGenerada = `${slug.toLowerCase()}-panel`;
+  const { salt: saltNuevo, hash: hashNuevo } = hashClaveNegocio(claveGenerada);
   codigos[slug] = {
     activado: true,
     creado: new Date().toISOString(),
@@ -1731,7 +1806,8 @@ app.post("/editar/nuevo", (req, res) => {
       googleUrl,
       categoria: categoria || "otro",
       pais: pais || "colombia",
-      claveAcceso: `${slug.toLowerCase()}-panel`,
+      claveAccesoHash: hashNuevo,
+      claveAccesoSalt: saltNuevo,
       email: email || "",
       plan: plan === "pro" ? "pro" : "basico",
       direccion: direccion || "",
@@ -1742,7 +1818,7 @@ app.post("/editar/nuevo", (req, res) => {
   guardarCodigos(codigos);
   registrarAuditoriaGlobal("crear_negocio", `Negocio "${nombre}" (${slug}) creado directamente desde /editar/nuevo`, req);
 
-  res.redirect(`/editar?key=${req.query.key}`);
+  res.redirect(`/editar?key=${req.query.key}&claveNueva=${encodeURIComponent(claveGenerada)}&slugNuevo=${slug}`);
 });
 
 // Editar un negocio dinámico existente (creado por código de activación o desde /editar/nuevo).
@@ -1787,12 +1863,29 @@ app.post("/editar/:slug", (req, res) => {
   }
   codigos[slug].activado = true;
   codigos[slug].activadoEl = new Date().toISOString();
+  // Preserva la clave de acceso tal cual estaba (cifrada o, si es una cuenta
+  // vieja, en texto plano) — este formulario no la toca. Solo si el negocio
+  // NUNCA tuvo ninguna clave configurada le generamos una por defecto.
+  const claveExistente = (codigos[slug].negocio && codigos[slug].negocio.claveAccesoHash) ? {
+    claveAccesoHash: codigos[slug].negocio.claveAccesoHash,
+    claveAccesoSalt: codigos[slug].negocio.claveAccesoSalt,
+  } : negocioActual.claveAccesoHash ? {
+    claveAccesoHash: negocioActual.claveAccesoHash,
+    claveAccesoSalt: negocioActual.claveAccesoSalt,
+  } : (codigos[slug].negocio && codigos[slug].negocio.claveAcceso) ? {
+    claveAcceso: codigos[slug].negocio.claveAcceso,
+  } : negocioActual.claveAcceso ? {
+    claveAcceso: negocioActual.claveAcceso,
+  } : (() => {
+    const { salt, hash } = hashClaveNegocio(`${slug.toLowerCase()}-panel`);
+    return { claveAccesoHash: hash, claveAccesoSalt: salt };
+  })();
   codigos[slug].negocio = {
     nombre,
     googleUrl,
     categoria: categoria || "otro",
     pais: pais || negocioActual.pais || "colombia",
-    claveAcceso: (codigos[slug].negocio && codigos[slug].negocio.claveAcceso) || negocioActual.claveAcceso || `${slug.toLowerCase()}-panel`,
+    ...claveExistente,
     email: email || negocioActual.email || "",
     plan: plan === "pro" ? "pro" : "basico",
     direccion: direccion || "",
@@ -2344,12 +2437,14 @@ app.post("/activar/:codigo", (req, res) => {
   // podría manipular) — se decide por lo que la tarjeta tenga guardado desde
   // que se pagó el pedido. Si no vino de un pedido con Pro, siempre básico.
   const planReal = entrada.proIncluido ? "pro" : "basico";
+  const { salt: saltActivacion, hash: hashActivacion } = hashClaveNegocio(claveLimpia);
   entrada.negocio = {
     nombre,
     googleUrl,
     categoria: categoria || "otro",
     pais: pais || "colombia",
-    claveAcceso: claveLimpia,
+    claveAccesoHash: hashActivacion,
+    claveAccesoSalt: saltActivacion,
     email: email || "",
     plan: planReal,
     direccion: direccion || "",
@@ -2381,7 +2476,7 @@ app.post("/activar/:codigo", (req, res) => {
           <h1 class="titulo-pagina">¡Tarjeta activada!</h1>
           <div class="ok-card">
             <p><b>${nombre}</b> ya está conectado a esta tarjeta Tapin.</p>
-            <p>Panel de este negocio:<br><code>${req.protocol}://${req.get("host")}/mi-panel/${codigo}?key=${entrada.negocio.claveAcceso}</code></p>
+            <p>Panel de este negocio:<br><code>${req.protocol}://${req.get("host")}/mi-panel/${codigo}?key=${encodeURIComponent(claveLimpia)}</code></p>
             <p>Esta tarjeta ya está lista — el cliente puede empezar a usarla de inmediato.</p>
           </div>
         </div>
@@ -2673,6 +2768,7 @@ app.get("/stats", (req, res) => {
   `);
 });
 
+
 // Historial detallado de un negocio: fecha y hora exacta de cada toque.
 // Esto es lo que le puedes mostrar o entregar a tu cliente para justificar la suscripción.
 // Visítalo así: https://tu-dominio.com/historial/mi-negocio?key=TU_CLAVE
@@ -2892,14 +2988,9 @@ app.get("/contenido/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
+  if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
-  const claveUsada = claveEfectiva(req, slug);
-  req.query.key = claveUsada;
-  const volverHref = claveUsada === ADMIN_KEY
-    ? `/stats?key=${encodeURIComponent(claveUsada)}`
-    : `/mi-panel/${slug}?key=${encodeURIComponent(claveUsada)}`;
 
   if (!esPro(negocio)) {
     return res.status(402).send(
@@ -2957,7 +3048,7 @@ app.get("/contenido/:slug", (req, res) => {
         </style>
       </head>
       <body>
-        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="${volverHref}">&larr; Volver al panel</a></div>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
         <div class="content">
           <div class="eyebrow">Marketing automático · ${negocio.nombre}</div>
           <h1 class="titulo-pagina">Contenido para redes</h1>
@@ -3571,6 +3662,7 @@ app.get("/mi-panel/:slug", (req, res) => {
   `);
 });
 
+
 // ---------- Autogestión del negocio (sin necesitar al admin) ----------
 
 // El negocio edita sus propios datos básicos (no el plan ni el código —
@@ -3580,7 +3672,7 @@ app.get("/mi-panel/:slug/editar", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
   req.query.key = claveUsada;
@@ -3646,7 +3738,7 @@ app.post("/mi-panel/:slug/editar", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   const { nombre, googleUrl, email, direccion, ciudad, categoria } = req.body;
@@ -3670,7 +3762,7 @@ app.get("/mi-panel/:slug/clave", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
   req.query.key = claveUsada;
@@ -3720,14 +3812,15 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   const claveNueva = (req.body.claveNueva || "").trim();
   if (claveNueva.length < 6) {
     return res.status(400).send("La clave debe tener al menos 6 caracteres.");
   }
-  guardarCambiosNegocio(slug, negocio, { claveAcceso: claveNueva });
+  const { salt: saltCambio, hash: hashCambio } = hashClaveNegocio(claveNueva);
+  guardarCambiosNegocio(slug, negocio, { claveAccesoHash: hashCambio, claveAccesoSalt: saltCambio, claveAcceso: undefined });
   ponerCookieSesion(res, slug, claveNueva);
   registrarAuditoria(slug, negocio, "Cambiaste tu clave de acceso");
 
@@ -3761,7 +3854,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado. La configuración solo la puede tocar la clave completa, no la de solo lectura.");
   }
   req.query.key = claveUsada;
@@ -3883,7 +3976,7 @@ app.post("/mi-panel/:slug/configuracion/meta", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
   const metaMensual = parseInt(req.body.metaMensual, 10) || null;
   guardarCambiosNegocio(slug, negocio, { metaMensual });
   registrarAuditoria(slug, negocio, metaMensual ? `Configuraste una meta mensual de ${metaMensual} toques` : "Quitaste tu meta mensual");
@@ -3894,7 +3987,7 @@ app.post("/mi-panel/:slug/configuracion/alertas", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
   const frecuenciaQuejas = ["instantanea", "diario", "semanal"].includes(req.body.frecuenciaQuejas)
     ? req.body.frecuenciaQuejas : "instantanea";
   const alertas = { quejas: req.body.quejas === "on", reporteMensual: req.body.reporteMensual === "on", frecuenciaQuejas };
@@ -3907,7 +4000,7 @@ app.post("/mi-panel/:slug/configuracion/pausar", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
   const pausado = req.body.pausar === "si";
   guardarCambiosNegocio(slug, negocio, { pausado });
   registrarAuditoria(slug, negocio, pausado ? "Pausaste tu negocio" : "Reanudaste tu negocio");
@@ -3918,7 +4011,7 @@ app.post("/mi-panel/:slug/configuracion/solo-lectura", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
   const claveSoloLectura = generarToken();
   guardarCambiosNegocio(slug, negocio, { claveSoloLectura });
   registrarAuditoria(slug, negocio, "Generaste un nuevo acceso de solo lectura");
@@ -3957,7 +4050,7 @@ app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
   if (!esPro(negocio)) {
@@ -4056,7 +4149,7 @@ app.post("/mi-panel/:slug/fidelizacion", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
   if (!esPro(negocio)) return res.status(402).send("Exclusivo del Plan Pro.");
@@ -4076,7 +4169,7 @@ app.get("/mi-panel/:slug/fidelizacion/exportar.csv", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
   const fid = negocio.fidelizacion || { metaSellos: 10 };
@@ -4098,7 +4191,7 @@ app.get("/mi-panel/:slug/fidelizacion/:id/canjear", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
   const datos = leerDatos();
@@ -5105,12 +5198,13 @@ app.get("/avisar-vencimiento-anual", async (req, res) => {
 
     if (negocio.email) {
       try {
+        const tokenRenovar = generarLinkAccesoNegocio(slug, 14);
         await enviarEmail(
           negocio.email,
           `Tu Plan Pro anual vence pronto — ${negocio.nombre}`,
           `<p>Tu Plan Pro anual de <b>${negocio.nombre}</b> vence el <b>${vence.toLocaleDateString("es-CO")}</b>.</p>
            <p>Para no perder el acceso a las funciones Pro, renueva desde tu panel antes de esa fecha.</p>
-           <p><a href="${req.protocol}://${req.get("host")}/mejorar-a-pro/${slug}?key=${negocio.claveAcceso}&plan=anual">Renovar mi Plan Pro anual</a></p>`
+           <p><a href="${req.protocol}://${req.get("host")}/mejorar-a-pro/${slug}?key=${tokenRenovar}&plan=anual">Renovar mi Plan Pro anual</a></p>`
         );
         guardarCambiosNegocio(slug, negocio, { avisoVencimientoEnviado: negocio.proAnualHasta });
         resultado.push({ slug, avisado: true });
@@ -5575,17 +5669,14 @@ app.get("/conoce", (req, res) => {
                 <div class="plan-anual-badge">10% más barato</div>
               </div>
               <ul>
-                <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
                 <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                <li><span class="check">✓</span> Filtro de calificaciones y retroalimentación privada — lo negativo nunca se publica</li>
+                <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
                 <li><span class="check">✓</span> Alerta instantánea por correo ante retroalimentación negativa</li>
                 <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
                 <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
                 <li><span class="check">✓</span> Reportes en CSV, PDF y Word — te los enviamos por correo cuando los necesites</li>
                 <li><span class="check">✓</span> Generador de contenido para redes sociales</li>
                 <li><span class="check">✓</span> Comparación contra el promedio de tu categoría</li>
-                <li><span class="check">✓</span> Recomendaciones automáticas para tu negocio</li>
-                <li><span class="check">✓</span> Programa de fidelización de clientes</li>
               </ul>
             </div>
           </div>
@@ -5605,9 +5696,13 @@ app.get("/conoce", (req, res) => {
             </div>
             <div class="precio-card">
               <div class="precio-card-titulo">Suscripción Plan Pro</div>
-              <table class="tabla-precios tabla-pro">
-                <tr><th>Tarjetas activas</th><th>Precio mensual</th></tr>
-                ${filasTablaProHtml()}
+              <table class="tabla-precios">
+                <tr><th>Tarjetas activas</th><th>Precio c/u / mes</th></tr>
+                ${ESCALONES_PRO.slice().reverse().map((e, i, arr) => {
+                  const siguiente = arr[i + 1];
+                  const rango = siguiente ? `${e.minimo}-${siguiente.minimo - 1}` : `${e.minimo}+`;
+                  return `<tr><td>${rango}</td><td>$${e.precio.toLocaleString("es-CO")}</td></tr>`;
+                }).join("")}
               </table>
             </div>
           </div>
@@ -5620,7 +5715,7 @@ app.get("/conoce", (req, res) => {
         </main>
         <footer class="site-footer">
           <span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span>
-          <span><a href="mailto:tapin.notificaciones@gmail.com">tapin.notificaciones@gmail.com</a><a href="https://wa.me/573003489609" target="_blank">WhatsApp</a></span>
+          <span><a href="mailto:hola@tapincol.com">hola@tapincol.com</a><a href="https://wa.me/573003489609" target="_blank">WhatsApp</a></span>
         </footer>
       </body>
     </html>
@@ -5844,7 +5939,7 @@ app.get("/mis-negocios", (req, res) => {
     </form>`;
 
   const bloqueLogin = `
-    <a class="google-login" href="/auth/google/iniciar" style="display:flex;align-items:center;justify-content:center;gap:10px;
+    <a href="/auth/google/iniciar" style="display:flex;align-items:center;justify-content:center;gap:10px;
        width:100%;box-sizing:border-box;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
        padding:13px;font-weight:700;font-size:0.9rem;color:${MARCA.texto};text-decoration:none;margin-bottom:14px;">
       <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -5993,9 +6088,10 @@ function renderizarPaginaNegocios(email) {
   const tarjetas = misSlugs.map((slug) => {
     const negocio = todos[slug];
     const r = calcularResumen((datos[slug] && datos[slug].eventos) || []);
+    const tokenPanel = generarLinkAccesoNegocio(slug, 7);
     return `
       <div class="card">
-        <a href="/mi-panel/${slug}?key=${negocio.claveAcceso || ""}" style="text-decoration:none;color:inherit;">
+        <a href="/mi-panel/${slug}?key=${tokenPanel}" style="text-decoration:none;color:inherit;">
           <div class="card-top">
             <div class="card-nombre">${negocio.nombre} ${esPro(negocio) ? `<span class="badge-pro">PRO</span>` : `<span class="badge-basico">BÁSICO</span>`}</div>
             <div class="card-total">${r.total}<span>toques totales</span></div>
@@ -6003,8 +6099,8 @@ function renderizarPaginaNegocios(email) {
           <div class="card-meta">${negocio.categoria || "—"} ${negocio.direccion ? "· " + negocio.direccion : ""}</div>
           <div class="card-cta">Ver panel completo &rarr;</div>
         </a>
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid ${MARCA.borde};font-size:0.76rem;color:${MARCA.textoSuave};">
-          ¿Olvidaste tu clave? Es: <code style="background:${MARCA.crema};padding:2px 8px;border-radius:6px;font-weight:700;color:${MARCA.texto};">${negocio.claveAcceso || "no configurada"}</code>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid ${MARCA.borde};font-size:0.76rem;">
+          <a href="/restablecer-clave/${slug}?token=${tokenPanel}" style="color:${MARCA.verde};font-weight:600;">¿Olvidaste tu clave? Restablécela aquí →</a>
         </div>
       </div>`;
   }).join("");
@@ -6222,7 +6318,7 @@ app.get("/cliente", (req, res) => {
           <div class="panel activo" id="panel-login">
             <h2>Bienvenido de vuelta</h2>
             <p>Entra para ver tus favoritos y tu historial de reseñas.</p>
-            <a class="google-login" href="/auth/google/iniciar?tipo=cliente" style="display:flex;align-items:center;justify-content:center;gap:10px;
+            <a href="/auth/google/iniciar?tipo=cliente" style="display:flex;align-items:center;justify-content:center;gap:10px;
                width:100%;box-sizing:border-box;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
                padding:13px;font-weight:700;font-size:0.9rem;color:${MARCA.texto};text-decoration:none;margin-bottom:14px;">
               <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -7859,7 +7955,7 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   // Si ya es Pro, normalmente lo mandamos a su panel — pero si está pidiendo
@@ -7968,7 +8064,7 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
 
@@ -8122,7 +8218,7 @@ app.get("/suscripcion/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   if (!esPro(negocio)) {
@@ -8213,7 +8309,7 @@ app.post("/suscripcion/:slug/registrar", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   if (!process.env.WOMPI_PRIVATE_KEY) {
@@ -8270,7 +8366,7 @@ app.post("/suscripcion/:slug/cancelar", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   const sus = negocio.suscripcion;
@@ -8292,7 +8388,7 @@ app.post("/suscripcion/:slug/bajar-anticipado", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   if (negocio.billingType !== "anual") {
@@ -8371,11 +8467,12 @@ app.get("/cobrar-suscripciones", async (req, res) => {
           suscripcion: { ...sus, ultimoCobro: new Date().toISOString(), ultimoError: estado },
         });
         resultado.push({ slug, estado: `FALLÓ (${estado})` });
+        const tokenSuscripcion = generarLinkAccesoNegocio(slug, 10);
         await enviarEmail(
           negocio.email,
           "No pudimos procesar tu suscripción Pro de Tapin",
           `<p>Intentamos cobrar tu mensualidad del Plan Pro y la tarjeta registrada fue rechazada (estado: ${estado}).</p>
-           <p>Por favor registra una tarjeta válida aquí: ${req.protocol}://${req.get("host")}/suscripcion/${slug}?key=${negocio.claveAcceso}</p>`
+           <p>Por favor registra una tarjeta válida aquí: ${req.protocol}://${req.get("host")}/suscripcion/${slug}?key=${tokenSuscripcion}</p>`
         );
       }
     } catch (err) {
@@ -8388,6 +8485,34 @@ app.get("/cobrar-suscripciones", async (req, res) => {
 });
 
 // ---------- SEO técnico ----------
+// El favicon (ícono que sale en la pestaña del navegador) — el navegador lo
+// pide solo en /favicon.ico sin que haga falta ningún <link> en cada página.
+// Reutiliza el mismo logo SVG oficial que ya está en todo el sitio, sobre un
+// círculo verde de fondo para que se vea bien en pestañas claras y oscuras.
+function faviconSvg() {
+  const escala = 0.034; // ajusta el logo (945x355 aprox) a un tamaño cómodo dentro del círculo
+  const anchoLogo = LOGO_ANCHO_VB * escala;
+  const altoLogo = LOGO_ALTO_VB * escala;
+  return `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="32" cy="32" r="32" fill="${MARCA.verdeOscuro}"/>
+    <g transform="translate(${32 - anchoLogo / 2},${32 - altoLogo / 2}) scale(${escala})">
+      <g transform="translate(-44.532706,477.996311) scale(0.100000,-0.100000)" fill="#FFFFFF" stroke="none">
+        ${LOGO_PATH_DATA}
+      </g>
+    </g>
+  </svg>`;
+}
+app.get("/favicon.ico", (req, res) => {
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.send(faviconSvg());
+});
+app.get("/favicon.svg", (req, res) => {
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.send(faviconSvg());
+});
+
 app.get("/robots.txt", (req, res) => {
   res.type("text/plain").send(
     `User-agent: *\n` +
