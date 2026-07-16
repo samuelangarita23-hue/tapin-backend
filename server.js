@@ -1040,12 +1040,12 @@ function proyeccionPeriodo(eventos, negocio, periodo) {
     semana: { etiqueta: "1 semana", inicio: new Date(ahora.getTime() - 7 * 86400000), fin: new Date(ahora.getTime() + 7 * 86400000) },
     mes: { etiqueta: "1 mes", inicio: new Date(ahora.getFullYear(), ahora.getMonth(), 1), fin: new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0, 23, 59, 59) },
     semestre: { etiqueta: "6 meses", inicio: new Date(ahora.getFullYear(), ahora.getMonth() < 6 ? 0 : 6, 1), fin: new Date(ahora.getFullYear(), ahora.getMonth() < 6 ? 6 : 12, 0, 23, 59, 59) },
-    anio: { etiqueta: "1 año", inicio: new Date(ahora.getFullYear(), 0, 1), fin: new Date(ahora.getFullYear(), 11, 31, 23, 59, 59) },
+    anio: { etiqueta: "1 año", inicio: new Date(ahora.getFullYear(), 0, 1), fin: new Date(ahora.getFullYear() + 1, 0, 1) },
   };
   const config = configuraciones[periodo] || configuraciones.mes;
-  const transcurridos = Math.max(1, Math.ceil((ahora - config.inicio) / 86400000));
+  const totalDias = Math.max(1, Math.round((config.fin - config.inicio) / 86400000));
+  const transcurridos = Math.min(totalDias, Math.max(1, Math.floor((ahora - config.inicio) / 86400000) + 1));
   const restantes = Math.max(0, Math.ceil((config.fin - ahora) / 86400000));
-  const totalDias = Math.max(1, Math.ceil((config.fin - config.inicio) / 86400000));
   const toquesPeriodo = eventos.filter((e) => {
     const fecha = new Date(e.fechaISO);
     return fecha >= config.inicio && fecha <= ahora;
@@ -1057,7 +1057,7 @@ function proyeccionPeriodo(eventos, negocio, periodo) {
     suficiente,
     periodo,
     etiqueta: config.etiqueta,
-    nombrePeriodo: config.etiqueta,
+    nombrePeriodo: periodo === "anio" ? `${config.etiqueta} ${ahora.getFullYear()}` : config.etiqueta,
     toquesMes: toquesPeriodo,
     proyectado,
     promedio: Math.round(promedio * 10) / 10,
