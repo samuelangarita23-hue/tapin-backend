@@ -2364,6 +2364,7 @@ app.get("/stats", (req, res) => {
     r.dias7.forEach((v, i) => { dias7Global[i] += v; });
   }
   const promedioEstrellas = promedioEstrellasFiltradas(estrellasGlobales);
+  const testimonios = estrellasGlobales;
 
   const PAISES_INFO = {
     colombia: { nombre: "Colombia", bandera: "🇨🇴" },
