@@ -59,143 +59,6 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json()); // necesario para recibir el webhook de Wompi (manda JSON)
 
-// Selector de tema disponible en todas las páginas HTML. Solo cambia la
-// apariencia y recuerda la preferencia en el navegador; no altera datos,
-// sesiones, rutas ni la lógica de negocio.
-const CONTROL_TEMA_GLOBAL = `
-  <style>
-    #tapin-theme-toggle{position:fixed;right:16px;bottom:16px;z-index:99999;width:48px;height:48px;border:1px solid rgba(255,255,255,.45);border-radius:50%;padding:0;background:#0d432b;color:#fff;font:700 21px/1 'Segoe UI Emoji','Segoe UI',sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.28);cursor:pointer;display:flex;align-items:center;justify-content:center;}
-    #tapin-theme-toggle:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.34);}
-    body .tabla-pro th:first-child,body .tabla-pro td:first-child{text-align:center!important;}
-    body .tabla-pro td{padding-top:12px!important;padding-bottom:12px!important;}
-    body .precios-grid{align-items:stretch!important;}
-    body .precios-grid>.precio-card{display:flex!important;flex-direction:column!important;height:auto!important;}
-    body .precios-grid>.precio-card>.tabla-precios{flex:1;}
-    body .tabla-pro tr:not(:first-child):hover td{filter:brightness(.97);}
-    body .tabla-pro tr.fila-empresa td{background:#fbf1d8!important;color:#624a08!important;font-weight:800!important;border-top:2px solid #e8ad32!important;}
-    html.tapin-dark{color-scheme:dark;--ink:#f4faf6;--forest:#438b67;--forest2:#256448;--cream:#071f16;--paper:#1b5139;--muted:#d0e0d6;--line:#5c8a70;--gold:#e8ad32;--gold2:#f7d77d;}
-    html.tapin-dark body{background:#071f16!important;color:#f4faf6!important;}
-    html.tapin-dark body :is(.site-header,.box,.card,.seccion,.form-card,.chart-card,.metric,.plan,.flujo,.precio-card,.nota,.tarjeta-info,.reco,.faq-item,table){background:#1b5139!important;color:#f4faf6!important;border:1px solid #5c8a70!important;box-shadow:0 14px 30px rgba(0,0,0,.34);}
-    html.tapin-dark body :is(.paso,.chart-card .reco,.form-card input,.form-card select,.form-card textarea){background:#0f3525!important;border-color:#46745b!important;box-shadow:0 7px 16px rgba(0,0,0,.2);}
-    html.tapin-dark body :is(h1,h2,h3,h4,.card-titulo,.seccion-titulo,.titulo-pagina){color:#f4faf6!important;}
-    html.tapin-dark body :is(p,.nota,.subtitulo,.seccion-sub,.flujo-descripcion,.paso p,.acceso p,td,th,label,.metric-lbl){color:#c2d1c7!important;}
-    html.tapin-dark body :is(input,select,textarea){background:#0d2b1e!important;color:#f4faf6!important;border-color:#668f78!important;}
-    html.tapin-dark body :is(input,textarea)::placeholder{color:#8fa598!important;}
-    html.tapin-dark body :is(td,th){background:#1b5139!important;}
-    html.tapin-dark body .tabla-precios tr:nth-child(even) td{background:#103625!important;}
-    html.tapin-dark body .tabla-precios tr:last-child td{background:#2a684a!important;color:#fff!important;}
-    html.tapin-dark body .tabla-pro tr.fila-empresa td{background:#f3efe3!important;color:#163a2a!important;border-top-color:#e8ad32!important;}
-    html.tapin-dark body .paso-num{background:#294637!important;color:#fff!important;}
-    html.tapin-dark body .metric-num{background:transparent!important;color:#fff!important;box-shadow:none!important;}
-    html.tapin-dark body :is(.check,.eyebrow){color:#ffdc7a!important;}
-    html.tapin-dark body :is(.topbar,.site-order){background:#0b2a1d!important;color:#fff!important;}
-    html.tapin-dark body .hero{background:linear-gradient(145deg,#347e5b 0%,#286f4f 48%,#205b41 100%)!important;color:#fff!important;}
-    html.tapin-dark body :is(.hero,.topbar,.site-order) *{color:#fff!important;}
-    html.tapin-dark body :is(.hero-cta-main,.plan-anual,.plan-anual-badge,.plan-badge,.acceso-badge){background:#f0b83e!important;color:#062e1e!important;}
-    html.tapin-dark body :is(.hero-cta-main,.plan-anual,.plan-anual-badge,.plan-badge,.acceso-badge) *{color:#062e1e!important;}
-    html.tapin-dark body .paso-pro-badge{background:#2f7655!important;color:#fff!important;}
-    html.tapin-dark body .acceso{border:1px solid #6b957e!important;box-shadow:0 14px 30px rgba(0,0,0,.34);}
-    html.tapin-dark body .acceso-1{background:linear-gradient(135deg,#0d3b29,#236346)!important;color:#fff!important;}
-    html.tapin-dark body .acceso-3{background:#dbe8df!important;color:#0b3424!important;border-color:#a9c2b3!important;}
-    html.tapin-dark body .acceso-3 :is(h3,p,span,div){color:#0b3424!important;}
-    html.tapin-dark body .acceso-4{background:linear-gradient(135deg,#ffdc7a,#f0b83e)!important;color:#062e1e!important;}
-    html.tapin-dark body .acceso-4 :is(h3,p,span){color:#062e1e!important;}
-    html.tapin-dark body .flujo-pro{background:linear-gradient(135deg,#1b5139,#46391e)!important;border:2px solid #e8ad32!important;}
-    html.tapin-dark body :is(.site-brand,.logo,.topbar>div:first-child) svg [fill]{fill:#fff!important;}
-    html.tapin-dark body :is(.site-brand,.logo,.topbar>div:first-child) svg [stroke]{stroke:#fff!important;}
-    html.tapin-dark body .tarjeta-nfc{background:#fff!important;}
-    html.tapin-dark body .tarjeta-nfc *{color:#062e1e!important;}
-    html.tapin-dark body .tarjeta-google span:nth-child(1),html.tapin-dark body .tarjeta-google span:nth-child(4){color:#4285F4!important;}
-    html.tapin-dark body .tarjeta-google span:nth-child(2),html.tapin-dark body .tarjeta-google span:nth-child(6){color:#EA4335!important;}
-    html.tapin-dark body .tarjeta-google span:nth-child(3){color:#FBBC05!important;}
-    html.tapin-dark body .tarjeta-google span:nth-child(5){color:#34A853!important;}
-    html.tapin-dark body a{color:#ffdc7a;}
-    html.tapin-dark body .google-login{background:#fff!important;color:#27312b!important;border-color:#d7ddd9!important;box-shadow:none!important;}
-    html.tapin-dark body .google-login svg path{border-color:transparent!important;}
-    html.tapin-dark #tapin-theme-toggle{background:#ffdc7a;color:#062e1e;border-color:#f0b83e;}
-    html.tapin-dark body[data-tapin-page="principal"] :is(#como-funciona,#precios){background:rgba(27,81,57,.62)!important;border:1px solid #5c8a70!important;}
-    html.tapin-dark body[data-tapin-page="principal"] :is(#accesos,#preguntas){background:rgba(8,43,29,.72)!important;border:1px solid #416c55!important;}
-    html.tapin-dark body[data-tapin-page="admin"],html.tapin-dark body[data-tapin-page="negocio"]{background:#071f16!important;}
-    html.tapin-dark body[data-tapin-page="admin"] :is(.content,.contenido),html.tapin-dark body[data-tapin-page="negocio"] :is(.content,.contenido){background:transparent!important;}
-    html.tapin-dark body[data-tapin-page="admin"] :is(button[type="submit"],.btn),html.tapin-dark body[data-tapin-page="negocio"] :is(button[type="submit"],.btn){background:#f3efe3!important;color:#163a2a!important;border-color:#d8cfba!important;}
-    html.tapin-dark body[data-tapin-page="admin"] :is(button[type="submit"],.btn) *,html.tapin-dark body[data-tapin-page="negocio"] :is(button[type="submit"],.btn) *{color:#163a2a!important;}
-    html.tapin-dark body :is(.ver-clave,.icono-toggle){background:transparent!important;color:#d6e4db!important;border:none!important;box-shadow:none!important;transform:none!important;}
-    html.tapin-dark body .ver-clave{position:absolute!important;right:4px!important;top:4px!important;bottom:4px!important;width:36px!important;height:auto!important;padding:0!important;margin:0!important;border-radius:7px!important;}
-    html.tapin-dark body[data-tapin-page="admin"] .seccion,html.tapin-dark body[data-tapin-page="negocio"] .seccion{background:transparent!important;border:none!important;box-shadow:none!important;}
-    html.tapin-dark body[data-tapin-page="admin"] :is(.resumen-box,.negocio-card,.pais-card,.chart-card),html.tapin-dark body[data-tapin-page="negocio"] :is(.resumen-box,.negocio-card,.chart-card){background:#123a29!important;color:#f4faf6!important;border:1px solid #4f7d64!important;box-shadow:0 8px 20px rgba(0,0,0,.22)!important;}
-    html.tapin-dark body[data-tapin-page="admin"] :is(.resumen-num,.resumen-lbl,.card-total,.card-total span),html.tapin-dark body[data-tapin-page="negocio"] :is(.resumen-num,.resumen-lbl,.card-total,.card-total span){color:#f4faf6!important;}
-    html.tapin-dark body :is(.spark-bar,.hora-barra){background:#62c28d!important;box-shadow:0 0 0 1px rgba(255,255,255,.08);}
-    html.tapin-dark body[data-tapin-page="admin"] .sparkline>div>div:not(.spark-bar),html.tapin-dark body[data-tapin-page="negocio"] .sparkline>div>div:not(.spark-bar){color:#e6f1ea!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] :is(.tabla-actividad,table){border:1px solid #72a088!important;background:#0d3021!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] :is(.tabla-actividad,table) th{background:#164631!important;color:#fff!important;border-color:#72a088!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] :is(.tabla-actividad,table) td{background:#1b5139!important;color:#f4faf6!important;border-color:#72a088!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] :is(.tabla-actividad,table) tr:nth-child(even) td{background:#15442f!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .chart-card .tabla-actividad{background:transparent!important;border:none!important;border-radius:0!important;box-shadow:none!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .seccion-actividad{margin-top:38px!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .seccion-actividad>.card-titulo{margin-bottom:14px!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .chart-card :is(div,span,p){color:#dcebe1!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .chart-card :is(b,strong){color:#fff!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] :is(.btn-herramienta,.panel-acciones a),html.tapin-dark body[data-tapin-page="admin"] :is(.card-actions a,.btn-pais){background:#f3efe3!important;color:#163a2a!important;border:1px solid #d8cfba!important;box-shadow:0 5px 12px rgba(0,0,0,.18)!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] :is(.btn-herramienta,.panel-acciones a):hover,html.tapin-dark body[data-tapin-page="admin"] :is(.card-actions a,.btn-pais):hover{background:#fffaf0!important;color:#0b2f20!important;border-color:#e8ad32!important;}
-    html.tapin-dark body[data-tapin-page="admin"] .sector-badge,html.tapin-dark body[data-tapin-page="negocio"] .sector-badge{color:#8ce3b2!important;}
-    html.tapin-dark body[data-tapin-page="admin"] .ultimo-toque,html.tapin-dark body[data-tapin-page="negocio"] .ultimo-toque{color:#cfe1d6!important;}
-    html.tapin-dark body[data-tapin-page="admin"] .ultimo-toque b,html.tapin-dark body[data-tapin-page="negocio"] .ultimo-toque b{color:#fff!important;}
-    html.tapin-dark body[data-tapin-page="admin"] .card-ultimo{color:#cfe1d6!important;border-top-color:#72a088!important;}
-    html.tapin-dark body[data-tapin-page="admin"] .card-ultimo b{color:#fff!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-vacio{color:#173b2b!important;background:#dedbcd!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-activo{color:#fff!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-1{background:#78d7a1!important;color:#092719!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-2{background:#4caf78!important;color:#092719!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-3{background:#34875d!important;color:#fff!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .cal-dia.cal-nivel-4{background:#174f36!important;color:#fff!important;}
-    html.tapin-dark body[data-tapin-page="negocio"] .cal-leyenda{color:#cfe1d6!important;}
-    html.tapin-dark body[data-tapin-page="descubre"] #mapa *{border-color:initial!important;}
-    html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-popup-tip,.leaflet-control-zoom a,.leaflet-control-attribution){background:#17432f!important;color:#f4faf6!important;border-color:#5c8a70!important;}
-    html.tapin-dark body[data-tapin-page="descubre"] :is(.chip-cat,.leyenda,.vacio,.leaflet-popup-content-wrapper,.leaflet-control-zoom a,.leaflet-control-attribution) *{color:#f4faf6!important;}
-    html.tapin-dark body[data-tapin-page="descubre"] .chip-cat.activo{background:#e8ad32!important;color:#062e1e!important;border-color:#f7d77d!important;}
-    html.tapin-dark body[data-tapin-page="descubre"] .chip-cat.activo *{color:#062e1e!important;}
-    html.tapin-dark body[data-tapin-page="descubre"] :is(.popup-link,.popup-fav.activo){background:#e8ad32!important;color:#062e1e!important;}
-  </style>
-  <button id="tapin-theme-toggle" type="button" aria-label="Activar tema oscuro" title="Activar tema oscuro">🌙</button>
-  <script>
-    (() => {
-      const raiz = document.documentElement;
-      const boton = document.getElementById("tapin-theme-toggle");
-      let oscuro = false;
-      try { oscuro = localStorage.getItem("tapin-tema") === "oscuro"; } catch (_) {}
-      const aplicar = () => {
-        raiz.classList.toggle("tapin-dark", oscuro);
-        boton.textContent = oscuro ? "☀️" : "🌙";
-        const descripcion = oscuro ? "Activar tema claro" : "Activar tema oscuro";
-        boton.setAttribute("aria-label", descripcion);
-        boton.setAttribute("title", descripcion);
-      };
-      aplicar();
-      boton.addEventListener("click", () => {
-        oscuro = !oscuro;
-        aplicar();
-        try { localStorage.setItem("tapin-tema", oscuro ? "oscuro" : "claro"); } catch (_) {}
-      });
-    })();
-  </script>`;
-
-app.use((req, res, next) => {
-  const enviar = res.send.bind(res);
-  res.send = (contenido) => {
-    if (typeof contenido === "string" && /<\/body>/i.test(contenido) && !contenido.includes('id="tapin-theme-toggle"')) {
-      let pagina = "general";
-      if (req.path === "/") pagina = "principal";
-      else if (req.path === "/descubre") pagina = "descubre";
-      else if (/^\/(mi-panel|mis-negocios)(\/|$)/.test(req.path) || /^\/editar\/[^/]+/.test(req.path)) pagina = "negocio";
-      else if (/^\/(admin|stats|editar|codigos|auditoria|respaldo)(\/|$)/.test(req.path)) pagina = "admin";
-      contenido = contenido.replace(/<body([^>]*)>/i, `<body$1 data-tapin-page="${pagina}">`);
-      contenido = contenido.replace(/<\/body>/i, `${CONTROL_TEMA_GLOBAL}</body>`);
-    }
-    return enviar(contenido);
-  };
-  next();
-});
-
 // tapin.page se redirige automáticamente a tapincol.com (el dominio nuevo y
 // principal de aquí en adelante) — así las tarjetas físicas grabadas con
 // tapin.page siguen funcionando para siempre, y todo el tráfico nuevo, SEO
@@ -626,6 +489,72 @@ function verificarPassword(password, salt, hashGuardado) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// ---------- Clave de acceso de negocio: cifrada con scrypt (igual que las
+// contraseñas de clientes), en vez de guardada en texto plano en codigos.json.
+// Como ya había negocios activos con la clave en texto plano ANTES de este
+// cambio, tieneClaveConfigurada() y claveNegocioValida() saben leer ambos
+// formatos — y en cuanto un negocio viejo entra una vez con su clave de
+// siempre, se migra sola a cifrada en ese mismo momento, sin que el dueño
+// tenga que hacer nada ni se quede sin poder entrar.
+function tieneClaveConfigurada(negocio) {
+  return !!(negocio && (negocio.claveAcceso || negocio.claveAccesoHash));
+}
+function claveNegocioValida(negocio, slug, intento) {
+  if (!intento || !negocio) return false;
+  // Un link de acceso temporal (generado por el propio servidor para correos
+  // o navegación entre sedes) — no es la clave real, es un token aparte.
+  if (typeof intento === "string" && intento.startsWith("tok_")) {
+    const tokens = leerTokensAccesoNegocio();
+    const entrada = tokens[intento];
+    return !!(entrada && entrada.slug === slug && new Date(entrada.expiraEl) > new Date());
+  }
+  if (negocio.claveAccesoHash && negocio.claveAccesoSalt) {
+    return verificarPassword(intento, negocio.claveAccesoSalt, negocio.claveAccesoHash);
+  }
+  // Cuenta vieja, todavía con la clave en texto plano.
+  if (negocio.claveAcceso && intento === negocio.claveAcceso) {
+    if (slug) {
+      const { salt, hash } = crearHashConSal(intento);
+      guardarCambiosNegocio(slug, negocio, { claveAccesoHash: hash, claveAccesoSalt: salt, claveAcceso: undefined });
+    }
+    return true;
+  }
+  return false;
+}
+// Genera la pareja {hash, salt} para guardar una clave de negocio nueva —
+// se usa al activar una tarjeta, al crear un negocio a mano, o al cambiar
+// la clave desde el panel. Nunca se guarda el texto plano después de esto.
+function hashClaveNegocio(claveTextoPlano) {
+  return crearHashConSal(claveTextoPlano);
+}
+
+// Algunos links los arma el SERVIDOR solo, sin que el negocio haya escrito su
+// clave en esa petición (ej: un correo automático de recordatorio, o el link
+// para saltar a "tu otra sede" desde el panel) — antes esos links usaban
+// negocio.claveAcceso directamente. Ahora que la clave está cifrada, el
+// servidor ya no la puede leer de vuelta, así que estos links usan en su
+// lugar un token temporal de un solo propósito, independiente de la clave real.
+const TOKENS_ACCESO_NEGOCIO_FILE = path.join(DATA_DIR, "tokens-acceso-negocio.json");
+function leerTokensAccesoNegocio() {
+  if (!fs.existsSync(TOKENS_ACCESO_NEGOCIO_FILE)) return {};
+  try { return JSON.parse(fs.readFileSync(TOKENS_ACCESO_NEGOCIO_FILE, "utf8")); } catch { return {}; }
+}
+function guardarTokensAccesoNegocio(tokens) {
+  fs.writeFileSync(TOKENS_ACCESO_NEGOCIO_FILE, JSON.stringify(tokens, null, 2));
+}
+function generarLinkAccesoNegocio(slug, diasValidez = 7) {
+  const tokens = leerTokensAccesoNegocio();
+  // limpieza de tokens vencidos, para que el archivo no crezca sin control
+  const ahora = Date.now();
+  for (const t in tokens) {
+    if (new Date(tokens[t].expiraEl).getTime() < ahora) delete tokens[t];
+  }
+  const token = "tok_" + generarToken();
+  tokens[token] = { slug, expiraEl: new Date(ahora + diasValidez * 24 * 60 * 60 * 1000).toISOString() };
+  guardarTokensAccesoNegocio(tokens);
+  return token;
+}
+
 // Lee cookies manualmente del header (sin depender de cookie-parser).
 function leerCookies(req) {
   const header = req.headers.cookie;
@@ -767,8 +696,8 @@ function claveEfectiva(req, slug) {
 function autorizadoProNegocio(req, negocio, slug) {
   const key = slug ? claveEfectiva(req, slug) : req.query.key;
   if (key === ADMIN_KEY) return true;
-  if (!negocio || !negocio.claveAcceso) return false;
-  return key === negocio.claveAcceso && esPro(negocio);
+  if (!tieneClaveConfigurada(negocio)) return false;
+  return claveNegocioValida(negocio, slug, key) && esPro(negocio);
 }
 
 // Detecta tipo de dispositivo de forma simple a partir del user-agent
@@ -1002,6 +931,84 @@ function progresoMeta(eventos, metaMensual) {
   return { toquesMes, metaMensual, pct: Math.min(100, Math.round((toquesMes / metaMensual) * 100)) };
 }
 
+// Proyección: "si sigues así, en un día/semana/mes/semestre/año tendrás
+// aproximadamente X toques". Se basa en tu propio promedio diario reciente
+// (últimos 30 días, o menos si el negocio es más nuevo que eso) — no en todo
+// el histórico, para que un cambio reciente (mejor o peor) sí se refleje en
+// la proyección en vez de diluirse en meses viejos.
+function calcularProyeccion(eventos, negocio) {
+  if (!eventos || eventos.length === 0) return null;
+
+  const ahora = new Date();
+  const primerEvento = new Date(eventos[0].fechaISO);
+  const diasHistoria = Math.max(1, (ahora - primerEvento) / 86400000);
+
+  const ventanaDias = Math.min(30, diasHistoria);
+  const inicioVentana = new Date(ahora.getTime() - ventanaDias * 86400000);
+  const eventosVentana = eventos.filter((e) => new Date(e.fechaISO) >= inicioVentana);
+  const promedioDiario = eventosVentana.length / ventanaDias;
+
+  // Tendencia: compara la mitad más reciente de la ventana contra la mitad
+  // anterior, para poder decir si vas para arriba, para abajo, o estable —
+  // no solo dar un número seco.
+  const mitadDias = ventanaDias / 2;
+  const inicioMitadReciente = new Date(ahora.getTime() - mitadDias * 86400000);
+  const toquesMitadReciente = eventosVentana.filter((e) => new Date(e.fechaISO) >= inicioMitadReciente).length;
+  const toquesMitadAnterior = eventosVentana.length - toquesMitadReciente;
+  let tendenciaPct = null;
+  if (toquesMitadAnterior >= 2) {
+    tendenciaPct = Math.round(((toquesMitadReciente - toquesMitadAnterior) / toquesMitadAnterior) * 100);
+  }
+
+  const PERIODOS = {
+    dia: { dias: 1, etiqueta: "día", etiquetaLarga: "un día" },
+    semana: { dias: 7, etiqueta: "semana", etiquetaLarga: "una semana" },
+    mes: { dias: 30, etiqueta: "mes", etiquetaLarga: "un mes" },
+    semestre: { dias: 182, etiqueta: "semestre", etiquetaLarga: "un semestre" },
+    anio: { dias: 365, etiqueta: "año", etiquetaLarga: "un año" },
+  };
+
+  const proyecciones = {};
+  for (const [clave, info] of Object.entries(PERIODOS)) {
+    proyecciones[clave] = {
+      ...info,
+      toques: Math.max(0, Math.round(promedioDiario * info.dias)),
+    };
+  }
+
+  // Solo mostramos la proyección como "confiable" si hay al menos una semana
+  // de historia y un mínimo de actividad — si no, se lo decimos tal cual en
+  // vez de mostrar un número que en realidad es puro ruido estadístico.
+  const confiable = diasHistoria >= 7 && eventosVentana.length >= 5;
+
+  return {
+    promedioDiario: Math.round(promedioDiario * 10) / 10,
+    ventanaDias: Math.round(ventanaDias),
+    tendenciaPct,
+    proyecciones,
+    confiable,
+  };
+}
+
+// Promedio real de estrellas de TODAS las calificaciones (positivas 4-5,
+// guardadas como testimonio; negativas 1-3, guardadas como queja) — antes
+// solo se veía el % de positivas vs. negativas, no un promedio de estrellas
+// de verdad.
+function calcularPromedioEstrellas(testimonios, quejas) {
+  const valores = [
+    ...(testimonios || []).map((t) => t.valor).filter((v) => v >= 1 && v <= 5),
+    ...(quejas || []).map((q) => q.valor).filter((v) => v >= 1 && v <= 5),
+  ];
+  if (valores.length === 0) return null;
+  const suma = valores.reduce((a, b) => a + b, 0);
+  const distribucion = [1, 2, 3, 4, 5].map((estrella) => valores.filter((v) => v === estrella).length);
+  return {
+    promedio: Math.round((suma / valores.length) * 10) / 10,
+    total: valores.length,
+    distribucion, // [conteo de 1★, 2★, 3★, 4★, 5★]
+  };
+}
+
 function barraSemana(dias7) {
   const max = Math.max(1, ...dias7);
   const nombresDias = [];
@@ -1017,7 +1024,7 @@ function barraSemana(dias7) {
       return `
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;height:100%;">
           <div style="font-size:0.75rem;font-weight:700;color:${MARCA.textoSuave};line-height:1;">${v}</div>
-          <div class="spark-bar" style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
+          <div style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
           <div style="font-size:0.62rem;color:#999;text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
         </div>`;
     })
@@ -1078,7 +1085,7 @@ function guardarTestimonio(slug, frase, valor, negocio) {
   guardarDatos(datos);
 }
 
-function guardarQueja(slug, comentario, negocio, telefono = "") {
+function guardarQueja(slug, comentario, negocio, telefono = "", valor = null) {
   const datos = leerDatos();
   if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
   if (!datos[slug].quejas) datos[slug].quejas = [];
@@ -1088,6 +1095,7 @@ function guardarQueja(slug, comentario, negocio, telefono = "") {
     fechaLegible: ahora.toLocaleString("es-CO", { timeZone: zonaDe(negocio) }),
     comentario,
     telefono,
+    valor: valor && valor >= 1 && valor <= 3 ? valor : null, // 1-3, para poder promediar todas las estrellas
     estado: "pendiente", // pendiente | contactado | resuelto
   });
   guardarDatos(datos);
@@ -1397,7 +1405,7 @@ app.get("/calificar/:slug", (req, res) => {
   };
   const motivosNegativos = motivosPorCategoria[negocio.categoria] || motivosPorCategoria.otro;
   const chipsNegativos = motivosNegativos
-    .map((m) => `<a href="/calificar/${slug}/rapido?motivo=${encodeURIComponent(m)}" class="chip">${m}</a>`)
+    .map((m) => `<a href="/calificar/${slug}/rapido?motivo=${encodeURIComponent(m)}&valor=${valor}" class="chip">${m}</a>`)
     .join("");
 
   res.send(`
@@ -1433,6 +1441,7 @@ app.get("/calificar/:slug", (req, res) => {
 
           <div class="divisor">o cuéntanos con tus palabras</div>
           <form method="POST" action="/calificar/${slug}">
+            <input type="hidden" name="valor" value="${valor}">
             <textarea name="comentario" placeholder="Escribe aquí lo que pasó... (opcional)"></textarea>
             <input type="tel" name="telefono" placeholder="Tu teléfono (opcional, para que te llamen)" style="width:100%;margin-top:10px;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:0.92rem;font-family:inherit;box-sizing:border-box;">
             <button type="submit">Enviar</button>
@@ -1452,7 +1461,8 @@ app.get("/calificar/:slug/rapido", (req, res) => {
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const motivo = req.query.motivo || "(sin detalle)";
-  guardarQueja(slug, motivo, negocio, "");
+  const valorRapido = parseInt(req.query.valor, 10) || null;
+  guardarQueja(slug, motivo, negocio, "", valorRapido);
 
   // La fidelización premia la VISITA, no solo las reseñas positivas — si el
   // cliente tiene sesión iniciada, suma su sello igual que en una calificación buena.
@@ -1482,7 +1492,8 @@ app.post("/calificar/:slug", async (req, res) => {
 
   const comentario = req.body.comentario || "(sin comentario)";
   const telefono = req.body.telefono || "";
-  guardarQueja(slug, comentario, negocio, telefono);
+  const valorTexto = parseInt(req.body.valor, 10) || null;
+  guardarQueja(slug, comentario, negocio, telefono, valorTexto);
 
   let selloSumado = null;
   if (esPro(negocio) && negocio.fidelizacion) {
@@ -1598,6 +1609,13 @@ app.get("/editar", (req, res) => {
 
           <a class="btn-nuevo" href="/editar/nuevo?key=${key}">+ Agregar negocio nuevo</a>
 
+          ${req.query.claveNueva ? `
+          <div style="background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:0.86rem;">
+            <b>Negocio "${req.query.slugNuevo}" creado.</b> Su clave de panel es: <code style="background:#fff;padding:2px 8px;border-radius:6px;">${escaparHtml(req.query.claveNueva)}</code>
+            — apúntala ahora, no se vuelve a mostrar (queda cifrada de aquí en adelante).
+          </div>
+          ` : ""}
+
           <table>
             <tr><th>Nombre</th><th>Enlace de toque</th><th>Categoría</th><th></th></tr>
             ${filas || "<tr><td colspan='4'>Todavía no hay negocios.</td></tr>"}
@@ -1632,6 +1650,8 @@ app.post("/editar/nuevo", (req, res) => {
     slug = generarCodigo();
   } while (codigos[slug] || NEGOCIOS[slug]);
 
+  const claveGenerada = `${slug.toLowerCase()}-panel`;
+  const { salt: saltNuevo, hash: hashNuevo } = hashClaveNegocio(claveGenerada);
   codigos[slug] = {
     activado: true,
     creado: new Date().toISOString(),
@@ -1641,7 +1661,8 @@ app.post("/editar/nuevo", (req, res) => {
       googleUrl,
       categoria: categoria || "otro",
       pais: pais || "colombia",
-      claveAcceso: `${slug.toLowerCase()}-panel`,
+      claveAccesoHash: hashNuevo,
+      claveAccesoSalt: saltNuevo,
       email: email || "",
       plan: plan === "pro" ? "pro" : "basico",
       direccion: direccion || "",
@@ -1652,7 +1673,7 @@ app.post("/editar/nuevo", (req, res) => {
   guardarCodigos(codigos);
   registrarAuditoriaGlobal("crear_negocio", `Negocio "${nombre}" (${slug}) creado directamente desde /editar/nuevo`, req);
 
-  res.redirect(`/editar?key=${req.query.key}`);
+  res.redirect(`/editar?key=${req.query.key}&claveNueva=${encodeURIComponent(claveGenerada)}&slugNuevo=${slug}`);
 });
 
 // Editar un negocio dinámico existente (creado por código de activación o desde /editar/nuevo).
@@ -1697,12 +1718,29 @@ app.post("/editar/:slug", (req, res) => {
   }
   codigos[slug].activado = true;
   codigos[slug].activadoEl = new Date().toISOString();
+  // Preserva la clave de acceso tal cual estaba (cifrada o, si es una cuenta
+  // vieja, en texto plano) — este formulario no la toca. Solo si el negocio
+  // NUNCA tuvo ninguna clave configurada le generamos una por defecto.
+  const claveExistente = (codigos[slug].negocio && codigos[slug].negocio.claveAccesoHash) ? {
+    claveAccesoHash: codigos[slug].negocio.claveAccesoHash,
+    claveAccesoSalt: codigos[slug].negocio.claveAccesoSalt,
+  } : negocioActual.claveAccesoHash ? {
+    claveAccesoHash: negocioActual.claveAccesoHash,
+    claveAccesoSalt: negocioActual.claveAccesoSalt,
+  } : (codigos[slug].negocio && codigos[slug].negocio.claveAcceso) ? {
+    claveAcceso: codigos[slug].negocio.claveAcceso,
+  } : negocioActual.claveAcceso ? {
+    claveAcceso: negocioActual.claveAcceso,
+  } : (() => {
+    const { salt, hash } = hashClaveNegocio(`${slug.toLowerCase()}-panel`);
+    return { claveAccesoHash: hash, claveAccesoSalt: salt };
+  })();
   codigos[slug].negocio = {
     nombre,
     googleUrl,
     categoria: categoria || "otro",
     pais: pais || negocioActual.pais || "colombia",
-    claveAcceso: (codigos[slug].negocio && codigos[slug].negocio.claveAcceso) || negocioActual.claveAcceso || `${slug.toLowerCase()}-panel`,
+    ...claveExistente,
     email: email || negocioActual.email || "",
     plan: plan === "pro" ? "pro" : "basico",
     direccion: direccion || "",
@@ -2254,12 +2292,14 @@ app.post("/activar/:codigo", (req, res) => {
   // podría manipular) — se decide por lo que la tarjeta tenga guardado desde
   // que se pagó el pedido. Si no vino de un pedido con Pro, siempre básico.
   const planReal = entrada.proIncluido ? "pro" : "basico";
+  const { salt: saltActivacion, hash: hashActivacion } = hashClaveNegocio(claveLimpia);
   entrada.negocio = {
     nombre,
     googleUrl,
     categoria: categoria || "otro",
     pais: pais || "colombia",
-    claveAcceso: claveLimpia,
+    claveAccesoHash: hashActivacion,
+    claveAccesoSalt: saltActivacion,
     email: email || "",
     plan: planReal,
     direccion: direccion || "",
@@ -2291,7 +2331,7 @@ app.post("/activar/:codigo", (req, res) => {
           <h1 class="titulo-pagina">¡Tarjeta activada!</h1>
           <div class="ok-card">
             <p><b>${nombre}</b> ya está conectado a esta tarjeta Tapin.</p>
-            <p>Panel de este negocio:<br><code>${req.protocol}://${req.get("host")}/mi-panel/${codigo}?key=${entrada.negocio.claveAcceso}</code></p>
+            <p>Panel de este negocio:<br><code>${req.protocol}://${req.get("host")}/mi-panel/${codigo}?key=${encodeURIComponent(claveLimpia)}</code></p>
             <p>Esta tarjeta ya está lista — el cliente puede empezar a usarla de inmediato.</p>
           </div>
         </div>
@@ -2782,14 +2822,9 @@ app.get("/contenido/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
+  if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
-  const claveUsada = claveEfectiva(req, slug);
-  req.query.key = claveUsada;
-  const volverHref = claveUsada === ADMIN_KEY
-    ? `/stats?key=${encodeURIComponent(claveUsada)}`
-    : `/mi-panel/${slug}?key=${encodeURIComponent(claveUsada)}`;
 
   if (!esPro(negocio)) {
     return res.status(402).send(
@@ -2847,7 +2882,7 @@ app.get("/contenido/:slug", (req, res) => {
         </style>
       </head>
       <body>
-        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="${volverHref}">&larr; Volver al panel</a></div>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
         <div class="content">
           <div class="eyebrow">Marketing automático · ${negocio.nombre}</div>
           <h1 class="titulo-pagina">Contenido para redes</h1>
@@ -2940,12 +2975,13 @@ app.get("/mi-panel/:slug", (req, res) => {
   // Acepta la clave completa, la clave de solo lectura (idea 5), o la cookie
   // de sesión que se guarda la primera vez.
   const claveUsada = claveEfectiva(req, slug);
-  const autorizado = claveUsada === negocio.claveAcceso ||
+  const claveCompletaValida = claveNegocioValida(negocio, slug, claveUsada);
+  const autorizado = claveCompletaValida ||
     (negocio.claveSoloLectura && claveUsada === negocio.claveSoloLectura);
-  if (!negocio.claveAcceso || !autorizado) {
+  if (!tieneClaveConfigurada(negocio) || !autorizado) {
     return res.status(401).send("No autorizado. Verifica el enlace que te dio Tapin, debe incluir tu clave personal (?key=...).");
   }
-  if (req.query.key && claveUsada === negocio.claveAcceso) ponerCookieSesion(res, slug, req.query.key);
+  if (req.query.key && claveCompletaValida) ponerCookieSesion(res, slug, req.query.key);
   req.query.key = claveUsada;
 
   const datos = leerDatos();
@@ -3006,6 +3042,28 @@ app.get("/mi-panel/:slug", (req, res) => {
   const meta = progresoMeta(eventos, negocio.metaMensual);
   const comparativoAnio = compararAnioAnterior(eventos, negocio);
   const soloLectura = req.query.key === negocio.claveSoloLectura && negocio.claveSoloLectura;
+
+  // Proyección de toques ("si sigues así...") y promedio real de estrellas —
+  // ambas exclusivas de Plan Pro, junto con el resto del análisis avanzado.
+  const proyeccion = esPro(negocio) ? calcularProyeccion(eventos, negocio) : null;
+  const promedioEstrellas = esPro(negocio) ? calcularPromedioEstrellas(testimonios, quejas) : null;
+
+  // Bloque reutilizable del promedio de estrellas — se usa en las dos
+  // variantes de "Cómo te calificaron" (con sector y sin sector).
+  const promedioEstrellasHtml = promedioEstrellas ? `
+    <div class="estrellas-promedio">
+      <div class="estrellas-promedio-num">${promedioEstrellas.promedio}</div>
+      <div class="estrellas-promedio-iconos">${"★".repeat(Math.round(promedioEstrellas.promedio))}${"☆".repeat(5 - Math.round(promedioEstrellas.promedio))}</div>
+      <div class="estrellas-promedio-total">Promedio de ${promedioEstrellas.total} calificaciones</div>
+    </div>
+    <div class="estrellas-barras">
+      ${[5, 4, 3, 2, 1].map((estrella) => {
+        const conteo = promedioEstrellas.distribucion[estrella - 1];
+        const pct = promedioEstrellas.total > 0 ? Math.round((conteo / promedioEstrellas.total) * 100) : 0;
+        return `<div class="estrellas-barra-fila"><span>${estrella}★</span><div class="pista"><div class="relleno" style="width:${pct}%;"></div></div><span>${conteo}</span></div>`;
+      }).join("")}
+    </div>
+  ` : "";
 
   res.send(`
     <html>
@@ -3068,6 +3126,22 @@ app.get("/mi-panel/:slug", (req, res) => {
           .sentimiento-leyenda i{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
           .sentimiento-vacio{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};padding:6px 0;}
 
+          .proy-filtros{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;}
+          .proy-btn{flex:1;min-width:56px;background:${MARCA.crema};border:1px solid ${MARCA.borde};color:${MARCA.textoSuave};
+                    border-radius:100px;padding:8px 6px;font-size:0.76rem;font-weight:700;cursor:pointer;text-align:center;}
+          .proy-btn-activo{background:${MARCA.verdeOscuro};border-color:${MARCA.verdeOscuro};color:#fff;}
+          .proy-numero{text-align:center;font-size:2.4rem;font-weight:800;color:${MARCA.verdeOscuro};line-height:1;}
+          .proy-etiqueta{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};margin-top:6px;}
+          .proy-analisis{font-size:0.82rem;color:${MARCA.textoSuave};text-align:center;margin-top:16px;padding-top:14px;border-top:1px solid ${MARCA.borde};line-height:1.5;}
+          .estrellas-promedio{text-align:center;margin-bottom:14px;}
+          .estrellas-promedio-num{font-size:1.8rem;font-weight:800;color:${MARCA.oro};}
+          .estrellas-promedio-iconos{color:${MARCA.oro};font-size:1.1rem;margin:4px 0;}
+          .estrellas-promedio-total{font-size:0.76rem;color:${MARCA.textoSuave};}
+          .estrellas-barras{display:flex;flex-direction:column;gap:5px;margin-top:14px;}
+          .estrellas-barra-fila{display:flex;align-items:center;gap:8px;font-size:0.74rem;color:${MARCA.textoSuave};}
+          .estrellas-barra-fila .pista{flex:1;height:7px;border-radius:100px;background:${MARCA.borde};overflow:hidden;}
+          .estrellas-barra-fila .relleno{height:100%;border-radius:100px;background:${MARCA.oro};}
+
           .tabla-actividad{width:100%;border-collapse:collapse;font-size:0.78rem;table-layout:fixed;}
           .tabla-actividad th:first-child, .tabla-actividad td:first-child{width:58%;}
           .tabla-actividad th:last-child, .tabla-actividad td:last-child{width:42%;}
@@ -3110,7 +3184,7 @@ app.get("/mi-panel/:slug", (req, res) => {
               ${soloLectura ? `<span style="display:inline-block;margin-left:6px;padding:5px 14px;border-radius:100px;font-size:0.72rem;font-weight:700;background:#F3F1EC;color:${MARCA.textoSuave};">Solo lectura</span>` : ""}
             </div>
             ${!soloLectura ? `
-            <div class="panel-acciones" style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+            <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
               <a href="/mi-panel/${slug}/editar?key=${req.query.key}"
                  style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
                         border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;
@@ -3146,7 +3220,8 @@ app.get("/mi-panel/:slug", (req, res) => {
                 .map((s) => {
                   const otroNegocio = todosNegocios[s];
                   const rOtro = calcularResumen((datos[s] && datos[s].eventos) || []);
-                  return `<a href="/mi-panel/${s}?key=${otroNegocio.claveAcceso || ""}"
+                  const tokenOtraSede = generarLinkAccesoNegocio(s, 1);
+                  return `<a href="/mi-panel/${s}?key=${tokenOtraSede}"
                              style="display:flex;justify-content:space-between;align-items:center;text-decoration:none;
                                     color:${MARCA.texto};padding:10px 10px;border-radius:8px;">
                             <span style="font-size:0.85rem;font-weight:600;">${otroNegocio.nombre}</span>
@@ -3216,14 +3291,12 @@ app.get("/mi-panel/:slug", (req, res) => {
                 ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
                 ${calendario.dias.map((v, i) => {
                   const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
-                  const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
-                  return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:5px;
+                  return `<div title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:5px;
                           background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
                           display:flex;align-items:center;justify-content:center;font-size:0.6rem;
                           color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
                 }).join("")}
               </div>
-              <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:12px;">Más oscuro = más toques</div>
             </div>
           </div>
 
@@ -3265,6 +3338,38 @@ app.get("/mi-panel/:slug", (req, res) => {
             </div>
           </div>
           ` : ""}
+          ${proyeccion ? `
+          <div class="seccion">
+            <div class="card-titulo">Proyección <span class="suave">si sigues así</span></div>
+            <div class="chart-card" style="margin-top:0;">
+              <div class="proy-filtros" role="group" aria-label="Elegir período de proyección">
+                <button type="button" class="proy-btn proy-btn-activo" data-periodo="dia" onclick="mostrarProyeccion('dia', this)">Día</button>
+                <button type="button" class="proy-btn" data-periodo="semana" onclick="mostrarProyeccion('semana', this)">Semana</button>
+                <button type="button" class="proy-btn" data-periodo="mes" onclick="mostrarProyeccion('mes', this)">Mes</button>
+                <button type="button" class="proy-btn" data-periodo="semestre" onclick="mostrarProyeccion('semestre', this)">Semestre</button>
+                <button type="button" class="proy-btn" data-periodo="anio" onclick="mostrarProyeccion('anio', this)">Año</button>
+              </div>
+              <div class="proy-numero" id="proy-numero">${proyeccion.proyecciones.dia.toques}</div>
+              <div class="proy-etiqueta" id="proy-etiqueta">toques proyectados en ${proyeccion.proyecciones.dia.etiquetaLarga}</div>
+              ${!proyeccion.confiable ? `
+              <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;margin-top:14px;">
+                Todavía tienes poca historia (menos de una semana o poca actividad) — esta proyección es solo una estimación inicial, se va a volver más precisa con más datos.
+              </div>
+              ` : `
+              <div class="proy-analisis">
+                Basado en tu promedio de <b>${proyeccion.promedioDiario} toques/día</b> en los últimos ${proyeccion.ventanaDias} días.
+                ${proyeccion.tendenciaPct !== null ? (
+                  proyeccion.tendenciaPct >= 10
+                    ? ` Tu actividad está <b style="color:${MARCA.verde};">subiendo</b> (+${proyeccion.tendenciaPct}% comparando la mitad más reciente de ese período contra la anterior) — si esa tendencia se mantiene, la proyección real podría quedar corta.`
+                    : proyeccion.tendenciaPct <= -10
+                      ? ` Tu actividad está <b style="color:${MARCA.rojo};">bajando</b> (${proyeccion.tendenciaPct}% comparando la mitad más reciente de ese período contra la anterior) — si no se corrige, la proyección real podría quedar por debajo de esto.`
+                      : ` Tu actividad se ha mantenido <b>estable</b> en ese período.`
+                ) : ""}
+              </div>
+              `}
+            </div>
+          </div>
+          ` : ""}
           <div class="seccion">
             <div class="card-titulo">Tus horas pico <span class="suave">últimos 30 días</span></div>
             <div class="chart-card" style="margin-top:0;">
@@ -3281,6 +3386,7 @@ app.get("/mi-panel/:slug", (req, res) => {
             <div>
               <div class="card-titulo">Cómo te calificaron</div>
               <div class="chart-card" style="margin-top:0;">
+                ${promedioEstrellasHtml}
                 ${totalCalificado > 0
                   ? `<div class="sentimiento-barra">
                        <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
@@ -3330,6 +3436,7 @@ app.get("/mi-panel/:slug", (req, res) => {
           <div class="seccion">
             <div class="card-titulo">Cómo te calificaron</div>
             <div class="chart-card" style="margin-top:0;">
+              ${promedioEstrellasHtml}
               ${totalCalificado > 0
                 ? `<div class="sentimiento-barra">
                      <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
@@ -3345,7 +3452,7 @@ app.get("/mi-panel/:slug", (req, res) => {
           </div>
           `}
 
-          <div class="seccion seccion-actividad">
+          <div class="seccion">
             <div class="card-titulo">Actividad reciente</div>
             <div class="chart-card" style="margin-top:0;">
               <table class="tabla-actividad">
@@ -3426,6 +3533,18 @@ app.get("/mi-panel/:slug", (req, res) => {
           `}
 
         </div>
+        ${proyeccion ? `
+        <script>
+          const proyeccionDatos = ${JSON.stringify(proyeccion.proyecciones)};
+          function mostrarProyeccion(periodo, boton) {
+            const datos = proyeccionDatos[periodo];
+            document.getElementById('proy-numero').textContent = datos.toques.toLocaleString('es-CO');
+            document.getElementById('proy-etiqueta').textContent = 'toques proyectados en ' + datos.etiquetaLarga;
+            document.querySelectorAll('.proy-btn').forEach((b) => b.classList.remove('proy-btn-activo'));
+            boton.classList.add('proy-btn-activo');
+          }
+        </script>
+        ` : ""}
       </body>
     </html>
   `);
@@ -3440,7 +3559,7 @@ app.get("/mi-panel/:slug/editar", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
   req.query.key = claveUsada;
@@ -3506,7 +3625,7 @@ app.post("/mi-panel/:slug/editar", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   const { nombre, googleUrl, email, direccion, ciudad, categoria } = req.body;
@@ -3530,7 +3649,7 @@ app.get("/mi-panel/:slug/clave", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
   req.query.key = claveUsada;
@@ -3580,14 +3699,15 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   const claveNueva = (req.body.claveNueva || "").trim();
   if (claveNueva.length < 6) {
     return res.status(400).send("La clave debe tener al menos 6 caracteres.");
   }
-  guardarCambiosNegocio(slug, negocio, { claveAcceso: claveNueva });
+  const { salt: saltCambio, hash: hashCambio } = hashClaveNegocio(claveNueva);
+  guardarCambiosNegocio(slug, negocio, { claveAccesoHash: hashCambio, claveAccesoSalt: saltCambio, claveAcceso: undefined });
   ponerCookieSesion(res, slug, claveNueva);
   registrarAuditoria(slug, negocio, "Cambiaste tu clave de acceso");
 
@@ -3621,7 +3741,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado. La configuración solo la puede tocar la clave completa, no la de solo lectura.");
   }
   req.query.key = claveUsada;
@@ -3743,7 +3863,7 @@ app.post("/mi-panel/:slug/configuracion/meta", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
   const metaMensual = parseInt(req.body.metaMensual, 10) || null;
   guardarCambiosNegocio(slug, negocio, { metaMensual });
   registrarAuditoria(slug, negocio, metaMensual ? `Configuraste una meta mensual de ${metaMensual} toques` : "Quitaste tu meta mensual");
@@ -3754,7 +3874,7 @@ app.post("/mi-panel/:slug/configuracion/alertas", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
   const frecuenciaQuejas = ["instantanea", "diario", "semanal"].includes(req.body.frecuenciaQuejas)
     ? req.body.frecuenciaQuejas : "instantanea";
   const alertas = { quejas: req.body.quejas === "on", reporteMensual: req.body.reporteMensual === "on", frecuenciaQuejas };
@@ -3767,7 +3887,7 @@ app.post("/mi-panel/:slug/configuracion/pausar", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
   const pausado = req.body.pausar === "si";
   guardarCambiosNegocio(slug, negocio, { pausado });
   registrarAuditoria(slug, negocio, pausado ? "Pausaste tu negocio" : "Reanudaste tu negocio");
@@ -3778,7 +3898,7 @@ app.post("/mi-panel/:slug/configuracion/solo-lectura", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) return res.status(401).send("No autorizado.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
   const claveSoloLectura = generarToken();
   guardarCambiosNegocio(slug, negocio, { claveSoloLectura });
   registrarAuditoria(slug, negocio, "Generaste un nuevo acceso de solo lectura");
@@ -3817,7 +3937,7 @@ app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
   if (!esPro(negocio)) {
@@ -3916,7 +4036,7 @@ app.post("/mi-panel/:slug/fidelizacion", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
   if (!esPro(negocio)) return res.status(402).send("Exclusivo del Plan Pro.");
@@ -3936,7 +4056,7 @@ app.get("/mi-panel/:slug/fidelizacion/exportar.csv", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
   const fid = negocio.fidelizacion || { metaSellos: 10 };
@@ -3958,7 +4078,7 @@ app.get("/mi-panel/:slug/fidelizacion/:id/canjear", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
-  if (!negocio.claveAcceso || claveUsada !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
   const datos = leerDatos();
@@ -4965,12 +5085,13 @@ app.get("/avisar-vencimiento-anual", async (req, res) => {
 
     if (negocio.email) {
       try {
+        const tokenRenovar = generarLinkAccesoNegocio(slug, 14);
         await enviarEmail(
           negocio.email,
           `Tu Plan Pro anual vence pronto — ${negocio.nombre}`,
           `<p>Tu Plan Pro anual de <b>${negocio.nombre}</b> vence el <b>${vence.toLocaleDateString("es-CO")}</b>.</p>
            <p>Para no perder el acceso a las funciones Pro, renueva desde tu panel antes de esa fecha.</p>
-           <p><a href="${req.protocol}://${req.get("host")}/mejorar-a-pro/${slug}?key=${negocio.claveAcceso}&plan=anual">Renovar mi Plan Pro anual</a></p>`
+           <p><a href="${req.protocol}://${req.get("host")}/mejorar-a-pro/${slug}?key=${tokenRenovar}&plan=anual">Renovar mi Plan Pro anual</a></p>`
         );
         guardarCambiosNegocio(slug, negocio, { avisoVencimientoEnviado: negocio.proAnualHasta });
         resultado.push({ slug, avisado: true });
@@ -5435,17 +5556,14 @@ app.get("/conoce", (req, res) => {
                 <div class="plan-anual-badge">10% más barato</div>
               </div>
               <ul>
-                <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
                 <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                <li><span class="check">✓</span> Filtro de calificaciones y retroalimentación privada — lo negativo nunca se publica</li>
+                <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
                 <li><span class="check">✓</span> Alerta instantánea por correo ante retroalimentación negativa</li>
                 <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
                 <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
                 <li><span class="check">✓</span> Reportes en CSV, PDF y Word — te los enviamos por correo cuando los necesites</li>
                 <li><span class="check">✓</span> Generador de contenido para redes sociales</li>
                 <li><span class="check">✓</span> Comparación contra el promedio de tu categoría</li>
-                <li><span class="check">✓</span> Recomendaciones automáticas para tu negocio</li>
-                <li><span class="check">✓</span> Programa de fidelización de clientes</li>
               </ul>
             </div>
           </div>
@@ -5465,9 +5583,13 @@ app.get("/conoce", (req, res) => {
             </div>
             <div class="precio-card">
               <div class="precio-card-titulo">Suscripción Plan Pro</div>
-              <table class="tabla-precios tabla-pro">
-                <tr><th>Tarjetas activas</th><th>Precio mensual</th></tr>
-                ${filasTablaProHtml()}
+              <table class="tabla-precios">
+                <tr><th>Tarjetas activas</th><th>Precio c/u / mes</th></tr>
+                ${ESCALONES_PRO.slice().reverse().map((e, i, arr) => {
+                  const siguiente = arr[i + 1];
+                  const rango = siguiente ? `${e.minimo}-${siguiente.minimo - 1}` : `${e.minimo}+`;
+                  return `<tr><td>${rango}</td><td>$${e.precio.toLocaleString("es-CO")}</td></tr>`;
+                }).join("")}
               </table>
             </div>
           </div>
@@ -5480,7 +5602,7 @@ app.get("/conoce", (req, res) => {
         </main>
         <footer class="site-footer">
           <span>© ${new Date().getFullYear()} Tapin. Hecho en Colombia.</span>
-          <span><a href="mailto:tapin.notificaciones@gmail.com">tapin.notificaciones@gmail.com</a><a href="https://wa.me/573003489609" target="_blank">WhatsApp</a></span>
+          <span><a href="mailto:hola@tapincol.com">hola@tapincol.com</a><a href="https://wa.me/573003489609" target="_blank">WhatsApp</a></span>
         </footer>
       </body>
     </html>
@@ -5704,7 +5826,7 @@ app.get("/mis-negocios", (req, res) => {
     </form>`;
 
   const bloqueLogin = `
-    <a class="google-login" href="/auth/google/iniciar" style="display:flex;align-items:center;justify-content:center;gap:10px;
+    <a href="/auth/google/iniciar" style="display:flex;align-items:center;justify-content:center;gap:10px;
        width:100%;box-sizing:border-box;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
        padding:13px;font-weight:700;font-size:0.9rem;color:${MARCA.texto};text-decoration:none;margin-bottom:14px;">
       <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -5853,9 +5975,10 @@ function renderizarPaginaNegocios(email) {
   const tarjetas = misSlugs.map((slug) => {
     const negocio = todos[slug];
     const r = calcularResumen((datos[slug] && datos[slug].eventos) || []);
+    const tokenPanel = generarLinkAccesoNegocio(slug, 7);
     return `
       <div class="card">
-        <a href="/mi-panel/${slug}?key=${negocio.claveAcceso || ""}" style="text-decoration:none;color:inherit;">
+        <a href="/mi-panel/${slug}?key=${tokenPanel}" style="text-decoration:none;color:inherit;">
           <div class="card-top">
             <div class="card-nombre">${negocio.nombre} ${esPro(negocio) ? `<span class="badge-pro">PRO</span>` : `<span class="badge-basico">BÁSICO</span>`}</div>
             <div class="card-total">${r.total}<span>toques totales</span></div>
@@ -5863,8 +5986,8 @@ function renderizarPaginaNegocios(email) {
           <div class="card-meta">${negocio.categoria || "—"} ${negocio.direccion ? "· " + negocio.direccion : ""}</div>
           <div class="card-cta">Ver panel completo &rarr;</div>
         </a>
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid ${MARCA.borde};font-size:0.76rem;color:${MARCA.textoSuave};">
-          ¿Olvidaste tu clave? Es: <code style="background:${MARCA.crema};padding:2px 8px;border-radius:6px;font-weight:700;color:${MARCA.texto};">${negocio.claveAcceso || "no configurada"}</code>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid ${MARCA.borde};font-size:0.76rem;">
+          <a href="/restablecer-clave/${slug}?token=${tokenPanel}" style="color:${MARCA.verde};font-weight:600;">¿Olvidaste tu clave? Restablécela aquí →</a>
         </div>
       </div>`;
   }).join("");
@@ -6082,7 +6205,7 @@ app.get("/cliente", (req, res) => {
           <div class="panel activo" id="panel-login">
             <h2>Bienvenido de vuelta</h2>
             <p>Entra para ver tus favoritos y tu historial de reseñas.</p>
-            <a class="google-login" href="/auth/google/iniciar?tipo=cliente" style="display:flex;align-items:center;justify-content:center;gap:10px;
+            <a href="/auth/google/iniciar?tipo=cliente" style="display:flex;align-items:center;justify-content:center;gap:10px;
                width:100%;box-sizing:border-box;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
                padding:13px;font-weight:700;font-size:0.9rem;color:${MARCA.texto};text-decoration:none;margin-bottom:14px;">
               <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -6841,30 +6964,14 @@ app.get("/", (req, res) => {
           .seccion-titulo{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2.2rem,4vw,3.4rem);line-height:1.03;letter-spacing:-.05em;text-align:center;margin:0 0 16px;color:var(--ink);}
           .seccion-sub{text-align:center;color:var(--muted);max-width:560px;margin:0 auto 50px;font-size:1rem;}
 
-          #como-funciona,#accesos,#precios,.faq{padding:68px 40px;border-radius:34px;margin-bottom:76px;}
-          #como-funciona,#precios{background:rgba(255,255,255,.42);border:1px solid rgba(222,220,204,.75);}
-          #accesos{background:rgba(232,239,230,.62);border:1px solid rgba(202,218,202,.8);}
-          .faq{background:rgba(247,239,214,.58);border:1px solid rgba(226,208,158,.7);max-width:none;}
-          #accesos .accesos{margin-bottom:0;}
-
-          .flujo{border-radius:28px;padding:34px 30px;margin-bottom:28px;}
-          .flujo-basico{background:#edf2ed;border:1px solid #d5e1d7;}
-          .flujo-pro{background:linear-gradient(135deg,#fff 35%,#f9f1dd);border:2px solid var(--gold);box-shadow:0 16px 30px rgba(139,96,12,.1);}
-          .flujo-cabecera{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
-          .flujo-cabecera h3{font-family:'Playfair Display',Georgia,serif;font-size:1.65rem;margin:0;color:var(--ink);}
-          .flujo-etiqueta{font-size:.66rem;font-weight:900;letter-spacing:.07em;padding:6px 11px;border-radius:999px;text-transform:uppercase;background:var(--paper);color:var(--forest);}
-          .flujo-pro .flujo-etiqueta{background:var(--forest);color:#fff;}
-          .flujo-descripcion{color:var(--muted);font-size:.9rem;margin:0 0 24px;}
-          .pasos{display:flex;flex-wrap:wrap;gap:16px;margin:0;}
+          .pasos{display:flex;flex-wrap:wrap;gap:20px;margin-bottom:110px;}
           .paso{flex:1;min-width:230px;background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:30px 26px;box-shadow:0 10px 20px rgba(9,49,30,.05);}
-          .paso.paso-pro{border:1px solid #e6c774;background:var(--paper);position:relative;}
-          .paso-pro-badge{position:absolute;right:18px;top:18px;background:var(--forest);color:#fff;font-size:.62rem;font-weight:900;letter-spacing:.06em;padding:6px 10px;border-radius:999px;text-transform:uppercase;}
           .paso-num{width:38px;height:38px;border-radius:50%;background:#edf1ed;color:var(--forest);font-size:.8rem;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:18px;}
           .paso h3{font-family:'Playfair Display',Georgia,serif;font-size:1.25rem;margin:0 0 8px;color:var(--ink);}
           .paso p{font-size:.88rem;color:var(--muted);line-height:1.55;margin:0;}
 
-          .accesos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:1fr;gap:18px;margin-bottom:110px;align-items:stretch;}
-          .acceso{border-radius:24px;padding:32px 28px;text-decoration:none;color:var(--ink);position:relative;overflow:hidden;box-shadow:0 14px 28px rgba(9,49,30,.08);transition:transform .2s ease,box-shadow .2s ease;min-height:240px;height:100%;display:flex;flex-direction:column;align-self:stretch;}
+          .accesos{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-bottom:110px;}
+          .acceso{border-radius:24px;padding:32px 28px;text-decoration:none;color:var(--ink);position:relative;overflow:hidden;box-shadow:0 14px 28px rgba(9,49,30,.08);transition:transform .2s ease,box-shadow .2s ease;min-height:210px;display:flex;flex-direction:column;}
           .acceso:hover{transform:translateY(-6px);box-shadow:0 22px 40px rgba(9,49,30,.16);}
           .acceso-1{background:linear-gradient(135deg,#0a3e29,#146542);color:#fff;}
           .acceso-2{background:linear-gradient(145deg,#fffef8,#fbf1d8);border:2px solid var(--gold);}
@@ -6909,15 +7016,6 @@ app.get("/", (req, res) => {
 
           .nota{background:#edf2ed;border-radius:20px;padding:26px 30px;color:var(--forest);line-height:1.6;font-size:.92rem;margin-bottom:70px;}
 
-          .faq{margin:20px auto 90px;max-width:860px;}
-          .faq-list{display:grid;gap:14px;margin-top:38px;}
-          .faq-item{background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 18px rgba(9,49,30,.05);overflow:hidden;}
-          .faq-item summary{list-style:none;cursor:pointer;padding:21px 58px 21px 24px;font-weight:800;font-size:.96rem;position:relative;color:var(--ink);}
-          .faq-item summary::-webkit-details-marker{display:none;}
-          .faq-item summary::after{content:'+';position:absolute;right:24px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:var(--cream);display:flex;align-items:center;justify-content:center;color:var(--forest);font-size:1.2rem;}
-          .faq-item[open] summary::after{content:'−';background:var(--gold);color:var(--ink);}
-          .faq-item p{margin:0;padding:0 24px 22px;color:var(--muted);font-size:.9rem;line-height:1.65;max-width:760px;}
-
           .contacto{text-align:center;padding:20px 0 40px;}
           .cta{display:inline-block;background:var(--forest);color:#fff;text-decoration:none;padding:16px 30px;border-radius:999px;font-weight:700;box-shadow:0 12px 22px rgba(9,67,43,.18);}
 
@@ -6930,12 +7028,10 @@ app.get("/", (req, res) => {
             .site-order{padding:10px 15px;}
             .hero h1{font-size:2.4rem;}
             .contenido{padding:60px 20px;}
-            #como-funciona,#accesos,#precios,.faq{padding:46px 20px;border-radius:24px;margin-bottom:48px;}
             .stats-strip{grid-template-columns:1fr;}
             .stats-strip div{border-right:none;border-bottom:1px solid var(--line);}
             .stats-strip div:last-child{border-bottom:none;}
             .accesos{grid-template-columns:1fr;}
-            .flujo{padding:28px 20px;}
             .planes,.precios-grid{flex-direction:column;}
             .site-footer{flex-direction:column;}
             .site-footer span:last-child{display:flex;gap:16px;margin-top:6px;}
@@ -6949,13 +7045,12 @@ app.get("/", (req, res) => {
             <a href="#como-funciona">Cómo funciona</a>
             <a href="#accesos">Accesos</a>
             <a href="#precios">Precios</a>
-            <a href="#preguntas">Preguntas</a>
             <a class="site-order" href="/pedido">Pedir tarjeta</a>
           </nav>
         </header>
 
         <div class="hero">
-          <div class="hero-kicker">HECHO EN COLOMBIA · SIN COMPLICACIONES · SIN FRICCIÓN</div>
+          <div class="hero-kicker">HECHO EN COLOMBIA · SIN APPS · SIN FRICCIÓN</div>
           <h1>Más reseñas. Mejor reputación.</h1>
           <p>Tapin convierte cada visita a tu negocio en una reseña de Google. El cliente acerca su celular a tu tarjeta y listo.</p>
           <div class="hero-cta-row">
@@ -6985,37 +7080,18 @@ app.get("/", (req, res) => {
 
         <div class="contenido">
           <div class="stats-strip">
-            <div><strong>Sin complicaciones</strong><span>Funciona desde cualquier celular</span></div>
+            <div><strong>Sin apps</strong><span>Funciona desde cualquier celular</span></div>
             <div><strong>1 toque</strong><span>Para abrir tu enlace de reseñas</span></div>
             <div><strong>En segundos</strong><span>Listo para usar al recibirlo</span></div>
           </div>
 
           <div id="como-funciona">
-            <div class="seccion-titulo">Así funciona Tapin</div>
-            <div class="seccion-sub">El proceso es fácil. La diferencia está en el filtro de calificaciones, que es exclusivo del Plan Pro.</div>
-
-            <div class="flujo flujo-basico">
-              <div class="flujo-cabecera"><span class="flujo-etiqueta">Sin Plan Pro</span><h3>Con tu tarjeta Tapin</h3></div>
-              <p class="flujo-descripcion">El cliente va directamente a dejar su reseña. Este recorrido no incluye el filtro de calificaciones.</p>
-              <div class="pasos">
-                <div class="paso"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
-                <div class="paso"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código y completas los datos de tu negocio en pocos minutos.</p></div>
-                <div class="paso"><div class="paso-num">3</div><h3>El cliente toca la tarjeta</h3><p>Solo acerca su celular a la tarjeta Tapin para abrir el enlace.</p></div>
-                <div class="paso"><div class="paso-num">4</div><h3>Deja su reseña en Google Reviews</h3><p>El último paso lleva al cliente a publicar su reseña directamente en Google Reviews.</p></div>
-              </div>
-            </div>
-
-            <div class="flujo flujo-pro">
-              <div class="flujo-cabecera"><span class="flujo-etiqueta">Con Plan Pro</span><h3>Con filtro de calificaciones</h3></div>
-              <p class="flujo-descripcion"><b>Este filtro solo está incluido en el Plan Pro:</b> separa las experiencias positivas y convierte las negativas en retroalimentación privada para el negocio.</p>
-              <div class="pasos">
-                <div class="paso paso-pro"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
-                <div class="paso paso-pro"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código, completas los datos y activas el Plan Pro.</p></div>
-                <div class="paso paso-pro"><div class="paso-num">3</div><h3>El cliente toca y califica</h3><p>Al acercar el celular, se abre una página sencilla para calificar la experiencia.</p></div>
-                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">4</div><h3>El filtro separa la calificación</h3><p>Las experiencias positivas siguen hacia Google y las negativas se reciben de forma privada.</p></div>
-                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">5</div><h3>Reseña pública o retroalimentación privada</h3><p>Si fue positiva, el cliente deja su reseña en Google Reviews; si fue negativa, el negocio la recibe de forma privada y obtiene una alerta instantánea.</p></div>
-                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">6</div><h3>Recibe el reporte mensual</h3><p>El último paso es un reporte mensual con todas tus estadísticas y análisis: horas pico, subidas, caídas y comparación con otros negocios de tu sector.</p></div>
-              </div>
+            <div class="seccion-titulo">Tres pasos. Cero fricción.</div>
+            <div class="seccion-sub">Diseñado para que pedir una reseña sea natural para tus clientes.</div>
+            <div class="pasos">
+              <div class="paso"><div class="paso-num">1</div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta, se abre una página simple donde el cliente califica su experiencia.</p></div>
+              <div class="paso"><div class="paso-num">2</div><h3>Si calificó bien, va directo a Google</h3><p>Lo mandamos automáticamente a dejar la reseña pública en tu perfil de Google.</p></div>
+              <div class="paso"><div class="paso-num">3</div><h3>Si calificó mal, queda privado</h3><p>Ese comentario llega directo a ti — nunca se vuelve una reseña negativa pública.</p></div>
             </div>
           </div>
 
@@ -7024,6 +7100,7 @@ app.get("/", (req, res) => {
             <div class="seccion-sub">Encuentra el acceso que necesitas.</div>
             <div class="accesos">
               <a class="acceso acceso-1" href="/pedido"><div class="acceso-badge">RECOMENDADO</div><div class="acceso-icono">✦</div><h3>Pedir tarjeta</h3><p>Solicita tu Tapin y recíbela configurada para tu negocio.</p><span class="acceso-flecha">Quiero mi Tapin →</span></a>
+              <a class="acceso acceso-2" href="/cliente"><div class="acceso-badge">CLIENTES</div><div class="acceso-icono">◯</div><h3>Soy cliente</h3><p>Guarda favoritos y lleva tu historial de reseñas.</p><span class="acceso-flecha">Ir a mi cuenta →</span></a>
               <a class="acceso acceso-3" href="/mis-negocios"><div class="acceso-icono">▣</div><h3>Tengo un negocio</h3><p>Activa tu tarjeta o entra al panel de tu negocio.</p><span class="acceso-flecha">Entrar a mi negocio →</span></a>
               <a class="acceso acceso-4" href="/descubre"><div class="acceso-icono">⌖</div><h3>Descubrir negocios</h3><p>Explora el mapa de negocios que ya usan Tapin.</p><span class="acceso-flecha">Ver el mapa →</span></a>
             </div>
@@ -7031,7 +7108,7 @@ app.get("/", (req, res) => {
 
           <div id="precios">
             <div class="seccion-titulo">Lo que cuesta, sin letra pequeña</div>
-            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres el filtro, retroalimentación privada, reportes y más. Para pagar la mensualidad Pro primero debes tener una tarjeta Tapin.</div>
+            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres retroalimentación privada, reportes y más.</div>
             <div class="planes">
               <div class="plan">
                 <div class="plan-nombre">Pago único</div>
@@ -7052,16 +7129,11 @@ app.get("/", (req, res) => {
                   <div class="plan-anual-badge">10% más barato</div>
                 </div>
                 <ul>
-                  <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
                   <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                  <li><span class="check">✓</span> Filtro de calificaciones y retroalimentación privada</li>
+                  <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
                   <li><span class="check">✓</span> Alerta instantánea ante retroalimentación negativa</li>
-                  <li><span class="check">✓</span> Historial detallado de cada toque y estadísticas completas</li>
-                  <li><span class="check">✓</span> Reporte PDF mensual con horas pico, subidas y caídas</li>
-                  <li><span class="check">✓</span> Comparación y análisis frente a negocios del mismo sector</li>
-                  <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
-                  <li><span class="check">✓</span> Recomendaciones automáticas y generador de contenido para redes</li>
-                  <li><span class="check">✓</span> Programa de fidelización de clientes</li>
+                  <li><span class="check">✓</span> Reporte mensual automático</li>
+                  <li><span class="check">✓</span> Generador de contenido para redes</li>
                 </ul>
               </div>
             </div>
@@ -7081,50 +7153,15 @@ app.get("/", (req, res) => {
               <div class="precio-card">
                 <div class="precio-card-titulo">Suscripción Plan Pro</div>
                 <div class="precio-card-sub">Precio mensual por tarjeta según cuántas tengas activas</div>
-                <table class="tabla-precios tabla-pro">
-                  <tr><th>Tarjetas activas</th><th>Precio mensual</th></tr>
-                  ${filasTablaProHtml()}
+                <table class="tabla-precios">
+                  <tr><th>Tarjetas activas</th><th>Precio c/u/mes</th></tr>
+                  ${ESCALONES_PRO.slice().reverse().map((e, i, arr) => {
+                    const siguiente = arr[i + 1];
+                    const rango = siguiente ? `${e.minimo}-${siguiente.minimo - 1}` : `${e.minimo}+`;
+                    return `<tr><td>${rango}</td><td>$${e.precio.toLocaleString("es-CO")}</td></tr>`;
+                  }).join("")}
                 </table>
               </div>
-            </div>
-          </div>
-
-          <div class="faq" id="preguntas">
-            <div class="seccion-titulo">Dudas frecuentes</div>
-            <div class="seccion-sub">Lo esencial antes de pedir y activar tu tarjeta Tapin.</div>
-            <div class="faq-list">
-              <details class="faq-item">
-                <summary>¿Necesito instalar una aplicación?</summary>
-                <p>No. Tapin funciona desde el navegador del celular, sin instalaciones ni configuraciones complicadas para tus clientes.</p>
-              </details>
-              <details class="faq-item">
-                <summary>¿Cómo usa el cliente la tarjeta?</summary>
-                <p>Acerca su celular a la tarjeta mediante NFC. El enlace se abre en segundos para continuar con la reseña.</p>
-              </details>
-              <details class="faq-item">
-                <summary>¿Cómo activo mi Tapin cuando lo recibo?</summary>
-                <p>Recibes un código de activación, completas los datos de tu negocio y conectas tu perfil de Google. El proceso está diseñado para hacerse en pocos minutos.</p>
-              </details>
-              <details class="faq-item">
-                <summary>¿Cuál es la diferencia entre la tarjeta y el Plan Pro?</summary>
-                <p>La compra básica incluye la tarjeta física, el envío y el acceso esencial. El Plan Pro añade el filtro de calificaciones, retroalimentación privada, alertas, estadísticas detalladas, reportes y otras herramientas avanzadas.</p>
-              </details>
-              <details class="faq-item">
-                <summary>¿Necesito una tarjeta Tapin para contratar el Plan Pro?</summary>
-                <p>Sí. La mensualidad Pro funciona sobre una tarjeta Tapin activa. Primero debes tener y activar tu tarjeta para poder utilizar las funciones Pro.</p>
-              </details>
-              <details class="faq-item">
-                <summary>¿Qué hace el filtro exclusivo del Plan Pro?</summary>
-                <p>Las experiencias positivas continúan hacia Google Reviews. Las negativas se convierten en retroalimentación privada y generan una alerta para que el negocio pueda atenderlas. Sin Plan Pro, este filtro no está disponible.</p>
-              </details>
-              <details class="faq-item">
-                <summary>¿Qué incluye el reporte mensual Pro?</summary>
-                <p>Incluye tus estadísticas completas, actividad, horas pico, subidas y caídas, análisis de resultados y comparación frente a otros negocios de tu sector.</p>
-              </details>
-              <details class="faq-item">
-                <summary>¿Cómo funcionan los pagos del Plan Pro?</summary>
-                <p>Puedes elegir mensualidad con renovación automática o pago anual. La suscripción mensual se puede cancelar desde el panel y permanece activa hasta terminar el período ya pagado.</p>
-              </details>
             </div>
           </div>
 
@@ -7135,7 +7172,7 @@ app.get("/", (req, res) => {
             <div class="seccion-sub">Estamos aquí para ayudarte. Escríbenos y te respondemos lo antes posible.</div>
             <div class="hero-cta-row" style="justify-content:center;">
               <a class="hero-cta-main" href="https://wa.me/573003489609" target="_blank">WhatsApp</a>
-              <a class="acceso-flecha" style="border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:15px 26px;text-decoration:none;font-weight:700;font-size:.92rem;" href="mailto:tapin.notificaciones@gmail.com">tapin.notificaciones@gmail.com</a>
+              <a class="acceso-flecha" style="border:1.5px solid var(--line);color:var(--ink);border-radius:999px;padding:15px 26px;text-decoration:none;font-weight:700;font-size:.92rem;" href="mailto:hola@tapincol.com">hola@tapincol.com</a>
             </div>
           </div>
         </div>
@@ -7221,31 +7258,12 @@ const PRECIO_PRO_ANUAL_COP = 649900; // pago único, cubre 12 meses (~10% más b
 // valor de comparar entre sus propias sedes, así que tiene sentido que pague
 // más por local, no menos. Ya anunciado en /conoce.
 const ESCALONES_PRO = [
-  { minimo: 50, precio: 199900 },
-  { minimo: 25, precio: 159900 },
-  { minimo: 10, precio: 119900 },
+  { minimo: 50, precio: 149900 },
+  { minimo: 25, precio: 129900 },
+  { minimo: 10, precio: 109900 },
   { minimo: 4, precio: 89900 },
   { minimo: 1, precio: PRECIO_PRO_COP },
 ];
-
-// Filas comerciales de la tabla pública. A partir de 100 tarjetas se prepara
-// una cotización empresarial en lugar de publicar una tarifa automática.
-const FILAS_TABLA_PRO = [
-  { rango: "1–3", precio: 59900 },
-  { rango: "4–9", precio: 89900 },
-  { rango: "10–24", precio: 119900 },
-  { rango: "25–49", precio: 159900 },
-  { rango: "50–99", precio: 199900 },
-  { rango: "100+", cotizacion: true },
-];
-
-function filasTablaProHtml() {
-  return FILAS_TABLA_PRO.map((fila) => `
-    <tr class="${fila.cotizacion ? "fila-empresa" : ""}">
-      <td>${fila.rango}</td>
-      <td>${fila.cotizacion ? "Cotización empresarial" : `$${fila.precio.toLocaleString("es-CO")}`}</td>
-    </tr>`).join("");
-}
 
 // Descuento por volumen — Plan D (Redondos: 10/20/30/35/40%). El precio por
 // tarjeta baja según cuántas se pidan de una vez, pero nunca por debajo de
@@ -7705,7 +7723,7 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   // Si ya es Pro, normalmente lo mandamos a su panel — pero si está pidiendo
@@ -7814,7 +7832,7 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
 
@@ -7968,7 +7986,7 @@ app.get("/suscripcion/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   if (!esPro(negocio)) {
@@ -8059,7 +8077,7 @@ app.post("/suscripcion/:slug/registrar", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   if (!process.env.WOMPI_PRIVATE_KEY) {
@@ -8116,7 +8134,7 @@ app.post("/suscripcion/:slug/cancelar", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   const sus = negocio.suscripcion;
@@ -8138,7 +8156,7 @@ app.post("/suscripcion/:slug/bajar-anticipado", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!negocio.claveAcceso || req.query.key !== negocio.claveAcceso) {
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
   if (negocio.billingType !== "anual") {
@@ -8217,11 +8235,12 @@ app.get("/cobrar-suscripciones", async (req, res) => {
           suscripcion: { ...sus, ultimoCobro: new Date().toISOString(), ultimoError: estado },
         });
         resultado.push({ slug, estado: `FALLÓ (${estado})` });
+        const tokenSuscripcion = generarLinkAccesoNegocio(slug, 10);
         await enviarEmail(
           negocio.email,
           "No pudimos procesar tu suscripción Pro de Tapin",
           `<p>Intentamos cobrar tu mensualidad del Plan Pro y la tarjeta registrada fue rechazada (estado: ${estado}).</p>
-           <p>Por favor registra una tarjeta válida aquí: ${req.protocol}://${req.get("host")}/suscripcion/${slug}?key=${negocio.claveAcceso}</p>`
+           <p>Por favor registra una tarjeta válida aquí: ${req.protocol}://${req.get("host")}/suscripcion/${slug}?key=${tokenSuscripcion}</p>`
         );
       }
     } catch (err) {
@@ -8234,6 +8253,34 @@ app.get("/cobrar-suscripciones", async (req, res) => {
 });
 
 // ---------- SEO técnico ----------
+// El favicon (ícono que sale en la pestaña del navegador) — el navegador lo
+// pide solo en /favicon.ico sin que haga falta ningún <link> en cada página.
+// Reutiliza el mismo logo SVG oficial que ya está en todo el sitio, sobre un
+// círculo verde de fondo para que se vea bien en pestañas claras y oscuras.
+function faviconSvg() {
+  const escala = 0.034; // ajusta el logo (945x355 aprox) a un tamaño cómodo dentro del círculo
+  const anchoLogo = LOGO_ANCHO_VB * escala;
+  const altoLogo = LOGO_ALTO_VB * escala;
+  return `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="32" cy="32" r="32" fill="${MARCA.verdeOscuro}"/>
+    <g transform="translate(${32 - anchoLogo / 2},${32 - altoLogo / 2}) scale(${escala})">
+      <g transform="translate(-44.532706,477.996311) scale(0.100000,-0.100000)" fill="#FFFFFF" stroke="none">
+        ${LOGO_PATH_DATA}
+      </g>
+    </g>
+  </svg>`;
+}
+app.get("/favicon.ico", (req, res) => {
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.send(faviconSvg());
+});
+app.get("/favicon.svg", (req, res) => {
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.send(faviconSvg());
+});
+
 app.get("/robots.txt", (req, res) => {
   res.type("text/plain").send(
     `User-agent: *\n` +
