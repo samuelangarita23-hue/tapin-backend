@@ -3133,20 +3133,23 @@ app.get("/contenido/:slug/tarjeta.svg", (req, res) => {
 // Así puedes darle este enlace al dueño sin que vea los datos de tus otros negocios.
 // Incluye recomendaciones automáticas generadas a partir de sus propios datos.
 // Visítalo así: https://tu-dominio.com/mi-panel/mi-negocio?key=CLAVE_DE_ESE_NEGOCIO
-app.get("/mi-panel/:slug", (req, res) => {
+app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   // Acepta la clave completa, la clave de solo lectura (idea 5), o la cookie
-  // de sesión que se guarda la primera vez.
+  // de sesión que se guarda la primera vez. Usa el mismo verificador cifrado
+  // (scrypt + tiempo constante) que el resto del panel de negocio, en vez de
+  // comparar la clave en texto plano — así un negocio ya migrado a clave
+  // cifrada puede seguir entrando a su panel principal sin quedar bloqueado.
   const claveUsada = claveEfectiva(req, slug);
-  const autorizado = claveUsada === negocio.claveAcceso ||
+  const autorizado = claveNegocioValida(negocio, slug, claveUsada) ||
     (negocio.claveSoloLectura && claveUsada === negocio.claveSoloLectura);
-  if (!negocio.claveAcceso || !autorizado) {
+  if (!tieneClaveConfigurada(negocio) || !autorizado) {
     return res.status(401).send("No autorizado. Verifica el enlace que te dio Tapin, debe incluir tu clave personal (?key=...).");
   }
-  if (req.query.key && claveUsada === negocio.claveAcceso) ponerCookieSesion(res, slug, req.query.key);
+  if (req.query.key && autorizado && claveUsada !== negocio.claveSoloLectura && !String(claveUsada).startsWith("tok_")) ponerCookieSesion(res, slug, req.query.key);
   req.query.key = claveUsada;
 
   const datos = leerDatos();
