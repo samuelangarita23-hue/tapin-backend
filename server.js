@@ -6986,15 +6986,21 @@ app.get("/pedido", (req, res) => {
           <div class="precio">Plan Básico — $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP c/u (incluye envío)</div>
           <form method="POST" action="/pedido">
             <div class="form-grid">
+            <div class="field">
             <label>¿Cuántas tarjetas necesitas?</label>
             <input type="number" name="cantidad" id="input-cantidad" min="1" max="500" value="1" required>
+            </div>
             <div class="descuento-info form-full" id="descuento-info"></div>
 
+            <div class="field">
             <label>Nombre del negocio</label>
             <input type="text" name="nombreNegocio" required>
+            </div>
 
+            <div class="field">
             <label>Tu correo</label>
             <input type="email" name="email" required>
+            </div>
 
             <label>Teléfono</label>
             <input type="tel" name="telefono" required placeholder="300 000 0000">
