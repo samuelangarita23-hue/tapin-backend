@@ -1002,6 +1002,32 @@ function progresoMeta(eventos, metaMensual) {
   return { toquesMes, metaMensual, pct: Math.min(100, Math.round((toquesMes / metaMensual) * 100)) };
 }
 
+// Proyeccion simple y transparente del cierre del mes basada en el ritmo real.
+function proyeccionMes(eventos, negocio) {
+  const ahora = new Date();
+  const inicio = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+  const fin = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0);
+  const dia = ahora.getDate();
+  const toquesMes = eventos.filter((e) => {
+    const fecha = new Date(e.fechaISO);
+    return fecha >= inicio && fecha <= ahora;
+  }).length;
+  const suficiente = dia >= 3 && toquesMes >= 3;
+  const promedio = toquesMes / Math.max(1, dia);
+  const proyectado = Math.max(toquesMes, Math.round(promedio * fin.getDate()));
+  const nombreMes = ahora.toLocaleDateString("es-CO", { month: "long", year: "numeric", timeZone: zonaDe(negocio) });
+  return {
+    suficiente,
+    nombreMes,
+    toquesMes,
+    proyectado,
+    promedio: Math.round(promedio * 10) / 10,
+    minimo: suficiente ? Math.max(toquesMes, Math.round(proyectado * 0.85)) : 0,
+    maximo: suficiente ? Math.round(proyectado * 1.15) : 0,
+    restantes: Math.max(0, fin.getDate() - dia),
+  };
+}
+
 function barraSemana(dias7) {
   const max = Math.max(1, ...dias7);
   const nombresDias = [];
@@ -3005,6 +3031,7 @@ app.get("/mi-panel/:slug", (req, res) => {
   const calendario = calendarioMes(eventos, negocio);
   const meta = progresoMeta(eventos, negocio.metaMensual);
   const comparativoAnio = compararAnioAnterior(eventos, negocio);
+  const proyeccion = proyeccionMes(eventos, negocio);
   const soloLectura = req.query.key === negocio.claveSoloLectura && negocio.claveSoloLectura;
 
   res.send(`
@@ -3170,6 +3197,21 @@ app.get("/mi-panel/:slug", (req, res) => {
               <div class="sparkline sparkline-grande">${barraSemana(r.dias7)}</div>
             </div>
             <div class="ultimo-toque">Último toque: <b>${ultimoTexto}</b></div>
+          </div>
+
+          <div class="seccion">
+            <div class="card-titulo">Proyeccion del mes <span class="suave">${proyeccion.nombreMes}</span></div>
+            <div class="chart-card" style="margin-top:0;">
+              ${proyeccion.suficiente ? `
+                <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;text-align:center;">
+                  <div><div class="suave" style="font-size:0.68rem;text-transform:uppercase;font-weight:700;">Hasta hoy</div><div style="font-size:1.65rem;font-weight:800;color:${MARCA.verdeOscuro};">${proyeccion.toquesMes}</div><div class="suave" style="font-size:0.72rem;">toques registrados</div></div>
+                  <div style="font-size:1.4rem;color:${MARCA.oro};font-weight:800;">→</div>
+                  <div><div class="suave" style="font-size:0.68rem;text-transform:uppercase;font-weight:700;">Al cierre</div><div style="font-size:1.65rem;font-weight:800;color:${MARCA.verde};">${proyeccion.proyectado}</div><div class="suave" style="font-size:0.72rem;">toques estimados</div></div>
+                </div>
+                <div class="ultimo-toque" style="border-top:1px solid ${MARCA.borde};padding-top:12px;">Rango orientativo: <b>${proyeccion.minimo}–${proyeccion.maximo}</b> toques · promedio actual <b>${proyeccion.promedio}/día</b></div>
+                <div class="suave" style="text-align:center;font-size:0.7rem;margin-top:8px;line-height:1.45;">Estimación basada en tu ritmo actual durante los ${proyeccion.restantes} días restantes. Es una referencia, no una garantía.</div>
+              ` : `<div style="text-align:center;color:${MARCA.textoSuave};font-size:0.82rem;line-height:1.5;"><b>Estamos reuniendo datos</b><br>Cuando haya al menos 3 días y 3 toques registrados este mes, aquí verás la estimación.</div>`}
+            </div>
           </div>
 
           ${meta ? `
@@ -6781,6 +6823,7 @@ app.get("/", (req, res) => {
         <title>Tapin — Convierte cada visita en una reseña de Google</title>
         <meta name="description" content="Tapin: tarjeta NFC para negocios en Colombia que aumenta las reseñas de Google en segundos. Gestión de reputación online — las calificaciones negativas se quedan en privado, nunca se publican.">
         <meta name="google-site-verification" content="H7LUjIzom1urhBIS-T8yWBsUl1T2-o6NBbVAiEZf-Nw" />
+        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d432b'/%3E%3Ctext x='32' y='46' text-anchor='middle' font-family='Arial,sans-serif' font-size='42' font-weight='700' fill='%23fbf6e9'%3ET%3C/text%3E%3C/svg%3E">
         <meta property="og:title" content="Tapin — Convierte cada visita en una reseña de Google">
         <meta property="og:description" content="Tarjeta NFC para negocios en Colombia: aumenta tus reseñas de Google y protege tu reputación online. Lo negativo se queda en privado, nunca se publica.">
         <meta property="og:type" content="website">
