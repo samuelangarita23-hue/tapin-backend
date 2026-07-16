@@ -678,7 +678,12 @@ function obtenerNegocio(slug) {
   const codigos = leerCodigos();
   const entrada = codigos[slug];
   if (entrada && entrada.desactivado) return null; // tarjeta quitada explícitamente
-  if (entrada && entrada.activado && entrada.negocio) return entrada.negocio;
+  if (entrada && entrada.activado && entrada.negocio) {
+    return {
+      ...entrada.negocio,
+      claveAcceso: entrada.negocio.claveAcceso || entrada.claveAcceso || `${slug.toLowerCase()}-panel`,
+    };
+  }
   if (NEGOCIOS[slug]) return NEGOCIOS[slug];
   return null;
 }
@@ -1225,7 +1230,12 @@ function todosLosNegocios() {
   for (const codigo in codigos) {
     if (codigos[codigo].desactivado) continue;
     if (codigos[codigo].activado && codigos[codigo].negocio) {
-      dinamicos[codigo] = codigos[codigo].negocio;
+      dinamicos[codigo] = {
+        ...codigos[codigo].negocio,
+        // Compatibilidad con tarjetas activadas antes de guardar la clave.
+        // Conserva la clave existente y solo crea una de respaldo si falta.
+        claveAcceso: codigos[codigo].negocio.claveAcceso || codigos[codigo].claveAcceso || `${codigo.toLowerCase()}-panel`,
+      };
     }
   }
   const resultado = { ...NEGOCIOS, ...dinamicos };
