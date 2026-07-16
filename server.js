@@ -7367,8 +7367,14 @@ app.get("/pedido", (req, res) => {
           *{box-sizing:border-box;}
           body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
                margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
-          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:420px;width:100%;
+          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:820px;width:100%;
                box-shadow:0 10px 40px rgba(0,0,0,0.08);}
+          form{max-width:760px;margin:0 auto;}
+          form > label,form > input,form > select{display:block;width:100%;}
+          form > label{margin-top:2px;}
+          form > input,form > select{margin-bottom:14px;}
+          .pro-opcion{max-width:100%;}
+          @media (max-width:640px){body{padding:14px;align-items:flex-start;}.box{padding:26px 20px;}}
           .logo{margin-bottom:6px;}
           h1{font-size:1.2rem;color:${MARCA.texto};margin:14px 0 4px;}
           p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0 0 22px;}
