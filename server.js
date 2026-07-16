@@ -1111,15 +1111,15 @@ function guardarTestimonio(slug, frase, valor, negocio) {
 
 // Promedio de las calificaciones positivas que sí pasan el filtro de Tapin.
 // Las quejas privadas no se mezclan porque no son reseñas publicadas.
-function promedioEstrellasFiltradas(testimonios) {
-  const valores = (testimonios || [])
+function promedioEstrellasFiltradas(testimonios, quejas = []) {
+  const valores = [...(testimonios || []), ...(quejas || [])]
     .map((t) => Number(t.valor))
     .filter((v) => Number.isFinite(v) && v >= 1 && v <= 5);
   if (!valores.length) return null;
   return Math.round((valores.reduce((suma, valor) => suma + valor, 0) / valores.length) * 10) / 10;
 }
 
-function guardarQueja(slug, comentario, negocio, telefono = "") {
+function guardarQueja(slug, comentario, negocio, telefono = "", valor = null) {
   const datos = leerDatos();
   if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
   if (!datos[slug].quejas) datos[slug].quejas = [];
@@ -1129,6 +1129,7 @@ function guardarQueja(slug, comentario, negocio, telefono = "") {
     fechaLegible: ahora.toLocaleString("es-CO", { timeZone: zonaDe(negocio) }),
     comentario,
     telefono,
+    valor: Number.isFinite(Number(valor)) && Number(valor) >= 1 && Number(valor) <= 5 ? Number(valor) : null,
     estado: "pendiente", // pendiente | contactado | resuelto
   });
   guardarDatos(datos);
@@ -1443,7 +1444,7 @@ app.get("/calificar/:slug", (req, res) => {
   };
   const motivosNegativos = motivosPorCategoria[negocio.categoria] || motivosPorCategoria.otro;
   const chipsNegativos = motivosNegativos
-    .map((m) => `<a href="/calificar/${slug}/rapido?motivo=${encodeURIComponent(m)}" class="chip">${m}</a>`)
+    .map((m) => `<a href="/calificar/${slug}/rapido?valor=${valor}&motivo=${encodeURIComponent(m)}" class="chip">${m}</a>`)
     .join("");
 
   res.send(`
@@ -1479,6 +1480,7 @@ app.get("/calificar/:slug", (req, res) => {
 
           <div class="divisor">o cuéntanos con tus palabras</div>
           <form method="POST" action="/calificar/${slug}">
+            <input type="hidden" name="valor" value="${valor}">
             <textarea name="comentario" placeholder="Escribe aquí lo que pasó... (opcional)"></textarea>
             <input type="tel" name="telefono" placeholder="Tu teléfono (opcional, para que te llamen)" style="width:100%;margin-top:10px;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:0.92rem;font-family:inherit;box-sizing:border-box;">
             <button type="submit">Enviar</button>
@@ -1498,7 +1500,8 @@ app.get("/calificar/:slug/rapido", (req, res) => {
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const motivo = req.query.motivo || "(sin detalle)";
-  guardarQueja(slug, motivo, negocio, "");
+  const valor = parseInt(req.query.valor, 10);
+  guardarQueja(slug, motivo, negocio, "", valor);
 
   // La fidelización premia la VISITA, no solo las reseñas positivas — si el
   // cliente tiene sesión iniciada, suma su sello igual que en una calificación buena.
@@ -1528,7 +1531,8 @@ app.post("/calificar/:slug", async (req, res) => {
 
   const comentario = req.body.comentario || "(sin comentario)";
   const telefono = req.body.telefono || "";
-  guardarQueja(slug, comentario, negocio, telefono);
+  const valor = parseInt(req.body.valor, 10);
+  guardarQueja(slug, comentario, negocio, telefono, valor);
 
   let selloSumado = null;
   if (esPro(negocio) && negocio.fidelizacion) {
@@ -2365,7 +2369,9 @@ app.get("/stats", (req, res) => {
   for (const slug in NEGOCIOS_TOTAL) {
     const eventos = (datos[slug] && datos[slug].eventos) || [];
     const testimonios = (datos[slug] && datos[slug].testimonios) || [];
+    const quejas = (datos[slug] && datos[slug].quejas) || [];
     testimonios.forEach((t) => estrellasGlobales.push(t));
+    quejas.forEach((q) => estrellasGlobales.push(q));
     const r = calcularResumen(eventos);
     totalNegocios++;
     totalToquesGlobal += r.total;
@@ -2396,7 +2402,8 @@ app.get("/stats", (req, res) => {
   function tarjetaHtml(slug) {
     const eventos = (datos[slug] && datos[slug].eventos) || [];
     const testimonios = (datos[slug] && datos[slug].testimonios) || [];
-    const promedioEstrellasNegocio = promedioEstrellasFiltradas(testimonios);
+    const quejas = (datos[slug] && datos[slug].quejas) || [];
+    const promedioEstrellasNegocio = promedioEstrellasFiltradas(testimonios, quejas);
     const r = calcularResumen(eventos);
     const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
     const promSector = promedioSector(NEGOCIOS_TOTAL[slug].categoria, slug, datos);
@@ -2602,7 +2609,7 @@ app.get("/stats", (req, res) => {
             <div class="chart-card" style="margin-top:10px;text-align:center;">
               <div class="chart-card-titulo">Promedio de estrellas recibidas</div>
               <div style="font-size:1.5rem;font-weight:800;color:${MARCA.oro};">${promedioEstrellas !== null ? promedioEstrellas + " / 5 ★" : "Sin calificaciones filtradas"}</div>
-              <div class="suave" style="font-size:0.72rem;margin-top:4px;">Solo opiniones positivas que pasaron el filtro de Tapin${testimonios.length ? " · " + testimonios.length + " calificaciones" : ""}.</div>
+              <div class="suave" style="font-size:0.72rem;margin-top:4px;">Incluye calificaciones positivas y negativas que pasaron el filtro de Tapin${estrellasGlobales.length ? " · " + estrellasGlobales.length + " evaluaciones" : ""}. Las negativas se guardan privadas y no se publican en Google.</div>
             </div>
             <div class="chart-card">
               <div class="chart-card-titulo">Toques combinados de todos los negocios — últimos 7 días</div>
@@ -3021,7 +3028,7 @@ app.get("/mi-panel/:slug", (req, res) => {
   const testimonios = (datos[slug] && datos[slug].testimonios) || [];
   const quejas = (datos[slug] && datos[slug].quejas) || [];
   const totalCalificado = testimonios.length + quejas.length;
-  const promedioEstrellas = promedioEstrellasFiltradas(testimonios);
+  const promedioEstrellas = promedioEstrellasFiltradas(testimonios, quejas);
   const pctPositivas = totalCalificado ? Math.round((testimonios.length / totalCalificado) * 100) : 0;
   const pctNegativas = totalCalificado ? 100 - pctPositivas : 0;
   const quejasResueltas = quejas.filter((q) => q.estado === "resuelto").length;
@@ -3241,7 +3248,7 @@ app.get("/mi-panel/:slug", (req, res) => {
             <div class="card-titulo">Promedio de estrellas recibidas</div>
             <div class="chart-card" style="margin-top:0;text-align:center;">
               <div style="font-size:1.5rem;font-weight:800;color:${MARCA.oro};">${promedioEstrellas !== null ? promedioEstrellas + " / 5 ★" : "Sin calificaciones filtradas"}</div>
-              <div class="suave" style="font-size:0.72rem;margin-top:4px;">Solo opiniones positivas que pasaron el filtro de Tapin${testimonios.length ? " · " + testimonios.length + " calificaciones" : ""}.</div>
+              <div class="suave" style="font-size:0.72rem;margin-top:4px;">Incluye calificaciones positivas y negativas que pasaron el filtro de Tapin${testimonios.length + quejas.length ? " · " + (testimonios.length + quejas.length) + " evaluaciones" : ""}. Las negativas se guardan privadas y no se publican en Google.</div>
             </div>
           </div>
 
@@ -7366,15 +7373,22 @@ app.get("/pedido", (req, res) => {
         <style>
           *{box-sizing:border-box;}
           body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
-               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
-          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:820px;width:100%;
+               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:14px;}
+          .box{background:#fff;border-radius:16px;padding:24px 26px;max-width:min(820px,100%);width:100%;
                box-shadow:0 10px 40px rgba(0,0,0,0.08);}
-          form{max-width:760px;margin:0 auto;}
+          form{max-width:720px;margin:0 auto;}
           form > label,form > input,form > select{display:block;width:100%;}
-          form > label{margin-top:2px;}
-          form > input,form > select{margin-bottom:14px;}
+          form > label{margin-top:0;font-size:0.72rem;}
+          form > input,form > select{margin-bottom:9px;padding:10px;font-size:0.84rem;}
+          h1{font-size:1.08rem;margin:9px 0 3px;}
+          p{font-size:0.78rem;margin-bottom:14px;}
+          .precio{padding:10px 12px;margin-bottom:13px;font-size:0.84rem;}
+          .descuento-info{padding:9px 11px;margin:-3px 0 12px;font-size:0.74rem;}
+          .pro-opcion{padding:9px 11px;margin-bottom:12px;font-size:0.76rem;}
+          .pro-opcion .txt{font-size:0.74rem;}
+          button{padding:11px;font-size:0.88rem;}
           .pro-opcion{max-width:100%;}
-          @media (max-width:640px){body{padding:14px;align-items:flex-start;}.box{padding:26px 20px;}}
+          @media (max-width:640px){body{padding:8px;align-items:flex-start;}.box{padding:18px 16px;}.logo svg{max-width:74px;height:auto;}}
           .logo{margin-bottom:6px;}
           h1{font-size:1.2rem;color:${MARCA.texto};margin:14px 0 4px;}
           p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0 0 22px;}
