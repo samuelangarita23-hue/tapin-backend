@@ -1035,11 +1035,17 @@ function proyeccionMes(eventos, negocio) {
 
 function proyeccionPeriodo(eventos, negocio, periodo) {
   const ahora = new Date();
+  const inicioSemana = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  inicioSemana.setHours(0, 0, 0, 0);
+  const diaSemana = inicioSemana.getDay() || 7;
+  inicioSemana.setDate(inicioSemana.getDate() - diaSemana + 1);
+  const finSemana = new Date(inicioSemana);
+  finSemana.setDate(finSemana.getDate() + 7);
   const configuraciones = {
-    dia: { etiqueta: "1 día", inicio: new Date(ahora.getTime() - 86400000), fin: new Date(ahora.getTime() + 86400000) },
-    semana: { etiqueta: "1 semana", inicio: new Date(ahora.getTime() - 7 * 86400000), fin: new Date(ahora.getTime() + 7 * 86400000) },
-    mes: { etiqueta: "1 mes", inicio: new Date(ahora.getFullYear(), ahora.getMonth(), 1), fin: new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0, 23, 59, 59) },
-    semestre: { etiqueta: "6 meses", inicio: new Date(ahora.getFullYear(), ahora.getMonth() < 6 ? 0 : 6, 1), fin: new Date(ahora.getFullYear(), ahora.getMonth() < 6 ? 6 : 12, 0, 23, 59, 59) },
+    dia: { etiqueta: "1 día", inicio: new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()), fin: new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() + 1) },
+    semana: { etiqueta: "1 semana", inicio: inicioSemana, fin: finSemana },
+    mes: { etiqueta: "1 mes", inicio: new Date(ahora.getFullYear(), ahora.getMonth(), 1), fin: new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1) },
+    semestre: { etiqueta: "6 meses", inicio: new Date(ahora.getFullYear(), ahora.getMonth() < 6 ? 0 : 6, 1), fin: new Date(ahora.getFullYear(), ahora.getMonth() < 6 ? 6 : 12, 1) },
     anio: { etiqueta: "1 año", inicio: new Date(ahora.getFullYear(), 0, 1), fin: new Date(ahora.getFullYear() + 1, 0, 1) },
   };
   const config = configuraciones[periodo] || configuraciones.mes;
@@ -1147,7 +1153,7 @@ function guardarTestimonio(slug, frase, valor, negocio) {
 // Las quejas privadas no se mezclan porque no son reseñas publicadas.
 function promedioEstrellasFiltradas(testimonios, quejas = []) {
   const valores = [...(testimonios || []), ...(quejas || [])]
-    .map((t) => Number(t.valor))
+    .map((t) => t.valor == null && Object.prototype.hasOwnProperty.call(t, "comentario") ? 3 : Number(t.valor))
     .filter((v) => Number.isFinite(v) && v >= 1 && v <= 5);
   if (!valores.length) return null;
   return Math.round((valores.reduce((suma, valor) => suma + valor, 0) / valores.length) * 10) / 10;
