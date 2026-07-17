@@ -3484,8 +3484,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .boceto-contenidos{margin-top:-14px;}
           .boceto-bloque{min-width:0;display:flex;flex-direction:column;}
           .boceto-bloque .chart-card{margin-top:0;flex:1;}
-          .boceto-fila-superior .chart-card{min-height:238px;display:flex;flex-direction:column;justify-content:center;}
-          .boceto-calendario{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:280px;margin:0 auto;}
+          .boceto-fila-superior .chart-card{min-height:340px;display:flex;flex-direction:column;justify-content:center;}
+          .boceto-calendario{display:grid;grid-template-columns:repeat(7,minmax(34px,1fr));gap:7px;width:100%;max-width:390px;margin:0 auto;}
+          .boceto-calendario .cal-dia{font-size:.76rem!important;border-radius:8px!important;}
           .boceto-boton{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;
                         background:${MARCA.verdeOscuro};color:#fff;text-decoration:none;font-size:.84rem;font-weight:800;
                         border-radius:12px;box-shadow:0 1px 2px rgba(11,61,44,.08);}
@@ -3494,7 +3495,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .boceto-contenido-titulo{font-size:.92rem;font-weight:800;color:${MARCA.texto};margin:0 0 12px;padding-left:10px;border-left:3px solid ${MARCA.verde};}
           .boceto-contenido .reco:last-child{margin-bottom:0;}
           .boceto-alerta{font-size:.78rem;color:${MARCA.textoSuave};line-height:1.5;margin:0 0 10px;}
-          .grafica-vertical{height:190px;display:flex;align-items:flex-end;justify-content:center;gap:38px;padding:0;}
+          .grafica-vertical{height:270px;display:flex;align-items:flex-end;justify-content:center;gap:38px;padding:0;}
           .barra-vertical-grupo{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:64px;}
           .barra-vertical-valor{font-size:.76rem;font-weight:800;margin-bottom:6px;}
           .barra-vertical{width:52px;min-height:8px;border-radius:8px 8px 3px 3px;}
@@ -3518,6 +3519,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             .boceto-fila-superior,.boceto-fila-media,.boceto-botones,.boceto-contenidos{grid-template-columns:1fr;}
             .boceto-contenidos{margin-top:0;}
             .boceto-fila-superior .boceto-bloque:last-child{grid-column:auto;}
+            .boceto-fila-superior .chart-card{min-height:300px;}
+            .boceto-calendario{grid-template-columns:repeat(7,minmax(30px,1fr));gap:6px;max-width:360px;}
+            .grafica-vertical{height:230px;}
           }
         </style>
       </head>
