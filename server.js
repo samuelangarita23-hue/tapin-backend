@@ -3509,6 +3509,23 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                                     color:#fff;font-size:.75rem;font-weight:800;box-shadow:0 8px 24px rgba(8,44,28,.22);}
           .boton-mejorar{display:inline-block;margin-top:8px;padding:10px 14px;border-radius:10px;background:${MARCA.verde};
                          color:#fff!important;text-decoration:none;font-size:.78rem;font-weight:800;}
+          .panel-gratis .boceto-contenidos{align-items:stretch;}
+          .panel-gratis .boceto-contenido{display:flex;flex-direction:column;height:100%;box-sizing:border-box;background:#fff;
+                                         border:1px solid ${MARCA.borde};border-radius:14px;padding:18px;
+                                         box-shadow:0 1px 2px rgba(11,61,44,.04);}
+          .panel-gratis .boceto-contenido-titulo{margin-bottom:14px;}
+          .panel-gratis .boceto-contenido .reco{line-height:1.5;}
+          .panel-gratis .boton-mejorar{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
+                                      box-sizing:border-box;margin-top:auto;padding:14px 16px;border-radius:12px;
+                                      background:linear-gradient(135deg,${MARCA.oro},#F7D77D);color:${MARCA.verdeOscuro}!important;
+                                      font-size:.84rem;box-shadow:0 8px 18px rgba(232,173,50,.24);transition:transform .15s,box-shadow .15s;}
+          .panel-gratis .boton-mejorar:hover{transform:translateY(-2px);box-shadow:0 11px 22px rgba(232,173,50,.34);}
+          .panel-gratis .boton-mejorar b{font-size:1.05rem;}
+          .panel-gratis .boceto-boton{position:relative;padding-right:42px;}
+          .panel-gratis .boceto-boton::after{content:"PRO";position:absolute;right:13px;top:50%;transform:translateY(-50%);
+                                             padding:3px 6px;border-radius:999px;background:${MARCA.oro};color:${MARCA.verdeOscuro};
+                                             font-size:.56rem;font-weight:900;letter-spacing:.04em;}
+          .panel-gratis .boceto-boton>span{display:none;}
           .pro-original{display:none!important;}
           @media (max-width:1100px){
             .boceto-fila-superior{grid-template-columns:repeat(2,minmax(0,1fr));}
@@ -3831,8 +3848,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
 
             <div class="boceto-contenidos">
               <div class="boceto-contenido"><div class="boceto-contenido-titulo">Recomendaciones</div>${esPro(negocio) ? recomendacionesHtml : `<div class="reco">Sigue reuniendo toques para conocer el comportamiento general de tu negocio.</div><div class="reco">Con Pro recibirás recomendaciones automáticas basadas en tus resultados.</div>`}</div>
-              <div class="boceto-contenido"><div class="boceto-contenido-titulo">Más de tu plan Pro</div>${esPro(negocio) ? `<div class="reco"><b>Alertas instantáneas activas</b> — recibirás un correo en <b>${negocio.email || "tu correo"}</b> cuando llegue una queja privada.</div><div class="reco"><b>Generador para redes</b> — convierte tus resultados en ideas de contenido listas para publicar.</div>` : `<div class="reco"><b>Disponible al mejorar:</b> horas pico, comparación con el sector, actividad detallada, alertas y contenido para redes.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}">Ver Plan Pro</a>`}</div>
-              <div class="boceto-contenido"><div class="boceto-contenido-titulo">Tu plan</div>${esPro(negocio) ? `<div class="reco"><b>Plan Pro activo</b> — tienes acceso a todas las estadísticas y herramientas avanzadas.</div><div class="reco"><b>Reporte PDF mensual</b> — al final de cada mes recibirás automáticamente el análisis completo de tu negocio.</div>` : `<div class="reco"><b>Plan Gratis activo</b> — conservas el calendario y el resumen esencial de tus toques.</div><div class="reco">Mejora a Pro para desbloquear el resto de este mismo dashboard.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}">Mejorar a Pro</a>`}</div>
+              <div class="boceto-contenido"><div class="boceto-contenido-titulo">${esPro(negocio) ? "Más de tu plan Pro" : "Desbloquea con Pro"}</div>${esPro(negocio) ? `<div class="reco"><b>Alertas instantáneas activas</b> — recibirás un correo en <b>${negocio.email || "tu correo"}</b> cuando llegue una queja privada.</div><div class="reco"><b>Generador para redes</b> — convierte tus resultados en ideas de contenido listas para publicar.</div>` : `<div class="reco"><b>Todo el análisis:</b> horas pico, comparación con el sector, actividad detallada, alertas y contenido para redes.</div><div class="reco"><b>Reportes automáticos:</b> recibe cada mes un PDF con los resultados de tu negocio.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}"><span>Ver Plan Pro</span><b>→</b></a>`}</div>
+              <div class="boceto-contenido"><div class="boceto-contenido-titulo">${esPro(negocio) ? "Tu plan" : "Tu plan actual"}</div>${esPro(negocio) ? `<div class="reco"><b>Plan Pro activo</b> — tienes acceso a todas las estadísticas y herramientas avanzadas.</div><div class="reco"><b>Reporte PDF mensual</b> — al final de cada mes recibirás automáticamente el análisis completo de tu negocio.</div>` : `<div class="reco"><b>Plan Gratis activo</b> — conservas el calendario y el resumen esencial de tus toques.</div><div class="reco"><b>Mejora cuando quieras:</b> el cambio se activa al instante y no pierdes tus datos actuales.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}"><span>Mejorar a Pro</span><b>→</b></a>`}</div>
             </div>
           </section>
 
