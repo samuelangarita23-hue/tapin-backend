@@ -3475,6 +3475,33 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .dash-panel-num{font-size:1.5rem;font-weight:800;color:${MARCA.texto};text-align:right;}
           .dash-panel-numlbl{font-size:0.7rem;color:${MARCA.textoSuave};text-align:right;}
           .dash-actividad-bars{display:flex;align-items:flex-end;gap:8px;height:110px;}
+
+          /* Estructura del panel Pro basada en el boceto del negocio. */
+          .panel-boceto{display:flex;flex-direction:column;gap:26px;margin-top:26px;}
+          .boceto-fila-superior{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;}
+          .boceto-fila-media{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.95fr);gap:16px;align-items:stretch;}
+          .boceto-fila-inferior{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start;}
+          .boceto-bloque{min-width:0;display:flex;flex-direction:column;}
+          .boceto-bloque .chart-card{margin-top:0;flex:1;}
+          .boceto-calendario{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:280px;margin:0 auto;}
+          .boceto-herramienta{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;overflow:hidden;
+                              box-shadow:0 1px 2px rgba(11,61,44,.04);}
+          .boceto-herramienta>a{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;
+                               background:${MARCA.verdeOscuro};color:#fff;text-decoration:none;font-size:.84rem;font-weight:800;}
+          .boceto-herramienta>a span{font-size:1rem;}
+          .boceto-herramienta-contenido{padding:16px;}
+          .boceto-herramienta .reco:last-child{margin-bottom:0;}
+          .boceto-alerta{font-size:.78rem;color:${MARCA.textoSuave};line-height:1.5;margin:0 0 10px;}
+          .pro-original{display:none!important;}
+          @media (max-width:1100px){
+            .boceto-fila-superior{grid-template-columns:repeat(2,minmax(0,1fr));}
+            .boceto-fila-superior .boceto-bloque:last-child{grid-column:1/-1;}
+            .boceto-fila-inferior{grid-template-columns:1fr 1fr;}
+          }
+          @media (max-width:760px){
+            .boceto-fila-superior,.boceto-fila-media,.boceto-fila-inferior{grid-template-columns:1fr;}
+            .boceto-fila-superior .boceto-bloque:last-child{grid-column:auto;}
+          }
         </style>
       </head>
       <body>
@@ -3669,7 +3696,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             ` : ""}
           </div>
 
-          <div class="seccion">
+          <div class="seccion ${esPro(negocio) ? "pro-original" : ""}">
             <div class="card-titulo">Calendario del mes</div>
             <div class="chart-card" style="margin-top:0;">
               <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
@@ -3723,6 +3750,64 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           ` : ""}
 
           ${esPro(negocio) ? `
+          <section class="panel-boceto" aria-label="Resumen detallado del negocio">
+            <div class="boceto-fila-superior">
+              <div class="boceto-bloque">
+                <div class="card-titulo">Calendario del mes</div>
+                <div class="chart-card">
+                  <div class="boceto-calendario">
+                    ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
+                    ${calendario.dias.map((v, i) => {
+                      const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
+                      const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
+                      return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};display:flex;align-items:center;justify-content:center;font-size:.66rem;font-weight:600;color:${intensidad > .5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
+                    }).join("")}
+                  </div>
+                  <div class="cal-leyenda" style="text-align:center;font-size:.7rem;color:${MARCA.textoSuave};margin-top:12px;">Más oscuro = más toques</div>
+                </div>
+              </div>
+
+              <div class="boceto-bloque">
+                <div class="card-titulo">Cómo te calificaron</div>
+                <div class="chart-card">
+                  ${totalCalificado > 0
+                    ? `<div class="sentimiento-barra"><div style="width:${pctPositivas}%;background:${MARCA.verde};"></div><div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div></div>
+                       <div class="sentimiento-leyenda"><span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span><span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span></div>
+                       ${tasaRecuperacion !== null ? `<div class="horas-nota">Recuperación: <b>${tasaRecuperacion}%</b></div>` : ""}`
+                    : `<div class="sentimiento-vacio">Sin calificaciones todavía.</div>`}
+                </div>
+              </div>
+
+              <div class="boceto-bloque">
+                <div class="card-titulo">Tú vs. tu sector</div>
+                <div class="chart-card">
+                  ${promSector !== null ? `<div style="display:flex;flex-direction:column;gap:14px;">
+                    <div><div style="display:flex;justify-content:space-between;font-size:.76rem;margin-bottom:5px;"><span>Tú</span><b>${r.semana}</b></div><div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;"><div style="height:100%;border-radius:100px;background:${MARCA.verde};width:${Math.min(100, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;"></div></div></div>
+                    <div><div style="display:flex;justify-content:space-between;font-size:.76rem;margin-bottom:5px;color:${MARCA.textoSuave};"><span>Sector</span><b>${promSector}</b></div><div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;"><div style="height:100%;border-radius:100px;background:${MARCA.oro};width:${Math.min(100, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;"></div></div></div>
+                  </div><div class="horas-nota">${r.semana >= promSector ? "Por encima del promedio." : `${promSector - r.semana} bajo el promedio.`}</div>` : `<div class="sentimiento-vacio">Aún no hay negocios suficientes para comparar tu sector.</div>`}
+                </div>
+              </div>
+            </div>
+
+            <div class="boceto-fila-media" id="actividad">
+              <div class="boceto-bloque">
+                <div class="card-titulo">Tus horas pico <span class="suave">30 días</span></div>
+                <div class="chart-card"><div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div><div class="horas-labels"><span>12am</span><span>12pm</span><span>11pm</span></div>${horas.totalMes > 0 ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques})</div>` : `<div class="horas-nota">Sin suficientes datos.</div>`}</div>
+              </div>
+              <div class="boceto-bloque">
+                <div class="card-titulo">Actividad reciente</div>
+                <div class="chart-card"><table class="tabla-actividad"><tr><th>Fecha</th><th>Dispositivo</th></tr>${actividadReciente || `<tr><td colspan="2" style="text-align:center;color:${MARCA.textoSuave};">Sin toques todavía</td></tr>`}</table></div>
+              </div>
+            </div>
+
+            <div class="boceto-fila-inferior">
+              <div class="boceto-herramienta"><a href="/quejas/${slug}?key=${req.query.key}">Retroalimentación privada <span>→</span></a><div class="boceto-herramienta-contenido"><p class="boceto-alerta">Consulta y responde la retroalimentación que tus clientes prefirieron dejarte en privado.</p>${recomendacionesHtml}</div></div>
+              <div class="boceto-herramienta"><a href="/contenido/${slug}?key=${req.query.key}">Generador de contenido <span>→</span></a><div class="boceto-herramienta-contenido"><div class="reco"><b>Alertas instantáneas activas</b> — recibirás un correo en <b>${negocio.email || "tu correo"}</b> cuando llegue una queja privada.</div><p class="boceto-alerta">Convierte tus mejores resultados en ideas listas para publicar en redes.</p></div></div>
+              <div class="boceto-herramienta"><a href="/reportes-guardados/${slug}?key=${req.query.key}">Reportes guardados <span>→</span></a><div class="boceto-herramienta-contenido"><div class="reco"><b>Reporte PDF mensual</b> — al final de cada mes recibirás automáticamente el análisis completo de tu negocio.</div><p class="boceto-alerta">Aquí quedan organizados tus reportes anteriores para consultarlos cuando los necesites.</p></div></div>
+            </div>
+          </section>
+
+          <div class="pro-original" aria-hidden="true">
           ${resumenFrase || caida || diaFlojo || clientesRecurrentes > 0 || percentil !== null ? `
           <div class="seccion">
             <div class="card-titulo">Lo que dicen tus datos</div>
@@ -3831,6 +3916,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               <div class="card-titulo">Recomendaciones para ti</div>
               ${recomendacionesHtml}
             </div>
+          </div>
           </div>
           ` : `
           <div class="seccion">
