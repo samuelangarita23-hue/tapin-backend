@@ -3546,7 +3546,18 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .boceto-fila-media .horas-chart>div{min-width:3px;border-radius:3px 3px 0 0!important;}
           .boceto-fila-media .horas-labels{width:100%;max-width:none;margin:8px 0 0;font-size:.64rem;}
           .tarjeta-bloqueada{position:relative;overflow:hidden;min-height:170px;border-color:#B8BDBA!important;background:#F4F5F3!important;}
-          .tarjeta-bloqueada>*{filter:grayscale(1);opacity:.72;pointer-events:none;user-select:none;}
+          .tarjeta-bloqueada>*{filter:none;opacity:1;pointer-events:none;user-select:none;}
+          .tarjeta-bloqueada .barra-vertical{background:linear-gradient(180deg,#B9BEBA,#747C77)!important;}
+          .tarjeta-bloqueada .barra-vertical-valor{color:#5F6762!important;}
+          .tarjeta-bloqueada .horas-chart>div{background:#858D88!important;}
+          .tarjeta-bloqueada .hora-pico-badge{background:#D9DCDA!important;color:#5F6762!important;}
+          .tarjeta-bloqueada .cal-dia.cal-vacio{background:#E0E2E0!important;color:#7A817D!important;}
+          .tarjeta-bloqueada .cal-dia.cal-nivel-1{background:#C8CCC9!important;color:#505753!important;}
+          .tarjeta-bloqueada .cal-dia.cal-nivel-2{background:#A9AFAB!important;color:#303632!important;}
+          .tarjeta-bloqueada .cal-dia.cal-nivel-3{background:#858D88!important;color:#fff!important;}
+          .tarjeta-bloqueada .cal-dia.cal-nivel-4{background:#626A65!important;color:#fff!important;}
+          .tarjeta-bloqueada svg path{stroke:#727A75!important;}
+          .tarjeta-bloqueada svg path[fill]:not([fill="none"]){fill:#AEB3B0!important;}
           .tarjeta-bloqueada::after{content:"Vista previa · PRO";position:absolute;right:12px;top:12px;
                                     z-index:2;width:max-content;max-width:80%;padding:6px 9px;border-radius:999px;
                                     background:#737B76;color:#fff;font-size:.6rem;font-weight:900;
