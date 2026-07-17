@@ -3480,26 +3480,33 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .panel-boceto{display:flex;flex-direction:column;gap:26px;margin-top:26px;}
           .boceto-fila-superior{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;}
           .boceto-fila-media{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.95fr);gap:16px;align-items:stretch;}
-          .boceto-fila-inferior{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start;}
+          .boceto-botones,.boceto-contenidos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start;}
+          .boceto-contenidos{margin-top:-14px;}
           .boceto-bloque{min-width:0;display:flex;flex-direction:column;}
           .boceto-bloque .chart-card{margin-top:0;flex:1;}
           .boceto-calendario{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:280px;margin:0 auto;}
-          .boceto-herramienta{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;overflow:hidden;
-                              box-shadow:0 1px 2px rgba(11,61,44,.04);}
-          .boceto-herramienta>a{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;
-                               background:${MARCA.verdeOscuro};color:#fff;text-decoration:none;font-size:.84rem;font-weight:800;}
-          .boceto-herramienta>a span{font-size:1rem;}
-          .boceto-herramienta-contenido{padding:16px;}
-          .boceto-herramienta .reco:last-child{margin-bottom:0;}
+          .boceto-boton{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;
+                        background:${MARCA.verdeOscuro};color:#fff;text-decoration:none;font-size:.84rem;font-weight:800;
+                        border-radius:12px;box-shadow:0 1px 2px rgba(11,61,44,.08);}
+          .boceto-boton span{font-size:1rem;}
+          .boceto-contenido{min-width:0;padding:4px 2px 0;}
+          .boceto-contenido-titulo{font-size:.92rem;font-weight:800;color:${MARCA.texto};margin:0 0 12px;padding-left:10px;border-left:3px solid ${MARCA.verde};}
+          .boceto-contenido .reco:last-child{margin-bottom:0;}
           .boceto-alerta{font-size:.78rem;color:${MARCA.textoSuave};line-height:1.5;margin:0 0 10px;}
+          .grafica-vertical{height:160px;display:flex;align-items:flex-end;justify-content:center;gap:28px;padding-top:12px;}
+          .barra-vertical-grupo{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:64px;}
+          .barra-vertical-valor{font-size:.76rem;font-weight:800;margin-bottom:6px;}
+          .barra-vertical{width:44px;min-height:6px;border-radius:8px 8px 3px 3px;}
+          .barra-vertical-etiqueta{font-size:.69rem;color:${MARCA.textoSuave};text-align:center;margin-top:7px;line-height:1.25;}
           .pro-original{display:none!important;}
           @media (max-width:1100px){
             .boceto-fila-superior{grid-template-columns:repeat(2,minmax(0,1fr));}
             .boceto-fila-superior .boceto-bloque:last-child{grid-column:1/-1;}
-            .boceto-fila-inferior{grid-template-columns:1fr 1fr;}
+            .boceto-botones,.boceto-contenidos{grid-template-columns:1fr 1fr;}
           }
           @media (max-width:760px){
-            .boceto-fila-superior,.boceto-fila-media,.boceto-fila-inferior{grid-template-columns:1fr;}
+            .boceto-fila-superior,.boceto-fila-media,.boceto-botones,.boceto-contenidos{grid-template-columns:1fr;}
+            .boceto-contenidos{margin-top:0;}
             .boceto-fila-superior .boceto-bloque:last-child{grid-column:auto;}
           }
         </style>
@@ -3771,8 +3778,10 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 <div class="card-titulo">Cómo te calificaron</div>
                 <div class="chart-card">
                   ${totalCalificado > 0
-                    ? `<div class="sentimiento-barra"><div style="width:${pctPositivas}%;background:${MARCA.verde};"></div><div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div></div>
-                       <div class="sentimiento-leyenda"><span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span><span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span></div>
+                    ? `<div class="grafica-vertical">
+                         <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.verde};">${pctPositivas}%</div><div class="barra-vertical" style="height:${Math.max(6, pctPositivas)}%;background:${MARCA.verde};"></div><div class="barra-vertical-etiqueta">Positivas<br><b>${testimonios.length}</b></div></div>
+                         <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.rojo};">${pctNegativas}%</div><div class="barra-vertical" style="height:${Math.max(6, pctNegativas)}%;background:${MARCA.rojo};"></div><div class="barra-vertical-etiqueta">Quejas<br><b>${quejas.length}</b></div></div>
+                       </div>
                        ${tasaRecuperacion !== null ? `<div class="horas-nota">Recuperación: <b>${tasaRecuperacion}%</b></div>` : ""}`
                     : `<div class="sentimiento-vacio">Sin calificaciones todavía.</div>`}
                 </div>
@@ -3781,9 +3790,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               <div class="boceto-bloque">
                 <div class="card-titulo">Tú vs. tu sector</div>
                 <div class="chart-card">
-                  ${promSector !== null ? `<div style="display:flex;flex-direction:column;gap:14px;">
-                    <div><div style="display:flex;justify-content:space-between;font-size:.76rem;margin-bottom:5px;"><span>Tú</span><b>${r.semana}</b></div><div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;"><div style="height:100%;border-radius:100px;background:${MARCA.verde};width:${Math.min(100, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;"></div></div></div>
-                    <div><div style="display:flex;justify-content:space-between;font-size:.76rem;margin-bottom:5px;color:${MARCA.textoSuave};"><span>Sector</span><b>${promSector}</b></div><div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;"><div style="height:100%;border-radius:100px;background:${MARCA.oro};width:${Math.min(100, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;"></div></div></div>
+                  ${promSector !== null ? `<div class="grafica-vertical">
+                    <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.verde};">${r.semana}</div><div class="barra-vertical" style="height:${Math.max(6, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;background:${MARCA.verde};"></div><div class="barra-vertical-etiqueta">Tú</div></div>
+                    <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.oro};">${promSector}</div><div class="barra-vertical" style="height:${Math.max(6, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;background:${MARCA.oro};"></div><div class="barra-vertical-etiqueta">Tu sector</div></div>
                   </div><div class="horas-nota">${r.semana >= promSector ? "Por encima del promedio." : `${promSector - r.semana} bajo el promedio.`}</div>` : `<div class="sentimiento-vacio">Aún no hay negocios suficientes para comparar tu sector.</div>`}
                 </div>
               </div>
@@ -3800,10 +3809,16 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               </div>
             </div>
 
-            <div class="boceto-fila-inferior">
-              <div class="boceto-herramienta"><a href="/quejas/${slug}?key=${req.query.key}">Retroalimentación privada <span>→</span></a><div class="boceto-herramienta-contenido"><p class="boceto-alerta">Consulta y responde la retroalimentación que tus clientes prefirieron dejarte en privado.</p>${recomendacionesHtml}</div></div>
-              <div class="boceto-herramienta"><a href="/contenido/${slug}?key=${req.query.key}">Generador de contenido <span>→</span></a><div class="boceto-herramienta-contenido"><div class="reco"><b>Alertas instantáneas activas</b> — recibirás un correo en <b>${negocio.email || "tu correo"}</b> cuando llegue una queja privada.</div><p class="boceto-alerta">Convierte tus mejores resultados en ideas listas para publicar en redes.</p></div></div>
-              <div class="boceto-herramienta"><a href="/reportes-guardados/${slug}?key=${req.query.key}">Reportes guardados <span>→</span></a><div class="boceto-herramienta-contenido"><div class="reco"><b>Reporte PDF mensual</b> — al final de cada mes recibirás automáticamente el análisis completo de tu negocio.</div><p class="boceto-alerta">Aquí quedan organizados tus reportes anteriores para consultarlos cuando los necesites.</p></div></div>
+            <div class="boceto-botones" aria-label="Herramientas del plan Pro">
+              <a class="boceto-boton" href="/quejas/${slug}?key=${req.query.key}">Retroalimentación privada <span>→</span></a>
+              <a class="boceto-boton" href="/contenido/${slug}?key=${req.query.key}">Generador de contenido <span>→</span></a>
+              <a class="boceto-boton" href="/reportes-guardados/${slug}?key=${req.query.key}">Reportes guardados <span>→</span></a>
+            </div>
+
+            <div class="boceto-contenidos">
+              <div class="boceto-contenido"><div class="boceto-contenido-titulo">Recomendaciones</div>${recomendacionesHtml}</div>
+              <div class="boceto-contenido"><div class="boceto-contenido-titulo">Más de tu plan Pro</div><div class="reco"><b>Alertas instantáneas activas</b> — recibirás un correo en <b>${negocio.email || "tu correo"}</b> cuando llegue una queja privada.</div><div class="reco"><b>Generador para redes</b> — convierte tus resultados en ideas de contenido listas para publicar.</div></div>
+              <div class="boceto-contenido"><div class="boceto-contenido-titulo">Tu plan</div><div class="reco"><b>Plan Pro activo</b> — tienes acceso a todas las estadísticas y herramientas avanzadas.</div><div class="reco"><b>Reporte PDF mensual</b> — al final de cada mes recibirás automáticamente el análisis completo de tu negocio.</div></div>
             </div>
           </section>
 
