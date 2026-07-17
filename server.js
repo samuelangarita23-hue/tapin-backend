@@ -511,7 +511,7 @@ const ESTILO_BASE = `
   .tapin-panel-card-stars{color:#d89412;font-size:.75rem;letter-spacing:2px;margin:4px 0 2px}.tapin-panel-card-copy{font-size:.52rem;color:#26342b;text-align:center;font-weight:700}
   .panel-metric-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:26px}.panel-metric{background:#fffefd;border:1px solid var(--line);border-radius:16px;padding:16px 14px;box-shadow:0 8px 20px rgba(9,49,30,.05)}.panel-metric strong{display:block;color:var(--ink);font-size:1.55rem;line-height:1}.panel-metric span{display:block;color:var(--muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;font-weight:800;margin-top:7px}
   @media(max-width:700px){.tapin-dashboard-hero{grid-template-columns:1fr;text-align:center;padding:24px 20px}.tapin-dashboard-hero p{margin:auto}.tapin-panel-card{width:205px;height:132px}.panel-metric-strip{grid-template-columns:repeat(2,1fr)}}
-  .dashboard-shell{display:grid;grid-template-columns:190px minmax(0,1fr);background:#fffefd;border:1px solid var(--line);border-radius:22px;overflow:hidden;box-shadow:0 16px 38px rgba(9,49,30,.09);margin-bottom:32px;min-height:430px}.dashboard-sidebar{background:linear-gradient(180deg,#0d432b,#092e20);padding:24px 14px;color:#d7eadf}.dashboard-brand{font-size:1.08rem;font-weight:800;color:#fff;padding:0 12px 26px;letter-spacing:-.03em}.dashboard-brand span{color:#e8a623}.dashboard-nav{display:flex;flex-direction:column;gap:5px}.dashboard-nav a{color:#bed4c7;text-decoration:none;font-size:.75rem;font-weight:600;padding:10px 12px;border-radius:9px}.dashboard-nav a.active,.dashboard-nav a:hover{background:#f3f6ee;color:#0d432b}.dashboard-nav small{font-size:.62rem;color:#8fac9b;text-transform:uppercase;letter-spacing:.1em;padding:17px 12px 5px}.dashboard-main{padding:28px 30px;background:#fffefd}.dashboard-toolbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:22px}.dashboard-toolbar h2{font-family:'DM Sans','Segoe UI',sans-serif;font-size:1.35rem;color:#102c20;margin:0 0 3px}.dashboard-toolbar p{font-size:.76rem;color:#718278;margin:0}.dashboard-select{border:1px solid #dbe1d8;background:#fff;border-radius:8px;padding:8px 11px;font-size:.72rem;color:#355345}.dashboard-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}.dashboard-kpi{border:1px solid #e1e7df;border-radius:12px;padding:15px 14px;background:#fff}.dashboard-kpi-label{font-size:.63rem;color:#7c8b82;text-transform:uppercase;font-weight:800;letter-spacing:.06em}.dashboard-kpi-value{font-size:1.55rem;font-weight:800;color:#123b29;margin-top:6px;line-height:1}.dashboard-kpi-note{font-size:.63rem;color:#4f8066;margin-top:7px}.dashboard-chart{border:1px solid #e1e7df;border-radius:14px;padding:17px 18px;background:#fff}.dashboard-chart-title{font-size:.75rem;color:#52655a;font-weight:700;margin-bottom:14px}.dashboard-chart .sparkline{max-width:none;height:105px}.dashboard-lower{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.dashboard-mini{border:1px solid #e1e7df;border-radius:12px;padding:15px;background:#fff}.dashboard-mini-title{font-size:.67rem;color:#839087;text-transform:uppercase;font-weight:800;letter-spacing:.05em}.dashboard-mini-value{font-size:1.15rem;color:#123b29;font-weight:800;margin-top:7px}.dashboard-mini-copy{font-size:.68rem;color:#6c7d73;margin-top:4px}@media(max-width:760px){.dashboard-shell{grid-template-columns:1fr}.dashboard-sidebar{padding:15px}.dashboard-brand{padding:0 10px 12px}.dashboard-nav{display:grid;grid-template-columns:repeat(3,1fr)}.dashboard-nav small{display:none}.dashboard-main{padding:22px 18px}.dashboard-kpis{grid-template-columns:1fr 1fr}.dashboard-lower{grid-template-columns:1fr}}
+  .dashboard-status-row{display:flex;flex-wrap:wrap;gap:7px;margin-top:18px}.dashboard-plan{font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;border-radius:999px;padding:7px 11px;background:#edf2ed;color:#315844}.dashboard-plan.pro{background:#f4dfaa;color:#6b4b08}.dashboard-plan.paused{background:#fbe9e3;color:#993c1d}.dashboard-plan.readonly{background:#eef0ed;color:#718078}.dashboard-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}.dashboard-actions a{border:1px solid #dfe5dc;background:#fff;border-radius:9px;padding:8px 12px;color:#224b37;text-decoration:none;font-size:.7rem;font-weight:700}.dashboard-actions a:hover{border-color:#0f5132;background:#edf5ef}.dashboard-actions a.primary{background:#e8a623;border-color:#e8a623;color:#143a28}.dashboard-actions a.primary:hover{background:#d89412}
 `;
 
 // ---------- Configuración de negocios ----------
@@ -2833,8 +2833,6 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
               </div>
               <div class="dashboard-chart" id="actividad-admin"><div class="dashboard-chart-title">Actividad combinada · últimos 7 días</div><div class="sparkline">${barraSemana(dias7Global)}</div></div>
               <div class="dashboard-lower"><div class="dashboard-mini"><div class="dashboard-mini-title">Calificación promedio</div><div class="dashboard-mini-value">${promedioEstrellas !== null ? promedioEstrellas + " / 5 ★" : "Sin calificaciones"}</div><div class="dashboard-mini-copy">Incluye positivas y negativas del filtro Tapin.</div></div><div class="dashboard-mini" id="negocios-admin"><div class="dashboard-mini-title">Gestión</div><div class="dashboard-mini-value">${totalNegocios} negocios</div><div class="dashboard-mini-copy">Revisa cada panel desde las tarjetas inferiores.</div></div></div>
-            </main>
-          </div>
 
           <div class="seccion">
             <div class="seccion-header">
@@ -2870,6 +2868,8 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
             ${seccionesPaises}
           </div>
 
+            </main>
+          </div>
         </div>
       </body>
     </html>
@@ -3342,7 +3342,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          .content{max-width:660px;}
+          .content{max-width:1100px;}
           .seccion{margin-bottom:26px;}
           .seccion-header{text-align:center;margin-bottom:14px;}
           .seccion-header .eyebrow{justify-content:center;}
@@ -3443,51 +3443,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               </div>
               <div class="dashboard-chart" id="actividad-negocio"><div class="dashboard-chart-title">Actividad · últimos 7 días</div><div class="sparkline">${barraSemana(r.dias7)}</div></div>
               <div class="dashboard-lower"><div class="dashboard-mini" id="opiniones-negocio"><div class="dashboard-mini-title">Opiniones</div><div class="dashboard-mini-value">${totalCalificado} evaluaciones</div><div class="dashboard-mini-copy">Incluye calificaciones positivas y negativas recibidas.</div></div><div class="dashboard-mini" id="proyeccion-negocio"><div class="dashboard-mini-title">Proyección seleccionada</div><div class="dashboard-mini-value">${proyeccion.nombrePeriodo}</div><div class="dashboard-mini-copy">Consulta el estimado desde la sección de proyecciones.</div></div></div>
-            </main>
-          </div>
-
-          <div class="seccion" style="text-align:center;">
-            <div class="eyebrow" style="justify-content:center;">Panel del negocio</div>
-            <h1 class="titulo-pagina">${negocio.nombre}</h1>
-            <div class="subtitulo">Actualizado al ${new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) })}</div>
-            <div style="margin-top:10px;">
-              <span style="display:inline-block;padding:5px 14px;border-radius:100px;font-size:0.72rem;font-weight:700;
-                           letter-spacing:0.02em;text-transform:uppercase;
-                           background:${esPro(negocio) ? MARCA.verdeClaro : "#F3F1EC"};
-                           color:${esPro(negocio) ? MARCA.verdeOscuro : MARCA.textoSuave};">
-                ${esPro(negocio) ? "Plan Pro" : "Plan Básico"}
-              </span>
-              ${negocio.pausado ? `<span style="display:inline-block;margin-left:6px;padding:5px 14px;border-radius:100px;font-size:0.72rem;font-weight:700;background:#FBEFE9;color:#993C1D;">Pausado</span>` : ""}
-              ${soloLectura ? `<span style="display:inline-block;margin-left:6px;padding:5px 14px;border-radius:100px;font-size:0.72rem;font-weight:700;background:#F3F1EC;color:${MARCA.textoSuave};">Solo lectura</span>` : ""}
-            </div>
-            ${!soloLectura ? `
-            <div class="panel-acciones" style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-              <a href="/mi-panel/${slug}/editar?key=${req.query.key}"
-                 style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
-                        border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;
-                        transition:border-color .15s;">
-                Editar mi negocio
-              </a>
-              <a href="/mi-panel/${slug}/clave?key=${req.query.key}"
-                 style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
-                        border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;">
-                Cambiar mi clave
-              </a>
-              ${esPro(negocio) ? `
-              <a href="/suscripcion/${slug}?key=${req.query.key}"
-                 style="font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
-                        border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 18px;text-decoration:none;">
-                Mi suscripción
-              </a>
-              ` : ""}
-              <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}"
-                 style="font-size:0.78rem;font-weight:700;color:#fff;background:${MARCA.oro};
-                        border:1.5px solid ${MARCA.oro};border-radius:100px;padding:9px 18px;text-decoration:none;">
-                Configuración
-              </a>
-            </div>
-            ` : ""}
-          </div>
+              <div class="dashboard-status-row"><span class="dashboard-plan ${esPro(negocio) ? "pro" : "basico"}">${esPro(negocio) ? "Plan Pro" : "Plan Básico"}</span>${negocio.pausado ? `<span class="dashboard-plan paused">Pausado</span>` : ""}${soloLectura ? `<span class="dashboard-plan readonly">Solo lectura</span>` : ""}</div>
+              ${!soloLectura ? `<div class="dashboard-actions"><a href="/mi-panel/${slug}/editar?key=${req.query.key}">Editar negocio</a><a href="/mi-panel/${slug}/clave?key=${req.query.key}">Cambiar clave</a>${esPro(negocio) ? `<a href="/suscripcion/${slug}?key=${req.query.key}">Suscripción</a>` : ""}<a class="primary" href="/mi-panel/${slug}/configuracion?key=${req.query.key}">Configuración</a></div>` : ""}
 
           ${otrasSedes.length > 0 ? `
           <div class="seccion">
@@ -3802,6 +3759,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           </div>
           `}
 
+            </main>
+          </div>
         </div>
       </body>
     </html>
