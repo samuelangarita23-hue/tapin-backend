@@ -3610,10 +3610,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3.5a2 2 0 010-4h.09A1.65 1.65 0 005 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09c0 .68.39 1.29 1 1.51.63.28 1.36.15 1.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06c-.48.46-.61 1.19-.33 1.82.22.61.83 1 1.51 1H21a2 2 0 010 4h-.09c-.68 0-1.29.39-1.51 1z"/></svg>
                 Opciones
               </a>
-              <a href="${esPro(negocio) ? `/mi-panel/${slug}/fidelizacion?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.24L3 3v6.59a2 2 0 00.59 1.41l9.58 9.58a2 2 0 002.83 0l6.59-6.59a2 2 0 000-2.83z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
-                Promociones
-              </a>
               <a href="${esPro(negocio) ? `/suscripcion/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                 ${esPro(negocio) ? "Mi suscripción" : "Plan de pago"}
@@ -4307,7 +4303,9 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           .config-subtitulo{max-width:480px;color:${MARCA.textoSuave};font-size:.82rem;line-height:1.5;text-align:right;}
           .config-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start;}
           .config-grid.config-pro{grid-template-areas:"sus alert" "meta alert" "pause read" "audit audit";}
-          .config-grid.config-gratis{grid-template-areas:"meta read" "pause read" "audit audit";}
+          .config-grid.config-gratis{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:"meta read pause" "audit audit audit";align-items:stretch;}
+          .config-grid.config-gratis>.form-card:not(.config-auditoria){display:flex;flex-direction:column;height:100%;}
+          .config-grid.config-gratis>.form-card:not(.config-auditoria)>form{margin-top:auto;}
           .config-suscripcion{grid-area:sus}.config-meta{grid-area:meta}.config-alertas{grid-area:alert}
           .config-pausar{grid-area:pause}.config-lectura{grid-area:read}.config-auditoria{grid-area:audit}
           .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:22px;max-width:none;margin:0;
@@ -4327,6 +4325,9 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           .linea-audit{display:flex;justify-content:space-between;font-size:0.8rem;padding:8px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.textoSuave};}
           .linea-audit b{color:${MARCA.texto};font-weight:600;}
           .config-auditoria .linea-audit:last-child{border-bottom:none;}
+          @media(max-width:980px){
+            .config-grid.config-gratis{grid-template-columns:1fr 1fr;grid-template-areas:"meta read" "pause pause" "audit audit";}
+          }
           @media(max-width:760px){
             .config-header{align-items:flex-start;flex-direction:column;}
             .config-subtitulo{text-align:left;}
