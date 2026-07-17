@@ -1209,11 +1209,15 @@ function barraSemana(dias7) {
   }
   return dias7
     .map((v, i) => {
-      const alturaPx = 6 + Math.round((v / max) * 46);
+      const alturaPx = 10 + Math.round((v / max) * 82);
+      const esPico = v > 0 && v === Math.max(...dias7);
+      const colorBarra = esPico
+        ? `linear-gradient(180deg,#F7D77D,${MARCA.oro})`
+        : `linear-gradient(180deg,#2C9560,${MARCA.verde})`;
       return `
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;height:100%;">
-          <div style="font-size:0.75rem;font-weight:700;color:${MARCA.textoSuave};line-height:1;">${v}</div>
-          <div style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
+          <div style="font-size:0.75rem;font-weight:800;color:${esPico ? "#8A6200" : MARCA.textoSuave};line-height:1;">${v}</div>
+          <div style="width:100%;max-width:34px;height:${alturaPx}px;background:${colorBarra};border-radius:6px 6px 2px 2px;box-shadow:inset 0 1px rgba(255,255,255,.28);"></div>
           <div style="font-size:0.62rem;color:#999;text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
         </div>`;
     })
@@ -3476,7 +3480,17 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .dash-panel-sub{font-size:0.72rem;color:${MARCA.textoSuave};margin-top:2px;}
           .dash-panel-num{font-size:1.5rem;font-weight:800;color:${MARCA.texto};text-align:right;}
           .dash-panel-numlbl{font-size:0.7rem;color:${MARCA.textoSuave};text-align:right;}
-          .dash-actividad-bars{display:flex;align-items:flex-end;gap:8px;height:110px;}
+          .dash-actividad-bars{display:flex;align-items:flex-end;gap:10px;height:150px;}
+          .actividad-visual{padding:14px 14px 10px;border:1px solid ${MARCA.borde};border-radius:13px;
+                            background:repeating-linear-gradient(to bottom,#FBFCF9 0,#FBFCF9 36px,rgba(15,81,50,.07) 37px);}
+          .actividad-visual .dash-actividad-bars{border-bottom:1px solid ${MARCA.borde};}
+          .actividad-resumen{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:12px;}
+          .actividad-metrica{padding:9px 7px;border-radius:10px;background:${MARCA.crema};text-align:center;}
+          .actividad-metrica b{display:block;font-size:.84rem;color:${MARCA.texto};}
+          .actividad-metrica span{font-size:.59rem;color:${MARCA.textoSuave};text-transform:uppercase;letter-spacing:.02em;}
+          .actividad-leyenda{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:9px;
+                             color:${MARCA.textoSuave};font-size:.64rem;}
+          .actividad-leyenda i{width:8px;height:8px;border-radius:2px;background:${MARCA.oro};}
           .proyeccion-panel{position:relative;overflow:hidden;}
           .proyeccion-grafica{padding:14px 14px 8px;border:1px solid ${MARCA.borde};border-radius:13px;
                               background:linear-gradient(180deg,#FBFCF9 0%,#F4F8F3 100%);}
@@ -3516,7 +3530,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                             border-bottom:1px solid ${MARCA.borde};}
           .barra-vertical-grupo{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:64px;}
           .barra-vertical-valor{font-size:.82rem;font-weight:900;margin-bottom:7px;}
-          .barra-vertical{width:58px;min-height:8px;border-radius:9px 9px 2px 2px;box-shadow:inset 0 1px rgba(255,255,255,.3);}
+          .barra-vertical{width:58px;min-height:24px;border-radius:9px 9px 2px 2px;box-shadow:inset 0 1px rgba(255,255,255,.3);}
           .barra-vertical-etiqueta{font-size:.7rem;color:${MARCA.textoSuave};text-align:center;margin-top:8px;line-height:1.25;}
           .grafica-resumen{display:flex;justify-content:center;gap:7px;flex-wrap:wrap;margin-top:11px;}
           .grafica-resumen span{padding:6px 9px;border-radius:999px;background:${MARCA.crema};color:${MARCA.textoSuave};font-size:.66rem;font-weight:700;}
@@ -3703,7 +3717,15 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                   <div class="dash-panel-numlbl">interacciones</div>
                 </div>
               </div>
-              <div class="dash-actividad-bars sparkline">${barraSemana(r.dias7)}</div>
+              <div class="actividad-visual">
+                <div class="dash-actividad-bars">${barraSemana(r.dias7)}</div>
+                <div class="actividad-leyenda"><i></i><span>La barra dorada indica tu día con más actividad</span></div>
+              </div>
+              <div class="actividad-resumen">
+                <div class="actividad-metrica"><b>${r.semana}</b><span>Total semanal</span></div>
+                <div class="actividad-metrica"><b>${Math.round((r.semana / 7) * 10) / 10}</b><span>Promedio diario</span></div>
+                <div class="actividad-metrica"><b>${Math.max(0, ...r.dias7)}</b><span>Mejor día</span></div>
+              </div>
               <div class="ultimo-toque" style="margin-top:12px;">Total histórico: <b>${r.total}</b> · Último toque: <b>${ultimoTexto}</b></div>
             </div>
 
@@ -3848,12 +3870,12 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               <div class="boceto-bloque">
                 <div class="card-titulo">Cómo te calificaron</div>
                 <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
-                  ${totalCalificado > 0
+                  ${totalCalificado > 0 || !esPro(negocio)
                     ? `<div class="grafica-vertical-marco"><div class="grafica-vertical">
                          <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.verde};">${pctPositivas}%</div><div class="barra-vertical" style="height:${Math.max(6, pctPositivas)}%;background:linear-gradient(180deg,#2C9560,${MARCA.verde});"></div><div class="barra-vertical-etiqueta">Positivas<br><b>${testimonios.length}</b></div></div>
                          <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.rojo};">${pctNegativas}%</div><div class="barra-vertical" style="height:${Math.max(6, pctNegativas)}%;background:linear-gradient(180deg,#E05243,${MARCA.rojo});"></div><div class="barra-vertical-etiqueta">Quejas<br><b>${quejas.length}</b></div></div>
                        </div></div>
-                       <div class="grafica-resumen"><span><b>${totalCalificado}</b> respuestas</span>${tasaRecuperacion !== null ? `<span>Recuperación <b>${tasaRecuperacion}%</b></span>` : ""}<span>Balance <b>${pctPositivas - pctNegativas >= 0 ? "+" : ""}${pctPositivas - pctNegativas} pts</b></span></div>`
+                       <div class="grafica-resumen"><span><b>${totalCalificado}</b> respuestas</span>${tasaRecuperacion !== null ? `<span>Recuperación <b>${tasaRecuperacion}%</b></span>` : ""}<span>Balance <b>${pctPositivas - pctNegativas >= 0 ? "+" : ""}${pctPositivas - pctNegativas} pts</b></span></div>${totalCalificado === 0 ? `<div class="horas-nota">La gráfica empezará a crecer cuando recibas calificaciones.</div>` : ""}`
                     : `<div class="sentimiento-vacio">Sin calificaciones todavía.</div>`}
                 </div>
               </div>
