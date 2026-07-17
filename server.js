@@ -2753,7 +2753,7 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
           .sparkline-grande{height:120px;max-width:520px;margin:0 auto;}
 
           /* Lista de negocios */
-          .lista-negocios{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:stretch;}
+          .lista-negocios{display:flex;flex-direction:column;gap:16px;}
           .card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 1px 2px rgba(11,61,44,0.04), 0 8px 24px rgba(11,61,44,0.06);border:1px solid ${MARCA.borde};transition:box-shadow .2s;}
           .card:hover{box-shadow:0 1px 2px rgba(11,61,44,0.05), 0 12px 32px rgba(11,61,44,0.10);}
           .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
@@ -2795,14 +2795,12 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
           .topbar-nav{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:flex-end;}
           .topbar-nav a{color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;white-space:nowrap;}
           .topbar-nav a:hover{color:#fff;text-decoration:underline;}
-          @media (max-width:980px){.lista-negocios{grid-template-columns:repeat(2,minmax(0,1fr));}}
           @media (max-width:640px){
             .topbar{flex-direction:column;align-items:flex-start;gap:10px;padding:16px 20px;}
             .topbar-nav{justify-content:flex-start;width:100%;}
             .content{padding:20px 16px 50px;}
             .card{padding:18px;}
             .card-top{flex-wrap:wrap;gap:10px;}
-            .lista-negocios{grid-template-columns:1fr;}
           }
         </style>
       </head>
@@ -3354,10 +3352,20 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
 
           .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch;}
           @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
+          .panel-analitica-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start;margin-top:6px;}
+          .panel-analitica-grid>.analitica-principal,.panel-analitica-grid>.analitica-reputacion{display:contents;}
+          .panel-analitica-grid>.analitica-principal>div:first-child{grid-column:1;grid-row:1;}
+          .panel-analitica-grid>.analitica-principal>div:nth-child(2){grid-column:2;grid-row:1;}
+          .panel-analitica-grid>.analitica-reputacion>div:first-child{grid-column:3;grid-row:1;}
+          .panel-analitica-grid>.analitica-reputacion>div:nth-child(2){grid-column:3;grid-row:2;}
+          .panel-analitica-grid>.seccion-actividad{grid-column:1;grid-row:2;margin:0;}
+          .panel-analitica-grid>.seccion-actividad .chart-card{height:100%;}
+          @media (max-width:900px){.panel-analitica-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.panel-analitica-grid>.analitica-principal>div:first-child,.panel-analitica-grid>.analitica-reputacion>div:first-child{grid-column:auto;grid-row:auto;}.panel-analitica-grid>.analitica-principal>div:nth-child(2),.panel-analitica-grid>.analitica-reputacion>div:nth-child(2),.panel-analitica-grid>.seccion-actividad{grid-column:auto;grid-row:auto;}}
+          @media (max-width:560px){.panel-analitica-grid{grid-template-columns:1fr;}}
           .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:stretch;}
           .grid-3 .reco{margin-bottom:0;height:100%;box-sizing:border-box;}
-          @media (max-width:760px){.grid-3{grid-template-columns:1fr 1fr;}}
-          @media (max-width:520px){.grid-3{grid-template-columns:1fr;}}
+          @media (max-width:900px){.grid-3{grid-template-columns:1fr 1fr;}}
+          @media (max-width:560px){.grid-3{grid-template-columns:1fr;}}
           @media (max-width:480px){
             .fila-herramientas{flex-direction:column;}
             .btn-herramienta{min-width:0;}
@@ -3408,9 +3416,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .tabla-actividad td{padding:7px 10px 7px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.texto};}
           .tabla-actividad tr:last-child td{border-bottom:none;}
 
-          .fila-herramientas{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
-          .btn-herramienta{min-width:0;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
-                           padding:10px 9px;text-decoration:none;color:${MARCA.texto};font-size:0.74rem;font-weight:700;
+          .fila-herramientas{display:flex;gap:10px;flex-wrap:wrap;}
+          .btn-herramienta{flex:1;min-width:140px;background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;
+                           padding:12px 14px;text-decoration:none;color:${MARCA.texto};font-size:0.82rem;font-weight:700;
                            text-align:center;box-shadow:0 1px 2px rgba(11,61,44,0.04);}
           .btn-herramienta:hover{border-color:${MARCA.verde};}
           .btn-reporte-pdf{display:flex;align-items:center;justify-content:space-between;gap:12px;
@@ -3450,9 +3458,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             .sidebar-pie{border-top:none;margin-top:0;padding-top:0;}
             .sidebar-pie a{padding:8px 12px;white-space:nowrap;}
             .dashboard-main{padding:22px 16px 50px;}
-            .fila-herramientas{grid-template-columns:repeat(2,minmax(0,1fr));}
           }
-          @media (max-width:520px){.fila-herramientas{grid-template-columns:1fr;}}
 
           .dash-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
           .dash-header h1{font-family:'Playfair Display',Georgia,serif;font-size:1.7rem;margin:0;color:${MARCA.texto};letter-spacing:-.02em;}
@@ -3766,7 +3772,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
           </div>
           ` : ""}
-          <div class="seccion grid-2">
+          <div class="panel-analitica-grid">
+          <div class="seccion grid-2 analitica-principal">
             <div>
               <div class="card-titulo">Calendario del mes</div>
               <div class="chart-card" style="margin-top:0;">
@@ -3847,7 +3854,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
           </div>
           ` : `
-          <div class="seccion">
+          <div class="seccion analitica-reputacion">
             <div class="card-titulo">Cómo te calificaron</div>
             <div class="chart-card" style="margin-top:0;">
               ${totalCalificado > 0
@@ -3874,8 +3881,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               </table>
             </div>
           </div>
+          </div>
 
-          <div class="seccion grid-2">
+          <div class="seccion grid-2 analitica-reputacion">
             <div>
               <div class="card-titulo">Más de tu plan Pro</div>
               <div class="reco" style="border-left-color:${MARCA.verde};">
