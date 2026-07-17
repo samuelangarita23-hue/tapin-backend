@@ -498,6 +498,19 @@ const ESTILO_BASE = `
   button:hover,.btn:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(5,58,36,.14);}
   input:focus,select:focus,textarea:focus{outline:none;border-color:${MARCA.verde}!important;box-shadow:0 0 0 3px rgba(15,81,50,.12);}
   h1,h2,h3{font-family:'Playfair Display',Georgia,serif;}
+  .tapin-dashboard-hero{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:22px;align-items:center;background:linear-gradient(135deg,#0d432b 0%,#0a3422 100%);border-radius:24px;padding:26px 28px;margin-bottom:28px;box-shadow:0 18px 38px rgba(6,46,30,.16);overflow:hidden;position:relative;}
+  .tapin-dashboard-hero:after{content:'';position:absolute;width:260px;height:260px;border-radius:50%;right:-90px;top:-130px;background:rgba(232,166,35,.12);}
+  .tapin-dashboard-hero .hero-kicker{color:#e8a623;font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:8px;}
+  .tapin-dashboard-hero h2{color:#fff;margin:0 0 7px;font-size:clamp(1.35rem,2.3vw,2rem);letter-spacing:-.02em;}
+  .tapin-dashboard-hero p{color:#cfe3d8;margin:0;max-width:540px;font-size:.88rem;}
+  .tapin-panel-card{width:220px;height:142px;background:#fffefd;border-radius:18px;padding:16px;position:relative;z-index:1;box-shadow:0 18px 30px rgba(0,0,0,.22);transform:rotate(3deg);margin:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .tapin-panel-card-brand{position:absolute;left:16px;top:12px;font-weight:800;color:#062e1e;font-size:.82rem;}
+  .tapin-panel-card-nfc{position:absolute;right:14px;top:12px;color:#062e1e;border:1px solid #062e1e;border-radius:999px;padding:1px 5px;font-size:.53rem;font-weight:800;}
+  .tapin-panel-card-google{font-size:2.35rem;line-height:1;font-weight:800;letter-spacing:-.09em;margin-top:8px;}
+  .tapin-panel-card-google span:nth-child(1){color:#4285F4}.tapin-panel-card-google span:nth-child(2){color:#EA4335}.tapin-panel-card-google span:nth-child(3){color:#FBBC05}.tapin-panel-card-google span:nth-child(4){color:#4285F4}.tapin-panel-card-google span:nth-child(5){color:#34A853}.tapin-panel-card-google span:nth-child(6){color:#EA4335}
+  .tapin-panel-card-stars{color:#d89412;font-size:.75rem;letter-spacing:2px;margin:4px 0 2px}.tapin-panel-card-copy{font-size:.52rem;color:#26342b;text-align:center;font-weight:700}
+  .panel-metric-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:26px}.panel-metric{background:#fffefd;border:1px solid var(--line);border-radius:16px;padding:16px 14px;box-shadow:0 8px 20px rgba(9,49,30,.05)}.panel-metric strong{display:block;color:var(--ink);font-size:1.55rem;line-height:1}.panel-metric span{display:block;color:var(--muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;font-weight:800;margin-top:7px}
+  @media(max-width:700px){.tapin-dashboard-hero{grid-template-columns:1fr;text-align:center;padding:24px 20px}.tapin-dashboard-hero p{margin:auto}.tapin-panel-card{width:205px;height:132px}.panel-metric-strip{grid-template-columns:repeat(2,1fr)}}
 `;
 
 // ---------- Configuración de negocios ----------
@@ -2796,6 +2809,19 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
         </div>
         <div class="content">
 
+          <div class="tapin-dashboard-hero">
+            <div>
+              <div class="hero-kicker">Tapin · panel de administración</div>
+              <h2>Todo lo que pasa en tus negocios, en un solo lugar.</h2>
+              <p>Consulta actividad, calificaciones, reportes y accesos de cada tarjeta Tapin desde una vista clara y ordenada.</p>
+            </div>
+            <div class="tapin-panel-card" aria-label="Tarjeta Tapin de ejemplo">
+              <div class="tapin-panel-card-brand">Tapin</div><div class="tapin-panel-card-nfc">NFC )))</div>
+              <div class="tapin-panel-card-google"><span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span></div>
+              <div class="tapin-panel-card-stars">★★★★★</div><div class="tapin-panel-card-copy">Déjanos una reseña en Google</div>
+            </div>
+          </div>
+
           <div class="seccion">
             <div class="seccion-header">
               <div class="eyebrow">Resumen general</div>
@@ -3379,6 +3405,19 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           <div>${logoSvg("#FFFFFF", 30)}</div>
         </div>
         <div class="content">
+
+          <div class="tapin-dashboard-hero">
+            <div>
+              <div class="hero-kicker">Tapin · panel del negocio</div>
+              <h2>${negocio.nombre}</h2>
+              <p>Una vista práctica para entender la actividad de tu tarjeta y tomar mejores decisiones con datos reales.</p>
+            </div>
+            <div class="tapin-panel-card" aria-label="Tarjeta Tapin de ejemplo">
+              <div class="tapin-panel-card-brand">Tapin</div><div class="tapin-panel-card-nfc">NFC )))</div>
+              <div class="tapin-panel-card-google"><span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span></div>
+              <div class="tapin-panel-card-stars">★★★★★</div><div class="tapin-panel-card-copy">Déjanos una reseña en Google</div>
+            </div>
+          </div>
 
           <div class="seccion" style="text-align:center;">
             <div class="eyebrow" style="justify-content:center;">Panel del negocio</div>
