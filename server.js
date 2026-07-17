@@ -1487,6 +1487,13 @@ app.get("/r/:slug", (req, res) => {
 
   registrarToque(slug, req, negocio);
 
+  // El filtro de calificación es exclusivo del Plan Pro. En el plan Gratis
+  // registramos el toque para las estadísticas básicas y enviamos al cliente
+  // directamente al enlace de reseñas de Google.
+  if (!esPro(negocio)) {
+    return res.redirect(302, negocio.googleUrl);
+  }
+
   res.send(`
     <html>
       <head>
