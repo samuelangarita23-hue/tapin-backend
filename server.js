@@ -482,8 +482,8 @@ const ICONO_OJO_ABIERTO = `<svg width="18" height="18" viewBox="0 0 24 24" fill=
 const ICONO_OJO_CERRADO = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 3L21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10.6 5.2C11.05 5.1 11.51 5 12 5C19 5 23 12 23 12C23 12 21.8 14.2 19.6 16.1M6.9 6.9C3.7 8.9 1 12 1 12C1 12 5 19 12 19C13.6 19 15 18.6 16.2 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.9 9.9C9.34 10.46 9 11.19 9 12C9 13.66 10.34 15 12 15C12.81 15 13.54 14.66 14.1 14.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 
 const ESTILO_BASE = `
-  *{box-sizing:border-box;}
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&display=swap');
+  *{box-sizing:border-box;}
   :root{--ink:#062e1e;--forest:#0d432b;--forest2:#146542;--cream:#fbf6e9;--paper:#fffefd;--muted:#50695b;--line:#dedccc;--gold:#e8a623;--gold2:#f3d576;}
   body{font-family:'DM Sans','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};color:${MARCA.texto};margin:0;min-height:100vh;line-height:1.5;}
   a{color:${MARCA.verde};}
