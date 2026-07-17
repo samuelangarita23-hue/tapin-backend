@@ -4301,9 +4301,20 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
         <title>Configuración — ${negocio.nombre}</title>
         <style>
           ${ESTILO_BASE}
-          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px;max-width:460px;margin-bottom:22px;}
-          .form-card h3{margin:0 0 4px;font-size:0.95rem;}
-          .form-card p.nota{color:${MARCA.textoSuave};font-size:0.78rem;margin:0 0 14px;}
+          .content{max-width:1120px;}
+          .config-header{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:24px;}
+          .config-header .titulo-pagina{margin-bottom:0;}
+          .config-subtitulo{max-width:480px;color:${MARCA.textoSuave};font-size:.82rem;line-height:1.5;text-align:right;}
+          .config-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start;}
+          .config-grid.config-pro{grid-template-areas:"sus alert" "meta alert" "pause read" "audit audit";}
+          .config-grid.config-gratis{grid-template-areas:"meta read" "pause read" "audit audit";}
+          .config-suscripcion{grid-area:sus}.config-meta{grid-area:meta}.config-alertas{grid-area:alert}
+          .config-pausar{grid-area:pause}.config-lectura{grid-area:read}.config-auditoria{grid-area:audit}
+          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:22px;max-width:none;margin:0;
+                     box-shadow:0 1px 3px rgba(11,61,44,.05);box-sizing:border-box;min-width:0;}
+          .form-card h3{margin:0 0 5px;font-size:0.98rem;color:${MARCA.texto};}
+          .form-card p.nota{color:${MARCA.textoSuave};font-size:0.78rem;line-height:1.5;margin:0 0 16px;}
+          .form-card form{margin:0;}
           input[type=number], input[type=text]{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;
                 font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;}
           label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin-bottom:6px;}
@@ -4315,16 +4326,28 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           .codigo-caja{background:${MARCA.crema};border-radius:8px;padding:10px 12px;font-size:0.82rem;word-break:break-all;margin:10px 0;}
           .linea-audit{display:flex;justify-content:space-between;font-size:0.8rem;padding:8px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.textoSuave};}
           .linea-audit b{color:${MARCA.texto};font-weight:600;}
+          .config-auditoria .linea-audit:last-child{border-bottom:none;}
+          @media(max-width:760px){
+            .config-header{align-items:flex-start;flex-direction:column;}
+            .config-subtitulo{text-align:left;}
+            .config-grid,.config-grid.config-pro,.config-grid.config-gratis{grid-template-columns:1fr;grid-template-areas:none;}
+            .config-grid>*{grid-area:auto!important;}
+            .linea-audit{align-items:flex-start;flex-direction:column;gap:3px;}
+          }
         </style>
       </head>
       <body>
         <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/mi-panel/${slug}?key=${claveUsada}" style="color:#CFE3D8;">&larr; Volver al panel</a></div>
         <div class="content">
-          <div class="eyebrow">Ajustes · ${negocio.nombre}</div>
-          <h1 class="titulo-pagina">Configuración</h1>
+          <div class="config-header">
+            <div><div class="eyebrow">Ajustes · ${negocio.nombre}</div><h1 class="titulo-pagina">Configuración</h1></div>
+            <div class="config-subtitulo">Administra tus metas, alertas, accesos y el estado del negocio desde un solo lugar.</div>
+          </div>
+
+          <div class="config-grid ${esPro(negocio) ? "config-pro" : "config-gratis"}">
 
           ${esPro(negocio) ? `
-          <div class="form-card">
+          <div class="form-card config-suscripcion">
             <h3>Mi suscripción</h3>
             <p class="nota">Ver el estado de tu pago, cambiar de tarjeta, o cancelar el Plan Pro.</p>
             <a href="/suscripcion/${slug}?key=${claveUsada}" style="display:inline-block;background:${MARCA.verdeOscuro};color:#fff;
@@ -4334,7 +4357,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           </div>
           ` : ""}
 
-          <div class="form-card">
+          <div class="form-card config-meta">
             <h3>Meta mensual</h3>
             <p class="nota">Te ponemos una barra de progreso en el panel hacia esta meta.</p>
             <form method="POST" action="/mi-panel/${slug}/configuracion/meta?key=${claveUsada}">
@@ -4345,7 +4368,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           </div>
 
           ${esPro(negocio) ? `
-          <div class="form-card">
+          <div class="form-card config-alertas">
             <h3>Alertas por correo</h3>
             <p class="nota">Elige cuáles quieres recibir — todas están activadas por defecto.</p>
             <form method="POST" action="/mi-panel/${slug}/configuracion/alertas?key=${claveUsada}">
@@ -4365,7 +4388,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           </div>
           ` : ""}
 
-          <div class="form-card">
+          <div class="form-card config-pausar">
             <h3>Pausar negocio</h3>
             <p class="nota">${negocio.pausado
               ? "Tu negocio está pausado — no vamos a marcar caídas raras en tus estadísticas mientras tanto."
@@ -4376,7 +4399,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
             </form>
           </div>
 
-          <div class="form-card">
+          <div class="form-card config-lectura">
             <h3>Acceso de solo lectura</h3>
             <p class="nota">Comparte este link con un encargado — puede ver el panel, pero no cambiar nada (ni clave, ni configuración, ni negocio).</p>
             ${negocio.claveSoloLectura
@@ -4389,12 +4412,13 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
                  </form>`}
           </div>
 
-          <div class="form-card">
+          <div class="form-card config-auditoria">
             <h3>Historial de cambios de tu cuenta</h3>
             <p class="nota">Solo tuyo, para tener orden — no es visible para nadie más.</p>
             ${auditoria.length
               ? auditoria.map((a) => `<div class="linea-audit"><b>${a.texto}</b><span>${a.fechaLegible}</span></div>`).join("")
               : `<p class="nota" style="margin:0;">Todavía no hay cambios registrados.</p>`}
+          </div>
           </div>
         </div>
       </body>
