@@ -3352,16 +3352,17 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
 
           .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch;}
           @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
-          .panel-analitica-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start;margin-top:6px;}
-          .panel-analitica-grid>.analitica-principal,.panel-analitica-grid>.analitica-reputacion{display:contents;}
-          .panel-analitica-grid>.analitica-principal>div:first-child{grid-column:1;grid-row:1;}
-          .panel-analitica-grid>.analitica-principal>div:nth-child(2){grid-column:2;grid-row:1;}
-          .panel-analitica-grid>.analitica-reputacion>div:first-child{grid-column:3;grid-row:1;}
-          .panel-analitica-grid>.analitica-reputacion>div:nth-child(2){grid-column:3;grid-row:2;}
-          .panel-analitica-grid>.seccion-actividad{grid-column:1;grid-row:2;margin:0;}
+          .panel-analitica-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(190px,.62fr);gap:14px;align-items:stretch;margin-top:6px;}
+          .panel-analitica-grid>.analitica-principal{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;grid-column:1 / span 2;grid-row:1;margin:0;}
+          .panel-analitica-grid>.analitica-principal>div:first-child,.panel-analitica-grid>.analitica-principal>div:nth-child(2){grid-column:auto;grid-row:auto;min-width:0;}
+          .panel-analitica-grid>.analitica-reputacion{display:flex!important;flex-direction:column;gap:14px;grid-column:3;grid-row:1;margin:0;min-width:0;}
+          .panel-analitica-grid>.analitica-reputacion>div{min-width:0;}
+          .panel-analitica-grid>.analitica-reputacion .chart-card{height:calc(100% - 28px);}
+          .panel-analitica-grid>.seccion-actividad{grid-column:1;grid-row:2;margin:0;min-width:0;}
           .panel-analitica-grid>.seccion-actividad .chart-card{height:100%;}
-          @media (max-width:900px){.panel-analitica-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.panel-analitica-grid>.analitica-principal>div:first-child,.panel-analitica-grid>.analitica-reputacion>div:first-child{grid-column:auto;grid-row:auto;}.panel-analitica-grid>.analitica-principal>div:nth-child(2),.panel-analitica-grid>.analitica-reputacion>div:nth-child(2),.panel-analitica-grid>.seccion-actividad{grid-column:auto;grid-row:auto;}}
-          @media (max-width:560px){.panel-analitica-grid{grid-template-columns:1fr;}}
+          .seccion-datos .grid-3{grid-template-columns:repeat(2,minmax(0,1fr));}
+          @media (max-width:900px){.panel-analitica-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.panel-analitica-grid>.analitica-principal{grid-column:1 / span 2;grid-row:auto;}.panel-analitica-grid>.analitica-reputacion{grid-column:1 / span 2;grid-row:auto;flex-direction:row!important;}.panel-analitica-grid>.seccion-actividad{grid-column:1 / span 2;grid-row:auto;}}
+          @media (max-width:560px){.panel-analitica-grid{grid-template-columns:1fr;}.panel-analitica-grid>.analitica-principal{grid-column:auto;grid-template-columns:1fr;}.panel-analitica-grid>.analitica-reputacion{grid-column:auto;flex-direction:column!important;}.panel-analitica-grid>.seccion-actividad{grid-column:auto;}.seccion-datos .grid-3{grid-template-columns:1fr;}}
           .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:stretch;}
           .grid-3 .reco{margin-bottom:0;height:100%;box-sizing:border-box;}
           @media (max-width:900px){.grid-3{grid-template-columns:1fr 1fr;}}
@@ -3753,7 +3754,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
 
           ${esPro(negocio) ? `
           ${resumenFrase || caida || diaFlojo || clientesRecurrentes > 0 || percentil !== null ? `
-          <div class="seccion">
+          <div class="seccion seccion-datos">
             <div class="card-titulo">Lo que dicen tus datos</div>
             <div class="grid-3">
               ${resumenFrase ? `<div class="reco" style="border-left-color:${MARCA.verde};"><b>Resumen (30 días):</b> ${resumenFrase}</div>` : ""}
