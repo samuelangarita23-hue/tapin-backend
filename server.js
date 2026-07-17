@@ -2753,7 +2753,7 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
           .sparkline-grande{height:120px;max-width:520px;margin:0 auto;}
 
           /* Lista de negocios */
-          .lista-negocios{display:flex;flex-direction:column;gap:16px;}
+          .lista-negocios{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:stretch;}
           .card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 1px 2px rgba(11,61,44,0.04), 0 8px 24px rgba(11,61,44,0.06);border:1px solid ${MARCA.borde};transition:box-shadow .2s;}
           .card:hover{box-shadow:0 1px 2px rgba(11,61,44,0.05), 0 12px 32px rgba(11,61,44,0.10);}
           .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
@@ -2795,12 +2795,14 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
           .topbar-nav{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:flex-end;}
           .topbar-nav a{color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;white-space:nowrap;}
           .topbar-nav a:hover{color:#fff;text-decoration:underline;}
+          @media (max-width:980px){.lista-negocios{grid-template-columns:repeat(2,minmax(0,1fr));}}
           @media (max-width:640px){
             .topbar{flex-direction:column;align-items:flex-start;gap:10px;padding:16px 20px;}
             .topbar-nav{justify-content:flex-start;width:100%;}
             .content{padding:20px 16px 50px;}
             .card{padding:18px;}
             .card-top{flex-wrap:wrap;gap:10px;}
+            .lista-negocios{grid-template-columns:1fr;}
           }
         </style>
       </head>
@@ -3343,7 +3345,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          .content{max-width:660px;}
+          .content{max-width:1120px;width:100%;}
           .seccion{margin-bottom:26px;}
           .seccion-header{text-align:center;margin-bottom:14px;}
           .seccion-header .eyebrow{justify-content:center;}
@@ -3352,6 +3354,10 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
 
           .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch;}
           @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
+          .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:stretch;}
+          .grid-3 .reco{margin-bottom:0;height:100%;box-sizing:border-box;}
+          @media (max-width:760px){.grid-3{grid-template-columns:1fr 1fr;}}
+          @media (max-width:520px){.grid-3{grid-template-columns:1fr;}}
           @media (max-width:480px){
             .fila-herramientas{flex-direction:column;}
             .btn-herramienta{min-width:0;}
@@ -3402,9 +3408,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .tabla-actividad td{padding:7px 10px 7px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.texto};}
           .tabla-actividad tr:last-child td{border-bottom:none;}
 
-          .fila-herramientas{display:flex;gap:10px;flex-wrap:wrap;}
-          .btn-herramienta{flex:1;min-width:140px;background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;
-                           padding:12px 14px;text-decoration:none;color:${MARCA.texto};font-size:0.82rem;font-weight:700;
+          .fila-herramientas{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+          .btn-herramienta{min-width:0;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
+                           padding:10px 9px;text-decoration:none;color:${MARCA.texto};font-size:0.74rem;font-weight:700;
                            text-align:center;box-shadow:0 1px 2px rgba(11,61,44,0.04);}
           .btn-herramienta:hover{border-color:${MARCA.verde};}
           .btn-reporte-pdf{display:flex;align-items:center;justify-content:space-between;gap:12px;
@@ -3429,8 +3435,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .sidebar-nav a svg{flex-shrink:0;width:17px;height:17px;}
           .sidebar-nav a.deshabilitado{opacity:0.45;pointer-events:none;}
           .sidebar-pie{border-top:1px solid rgba(255,255,255,0.14);padding-top:14px;margin-top:14px;}
-          .sidebar-pie a{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;
-                         color:#CFE3D8;text-decoration:none;font-size:0.84rem;font-weight:600;}
+          .sidebar-pie a{display:inline-flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;
+                         color:#CFE3D8;text-decoration:none;font-size:0.7rem;font-weight:600;}
+          .sidebar-pie a svg{flex-shrink:0;width:14px;height:14px;}
           .sidebar-pie a:hover{background:rgba(255,255,255,0.08);color:#fff;}
           .dashboard-main{flex:1;min-width:0;padding:34px 40px 60px;box-sizing:border-box;}
           @media (max-width:900px){
@@ -3443,7 +3450,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             .sidebar-pie{border-top:none;margin-top:0;padding-top:0;}
             .sidebar-pie a{padding:8px 12px;white-space:nowrap;}
             .dashboard-main{padding:22px 16px 50px;}
+            .fila-herramientas{grid-template-columns:repeat(2,minmax(0,1fr));}
           }
+          @media (max-width:520px){.fila-herramientas{grid-template-columns:1fr;}}
 
           .dash-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
           .dash-header h1{font-family:'Playfair Display',Georgia,serif;font-size:1.7rem;margin:0;color:${MARCA.texto};letter-spacing:-.02em;}
@@ -3722,11 +3731,11 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           ${r.total === 0 ? `
           <div class="seccion">
             <div class="card-titulo">Primeros pasos</div>
-            <div class="chart-card" style="margin-top:0;">
-              <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;margin-bottom:8px;">
+            <div class="grid-3">
+              <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
                 Comparte el link de tu tarjeta con tus primeros clientes: <b>${req.protocol}://${req.get("host")}/r/${slug}</b>
               </div>
-              <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;margin-bottom:8px;">
+              <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
                 Verifica que tu <a href="/mi-panel/${slug}/editar?key=${req.query.key}" style="color:#7A5A00;">enlace de reseñas de Google</a> sea el correcto antes del primer toque.
               </div>
               <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
@@ -3740,7 +3749,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           ${resumenFrase || caida || diaFlojo || clientesRecurrentes > 0 || percentil !== null ? `
           <div class="seccion">
             <div class="card-titulo">Lo que dicen tus datos</div>
-            <div class="chart-card" style="margin-top:0;display:flex;flex-direction:column;gap:10px;">
+            <div class="grid-3">
               ${resumenFrase ? `<div class="reco" style="border-left-color:${MARCA.verde};"><b>Resumen (30 días):</b> ${resumenFrase}</div>` : ""}
               ${caida ? `<div class="reco" style="border-left-color:${MARCA.rojo};background:#FBEFE9;color:#993C1D;">
                 <b>⚠ Caída esta semana</b> — ${caida.pctCaida}% por debajo de tu propio promedio (~${caida.promedioSemanal} toques/semana).
