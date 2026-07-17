@@ -43,6 +43,34 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
+// Protege ADMIN_KEY contra fuerza bruta en TODAS las rutas de administrador
+// (/stats, /editar, /codigos, /auditoria, /respaldo, etc.) — hasta ahora solo
+// /admin/entrar tenía límite de intentos, pero esas otras rutas también
+// aceptan ?key= directamente sin pasar por ahí. Solo cuenta intentos FALLIDOS
+// (clave incorrecta) — el administrador real, con la clave correcta, nunca
+// se ve afectado por esto sin importar cuántas veces recargue la página.
+const intentosAdminFallidos = {};
+function limitarIntentosAdmin(req, res, next) {
+  if (!req.query.key || req.query.key === ADMIN_KEY) return next();
+  const ip = req.ip || "desconocida";
+  const ahora = Date.now();
+  const ventanaMs = 15 * 60 * 1000;
+  if (!intentosAdminFallidos[ip]) intentosAdminFallidos[ip] = [];
+  intentosAdminFallidos[ip] = intentosAdminFallidos[ip].filter((t) => ahora - t < ventanaMs);
+  if (intentosAdminFallidos[ip].length >= 10) {
+    return res.status(429).send("Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.");
+  }
+  intentosAdminFallidos[ip].push(ahora);
+  next();
+}
+setInterval(() => {
+  const ahora = Date.now();
+  for (const ip in intentosAdminFallidos) {
+    intentosAdminFallidos[ip] = intentosAdminFallidos[ip].filter((t) => ahora - t < 30 * 60 * 1000);
+    if (intentosAdminFallidos[ip].length === 0) delete intentosAdminFallidos[ip];
+  }
+}, 10 * 60 * 1000);
+
 app.set("trust proxy", 1);
 
 // Encabezados de seguridad básicos en cada respuesta — sin librerías extra.
@@ -1706,7 +1734,7 @@ app.get("/testimonio/:slug", (req, res) => {
 // Página para crear y editar negocios directamente desde el navegador,
 // sin tener que tocar el código ni redesplegar en Render.
 // Visítalo así: https://tu-dominio.com/editar?key=TU_CLAVE
-app.get("/editar", (req, res) => {
+app.get("/editar", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
@@ -1772,7 +1800,7 @@ app.get("/editar", (req, res) => {
 });
 
 // Formulario para crear un negocio nuevo directamente (sin pasar por código de activación).
-app.get("/editar/nuevo", (req, res) => {
+app.get("/editar/nuevo", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
@@ -1780,7 +1808,7 @@ app.get("/editar/nuevo", (req, res) => {
   res.send(formularioNegocio({ titulo: "Agregar negocio nuevo", accion: `/editar/nuevo?key=${key}`, key }));
 });
 
-app.post("/editar/nuevo", (req, res) => {
+app.post("/editar/nuevo", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
@@ -1822,7 +1850,7 @@ app.post("/editar/nuevo", (req, res) => {
 });
 
 // Editar un negocio dinámico existente (creado por código de activación o desde /editar/nuevo).
-app.get("/editar/:slug", (req, res) => {
+app.get("/editar/:slug", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
@@ -1841,7 +1869,7 @@ app.get("/editar/:slug", (req, res) => {
   }));
 });
 
-app.post("/editar/:slug", (req, res) => {
+app.post("/editar/:slug", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
@@ -1903,7 +1931,7 @@ app.post("/editar/:slug", (req, res) => {
   res.redirect(`/editar?key=${req.query.key}`);
 });
 // Pantalla de confirmación antes de quitar una tarjeta (para evitar borrados accidentales).
-app.get("/editar/:slug/quitar", (req, res) => {
+app.get("/editar/:slug/quitar", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
@@ -1948,7 +1976,7 @@ app.get("/editar/:slug/quitar", (req, res) => {
 
 // Procesa la desactivación: la tarjeta deja de funcionar y desaparece del panel,
 // pero el historial de toques queda guardado en data.json por si se reactiva después.
-app.post("/editar/:slug/quitar", (req, res) => {
+app.post("/editar/:slug/quitar", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
@@ -2061,7 +2089,7 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
 // Panel de generación y administración de códigos de activación.
 // Genera un código por cada tarjeta física ANTES de saber a qué negocio va.
 // Visítalo así: https://tu-dominio.com/codigos?key=TU_CLAVE
-app.get("/codigos", (req, res) => {
+app.get("/codigos", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
@@ -2162,7 +2190,7 @@ app.get("/codigos", (req, res) => {
 // Genera N códigos nuevos y los guarda. Si viene un correo, se los manda de una
 // vez — un código en el correo si generaste 1, o todos los que hayan sido
 // necesarios si generaste varios (ej: un negocio con varias sedes).
-app.post("/codigos/generar", async (req, res) => {
+app.post("/codigos/generar", limitarIntentosAdmin, async (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
@@ -2485,7 +2513,7 @@ app.post("/activar/:codigo", (req, res) => {
   `);
 });
 
-app.get("/stats", (req, res) => {
+app.get("/stats", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
@@ -2561,6 +2589,14 @@ app.get("/stats", (req, res) => {
           : `<div class="reporte-badge pendiente">— Reporte de este mes aún no enviado</div>`;
     }
 
+    // El administrador ya fue autenticado en /stats. Como las claves de los
+    // negocios ahora se guardan cifradas, no se imprime negocio.claveAcceso.
+    // Se crea un token temporal limitado exclusivamente a este negocio para
+    // abrir su panel sin pedir otra clave ni exponer la clave real.
+    const tokenPanelAdmin = tieneClaveConfigurada(NEGOCIOS_TOTAL[slug])
+      ? generarLinkAccesoNegocio(slug, 1)
+      : null;
+
     return `
       <div class="card">
         <div class="card-top">
@@ -2587,7 +2623,7 @@ app.get("/stats", (req, res) => {
         <div class="card-actions">
           <a href="/historial/${slug}?key=${key}">Historial</a>
           <a href="/reporte/${slug}?key=${key}">Reporte</a>
-          ${NEGOCIOS_TOTAL[slug].claveAcceso ? `<a class="btn-panel-negocio" href="/mi-panel/${slug}?key=${NEGOCIOS_TOTAL[slug].claveAcceso}" target="_blank">Abrir panel del negocio ↗</a>` : `<span class="sin-panel">Sin panel activado</span>`}
+          ${tokenPanelAdmin ? `<a class="btn-panel-negocio" href="/mi-panel/${slug}?key=${encodeURIComponent(tokenPanelAdmin)}" target="_blank">Abrir panel del negocio ↗</a>` : `<span class="sin-panel">Sin panel activado</span>`}
           <a href="/export/${slug}.csv?key=${key}">CSV</a>
           <a href="/export/${slug}.pdf?key=${key}">PDF</a>
           <a href="/export/${slug}.docx?key=${key}">Word</a>
@@ -2772,7 +2808,7 @@ app.get("/stats", (req, res) => {
 // Historial detallado de un negocio: fecha y hora exacta de cada toque.
 // Esto es lo que le puedes mostrar o entregar a tu cliente para justificar la suscripción.
 // Visítalo así: https://tu-dominio.com/historial/mi-negocio?key=TU_CLAVE
-app.get("/historial/:slug", (req, res) => {
+app.get("/historial/:slug", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
@@ -4316,7 +4352,7 @@ app.get("/fidelidad/:slug/sumar", (req, res) => {
 
 // Mismo reporte que el PDF, pero para ver directo en el navegador sin descargar nada.
 // Visítalo así: https://tu-dominio.com/reporte/mi-negocio?key=TU_CLAVE
-app.get("/reporte/:slug", (req, res) => {
+app.get("/reporte/:slug", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
@@ -4776,7 +4812,7 @@ app.get("/export/:slug.docx", async (req, res) => {
 // que respalda el cobro inicial y deja constancia de la fecha de activación
 // y las condiciones del servicio. Útil como soporte comercial con el cliente.
 // Visítalo así: https://tu-dominio.com/entrega/mi-negocio.pdf?key=TU_CLAVE
-app.get("/entrega/:slug.pdf", async (req, res) => {
+app.get("/entrega/:slug.pdf", limitarIntentosAdmin, async (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
@@ -5032,7 +5068,7 @@ async function enviarReporteMensualNegocio(slug, negocio, baseUrl) {
 // individualmente, pero /enviar-reportes-mensuales (más abajo) ya manda a
 // TODOS los Pro de una sola vez — ya no necesitas un cron por cada negocio.
 // Visítalo así: https://tu-dominio.com/notificar/mi-negocio?key=TU_CLAVE
-app.get("/notificar/:slug", async (req, res) => {
+app.get("/notificar/:slug", limitarIntentosAdmin, async (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
@@ -5055,7 +5091,7 @@ app.get("/notificar/:slug", async (req, res) => {
 // por ejemplo) apuntando aquí reemplaza tener que acordarte de mandar cada
 // reporte a mano o configurar un cron por cada negocio.
 // Visítalo así: https://tu-dominio.com/enviar-reportes-mensuales?key=TU_CLAVE
-app.get("/enviar-reportes-mensuales", async (req, res) => {
+app.get("/enviar-reportes-mensuales", limitarIntentosAdmin, async (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
@@ -5088,7 +5124,7 @@ app.get("/enviar-reportes-mensuales", async (req, res) => {
 // otros procesos automáticos — no bloquea nada, solo te avisa por correo si
 // algo quedó roto, para arreglarlo antes de que un cliente se tope con el error.
 // Visítalo así: https://tu-dominio.com/verificar-links-google?key=TU_CLAVE
-app.get("/verificar-links-google", async (req, res) => {
+app.get("/verificar-links-google", limitarIntentosAdmin, async (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
@@ -5126,7 +5162,7 @@ app.get("/verificar-links-google", async (req, res) => {
 // que eligieron esa frecuencia en vez de "al instante" — visítala con un
 // cron diario (revisa sola si a cada negocio ya le toca según su frecuencia).
 // Visítala así: https://tu-dominio.com/enviar-resumenes-quejas?key=TU_CLAVE
-app.get("/enviar-resumenes-quejas", async (req, res) => {
+app.get("/enviar-resumenes-quejas", limitarIntentosAdmin, async (req, res) => {
   if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
 
   const negocios = todosLosNegocios();
@@ -5184,7 +5220,7 @@ app.get("/enviar-resumenes-quejas", async (req, res) => {
 // para vencer — para que renueven a tiempo y no se les caiga el plan sin
 // darse cuenta. Visítala con un cron diario, solo manda un correo por negocio
 // (usa "avisoVencimientoEnviado" para no repetirlo cada día que corra el cron).
-app.get("/avisar-vencimiento-anual", async (req, res) => {
+app.get("/avisar-vencimiento-anual", limitarIntentosAdmin, async (req, res) => {
   if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
 
   const negocios = todosLosNegocios();
@@ -5311,7 +5347,7 @@ app.get("/reportes-guardados/:slug/:mes.pdf", (req, res) => {
 // Misma información en JSON, útil para conectar la app móvil o un dashboard propio.
 // Incluye nombre y categoría de cada negocio (no solo los eventos), para que
 // la app no tenga que adivinar esa parte.
-app.get("/stats.json", (req, res) => {
+app.get("/stats.json", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).json({ error: "No autorizado" });
   }
@@ -5340,7 +5376,7 @@ app.get("/stats.json", (req, res) => {
 // quitar negocios, generar códigos) — quién hizo qué y cuándo, para tener
 // rastro si algo raro pasa o simplemente para acordarte de tus propios cambios.
 // Visítalo así: https://tu-dominio.com/auditoria?key=TU_CLAVE
-app.get("/auditoria", (req, res) => {
+app.get("/auditoria", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
@@ -5396,7 +5432,7 @@ app.get("/auditoria", (req, res) => {
   `);
 });
 
-app.get("/respaldo", (req, res) => {
+app.get("/respaldo", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
@@ -5420,7 +5456,7 @@ app.get("/respaldo", (req, res) => {
 // pensado para programarlo en cron-job.org una vez a la semana, así el
 // respaldo te llega solo sin que tengas que acordarte de entrar a bajarlo.
 // Visítalo así: https://tu-dominio.com/respaldo-correo?key=TU_CLAVE
-app.get("/respaldo-correo", async (req, res) => {
+app.get("/respaldo-correo", limitarIntentosAdmin, async (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
@@ -6983,7 +7019,7 @@ app.post("/favoritos/:slug/quitar", (req, res) => {
 // no la uses en producción si te preocupa que alguien la descubra — está protegida
 // con ADMIN_KEY de todas formas.
 // Visítalo así: https://tu-dominio.com/test-email?key=TU_CLAVE&to=tu@correo.com
-app.get("/test-email", async (req, res) => {
+app.get("/test-email", limitarIntentosAdmin, async (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
@@ -8418,7 +8454,7 @@ function precioProSegunLocales(email, todosNegocios) {
   return (escalon || ESCALONES_PRO[ESCALONES_PRO.length - 1]).precio;
 }
 
-app.get("/cobrar-suscripciones", async (req, res) => {
+app.get("/cobrar-suscripciones", limitarIntentosAdmin, async (req, res) => {
   if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
   if (!process.env.WOMPI_PRIVATE_KEY) {
     return res.status(500).send("Falta configurar WOMPI_PRIVATE_KEY en Render.");
