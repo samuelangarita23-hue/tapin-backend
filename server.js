@@ -482,8 +482,8 @@ const ICONO_OJO_ABIERTO = `<svg width="18" height="18" viewBox="0 0 24 24" fill=
 const ICONO_OJO_CERRADO = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 3L21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10.6 5.2C11.05 5.1 11.51 5 12 5C19 5 23 12 23 12C23 12 21.8 14.2 19.6 16.1M6.9 6.9C3.7 8.9 1 12 1 12C1 12 5 19 12 19C13.6 19 15 18.6 16.2 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.9 9.9C9.34 10.46 9 11.19 9 12C9 13.66 10.34 15 12 15C12.81 15 13.54 14.66 14.1 14.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 
 const ESTILO_BASE = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&display=swap');
   *{box-sizing:border-box;}
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&display=swap');
   :root{--ink:#062e1e;--forest:#0d432b;--forest2:#146542;--cream:#fbf6e9;--paper:#fffefd;--muted:#50695b;--line:#dedccc;--gold:#e8a623;--gold2:#f3d576;}
   body{font-family:'DM Sans','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};color:${MARCA.texto};margin:0;min-height:100vh;line-height:1.5;}
   a{color:${MARCA.verde};}
@@ -498,29 +498,6 @@ const ESTILO_BASE = `
   button:hover,.btn:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(5,58,36,.14);}
   input:focus,select:focus,textarea:focus{outline:none;border-color:${MARCA.verde}!important;box-shadow:0 0 0 3px rgba(15,81,50,.12);}
   h1,h2,h3{font-family:'Playfair Display',Georgia,serif;}
-  .tapin-dashboard-hero{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:22px;align-items:center;background:linear-gradient(135deg,#0d432b 0%,#0a3422 100%);border-radius:24px;padding:26px 28px;margin-bottom:28px;box-shadow:0 18px 38px rgba(6,46,30,.16);overflow:hidden;position:relative;}
-  .tapin-dashboard-hero:after{content:'';position:absolute;width:260px;height:260px;border-radius:50%;right:-90px;top:-130px;background:rgba(232,166,35,.12);}
-  .tapin-dashboard-hero .hero-kicker{color:#e8a623;font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;margin-bottom:8px;}
-  .tapin-dashboard-hero h2{color:#fff;margin:0 0 7px;font-size:clamp(1.35rem,2.3vw,2rem);letter-spacing:-.02em;}
-  .tapin-dashboard-hero p{color:#cfe3d8;margin:0;max-width:540px;font-size:.88rem;}
-  .tapin-panel-card{width:220px;height:142px;background:#fffefd;border-radius:18px;padding:16px;position:relative;z-index:1;box-shadow:0 18px 30px rgba(0,0,0,.22);transform:rotate(3deg);margin:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;}
-  .tapin-panel-card-brand{position:absolute;left:16px;top:12px;font-weight:800;color:#062e1e;font-size:.82rem;}
-  .tapin-panel-card-nfc{position:absolute;right:14px;top:12px;color:#062e1e;border:1px solid #062e1e;border-radius:999px;padding:1px 5px;font-size:.53rem;font-weight:800;}
-  .tapin-panel-card-google{font-size:2.35rem;line-height:1;font-weight:800;letter-spacing:-.09em;margin-top:8px;}
-  .tapin-panel-card-google span:nth-child(1){color:#4285F4}.tapin-panel-card-google span:nth-child(2){color:#EA4335}.tapin-panel-card-google span:nth-child(3){color:#FBBC05}.tapin-panel-card-google span:nth-child(4){color:#4285F4}.tapin-panel-card-google span:nth-child(5){color:#34A853}.tapin-panel-card-google span:nth-child(6){color:#EA4335}
-  .tapin-panel-card-stars{color:#d89412;font-size:.75rem;letter-spacing:2px;margin:4px 0 2px}.tapin-panel-card-copy{font-size:.52rem;color:#26342b;text-align:center;font-weight:700}
-  .panel-metric-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:26px}.panel-metric{background:#fffefd;border:1px solid var(--line);border-radius:16px;padding:16px 14px;box-shadow:0 8px 20px rgba(9,49,30,.05)}.panel-metric strong{display:block;color:var(--ink);font-size:1.55rem;line-height:1}.panel-metric span{display:block;color:var(--muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;font-weight:800;margin-top:7px}
-  @media(max-width:700px){.tapin-dashboard-hero{grid-template-columns:1fr;text-align:center;padding:24px 20px}.tapin-dashboard-hero p{margin:auto}.tapin-panel-card{width:205px;height:132px}.panel-metric-strip{grid-template-columns:repeat(2,1fr)}}
-  .dashboard-status-row{display:flex;flex-wrap:wrap;gap:7px;margin-top:18px}.dashboard-plan{font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;border-radius:999px;padding:7px 11px;background:#edf2ed;color:#315844}.dashboard-plan.pro{background:#f4dfaa;color:#6b4b08}.dashboard-plan.paused{background:#fbe9e3;color:#993c1d}.dashboard-plan.readonly{background:#eef0ed;color:#718078}.dashboard-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}.dashboard-actions a{border:1px solid #dfe5dc;background:#fff;border-radius:9px;padding:8px 12px;color:#224b37;text-decoration:none;font-size:.7rem;font-weight:700}.dashboard-actions a:hover{border-color:#0f5132;background:#edf5ef}.dashboard-actions a.primary{background:#e8a623;border-color:#e8a623;color:#143a28}.dashboard-actions a.primary:hover{background:#d89412}
-  .dashboard-shell{display:grid;grid-template-columns:190px minmax(0,1fr);width:min(100%,920px);margin:0 auto;background:#fffefd;border:1px solid #dedccc;border-radius:22px;overflow:hidden;box-shadow:0 18px 42px rgba(6,46,30,.13);min-height:600px;}
-  .dashboard-sidebar{background:linear-gradient(180deg,#0d432b 0%,#073522 100%);color:#fff;padding:30px 14px;display:flex;flex-direction:column;}
-  .dashboard-brand{font-size:1.1rem;font-weight:800;letter-spacing:-.04em;padding:0 12px 30px;color:#fff;}.dashboard-brand span{color:#e8a623;}
-  .dashboard-nav{display:flex;flex-direction:column;gap:5px;}.dashboard-nav small{font-size:.58rem;text-transform:uppercase;letter-spacing:.12em;color:#8fb8a1;margin:7px 12px 5px;}.dashboard-nav a{display:flex;align-items:center;gap:5px;color:#d7e8dd;text-decoration:none;font-size:.72rem;font-weight:600;padding:10px 12px;border-radius:9px;transition:background .18s,color .18s;}.dashboard-nav a:hover{background:rgba(255,255,255,.1);color:#fff;}.dashboard-nav a.active{background:#fffefd;color:#0d432b;}
-  .dashboard-main{min-width:0;padding:30px 30px 36px;background:#fffefd;}.dashboard-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:22px;}.dashboard-toolbar h2{font-family:'DM Sans','Segoe UI',sans-serif;font-size:1.35rem;line-height:1.15;margin:0;color:#062e1e;letter-spacing:-.04em;}.dashboard-toolbar p{font-size:.76rem;color:#6d7f73;margin:5px 0 0;}.dashboard-select{border:1px solid #dedccc;border-radius:8px;padding:8px 11px;color:#315844;background:#fff;font-size:.68rem;white-space:nowrap;}
-  .dashboard-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}.dashboard-kpi{border:1px solid #dfe5dc;border-radius:12px;padding:14px 12px;background:#fff;min-width:0;}.dashboard-kpi-label{font-size:.61rem;text-transform:uppercase;letter-spacing:.08em;font-weight:800;color:#708075;line-height:1.35;}.dashboard-kpi-value{font-size:1.48rem;line-height:1.1;font-weight:800;color:#062e1e;margin-top:9px;}.dashboard-kpi-note{font-size:.63rem;color:#718078;margin-top:6px;}.dashboard-chart{border:1px solid #dfe5dc;border-radius:12px;background:#fff;padding:17px 18px;margin-top:16px;}.dashboard-chart-title{font-size:.76rem;font-weight:700;color:#456253;margin-bottom:12px;}.dashboard-chart .sparkline{height:105px;max-width:none;justify-content:space-around;}.dashboard-chart .sparkline>div{max-width:24px;flex:1;}.dashboard-lower{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px;}.dashboard-mini{border:1px solid #dfe5dc;border-radius:12px;padding:15px;background:#fff;}.dashboard-mini-title{font-size:.65rem;font-weight:800;color:#718078;text-transform:uppercase;letter-spacing:.08em;}.dashboard-mini-value{font-size:1.08rem;font-weight:800;color:#062e1e;margin-top:10px;}.dashboard-mini-copy{font-size:.68rem;color:#718078;line-height:1.45;margin-top:6px;}
-  .dashboard-main>.seccion{margin:25px 0 0;padding-top:23px;border-top:1px solid #e7e9e3;}.dashboard-main>.seccion:first-of-type{margin-top:28px;}.dashboard-main>.seccion .seccion-header{text-align:left;margin-bottom:14px;}.dashboard-main>.seccion .seccion-header h2{font-family:'DM Sans','Segoe UI',sans-serif;font-size:1rem;letter-spacing:-.02em;color:#062e1e;}.dashboard-main>.seccion .seccion-header p{font-size:.73rem;}.dashboard-main>.seccion .card-titulo{font-size:.75rem;margin-bottom:10px;}.dashboard-main>.seccion .resumen-box,.dashboard-main>.seccion .chart-card,.dashboard-main>.seccion .card{box-shadow:none;border-color:#dfe5dc;}.dashboard-main>.seccion .resumen-box{padding:13px 9px;}.dashboard-main>.seccion .resumen-num{font-size:1.3rem;}.dashboard-main>.seccion .chart-card{padding:14px 16px;}.dashboard-main>.seccion .reco{font-size:.74rem;padding:10px 12px;}.dashboard-main>.seccion .tabla-actividad{font-size:.72rem;}
-  @media(max-width:760px){.dashboard-shell{grid-template-columns:1fr;border-radius:16px;}.dashboard-sidebar{min-height:0;padding:17px 14px;}.dashboard-brand{padding:0 10px 12px;}.dashboard-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;}.dashboard-nav small{grid-column:1/-1;margin:7px 10px 2px;}.dashboard-main{padding:23px 18px 28px;}}
-  @media(max-width:460px){.dashboard-kpis{grid-template-columns:1fr;}.dashboard-lower{grid-template-columns:1fr;}.dashboard-toolbar{align-items:stretch;flex-direction:column;}.dashboard-select{align-self:flex-start;}.dashboard-nav{grid-template-columns:1fr 1fr;}.dashboard-main>.seccion .resumen-grid{grid-template-columns:repeat(2,1fr);}}
 `;
 
 // ---------- Configuración de negocios ----------
@@ -1254,6 +1231,27 @@ function barraHoras(porHora, picoHora) {
       return `<div style="flex:1;height:${alturaPx}px;background:${color};border-radius:2px 2px 0 0;" title="${h}:00 — ${v} toques"></div>`;
     })
     .join("");
+}
+
+// Gráfica de línea con área rellena (SVG) — puramente visual, se le pasa un
+// arreglo de valores ya calculados en otro lado (ej. calendario.dias) y solo
+// dibuja la curva; no calcula ni inventa ningún dato nuevo.
+function graficaLinea(valores, { alto = 90, color = MARCA.verde } = {}) {
+  const datos = valores && valores.length ? valores : [0];
+  const max = Math.max(1, ...datos);
+  const ancho = 100; // porcentual, escala con el contenedor vía viewBox
+  const paso = datos.length > 1 ? ancho / (datos.length - 1) : 0;
+  const puntos = datos.map((v, i) => {
+    const x = i * paso;
+    const y = alto - (v / max) * (alto - 10) - 5;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  });
+  const lineaPath = "M" + puntos.join(" L");
+  const areaPath = `${lineaPath} L${ancho},${alto} L0,${alto} Z`;
+  return `<svg viewBox="0 0 ${ancho} ${alto}" preserveAspectRatio="none" style="width:100%;height:${alto}px;display:block;">
+    <path d="${areaPath}" fill="${color}" opacity="0.12" stroke="none"/>
+    <path d="${lineaPath}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/>
+  </svg>`;
 }
 
 function registrarToque(slug, req, negocio) {
@@ -2736,8 +2734,7 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          .topbar{display:none;}
-          .content{max-width:1120px;padding-top:34px;}
+          .content{max-width:880px;}
           .seccion{margin-bottom:48px;}
           .seccion-header{text-align:center;margin-bottom:24px;}
           .seccion-header .eyebrow{justify-content:center;}
@@ -2820,30 +2817,6 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
         </div>
         <div class="content">
 
-          <div class="dashboard-shell">
-            <aside class="dashboard-sidebar">
-              <div class="dashboard-brand">Tapin<span>·</span></div>
-              <nav class="dashboard-nav">
-                <small>Administración</small>
-                <a class="active" href="#resumen-admin">⌂ &nbsp;Resumen</a>
-                <a href="#actividad-admin">▥ &nbsp;Actividad</a>
-                <a href="#negocios-admin">▣ &nbsp;Negocios</a>
-                <small>Herramientas</small>
-                <a href="/codigos?key=${key}">＋ &nbsp;Tarjetas</a>
-                <a href="/auditoria?key=${key}">◌ &nbsp;Auditoría</a>
-                <a href="/respaldo?key=${key}">⚙ &nbsp;Configuración</a>
-              </nav>
-            </aside>
-            <main class="dashboard-main" id="resumen-admin">
-              <div class="dashboard-toolbar"><div><h2>Resumen general</h2><p>Todas tus tarjetas Tapin</p></div><span class="dashboard-select">Este mes⌄</span></div>
-              <div class="dashboard-kpis">
-                <div class="dashboard-kpi"><div class="dashboard-kpi-label">Tarjetas activas</div><div class="dashboard-kpi-value">${totalNegocios}</div><div class="dashboard-kpi-note">Negocios registrados</div></div>
-                <div class="dashboard-kpi"><div class="dashboard-kpi-label">Toques totales</div><div class="dashboard-kpi-value">${totalToquesGlobal}</div><div class="dashboard-kpi-note">Actividad acumulada</div></div>
-                <div class="dashboard-kpi"><div class="dashboard-kpi-label">Últimos 7 días</div><div class="dashboard-kpi-value">${totalSemanaGlobal}</div><div class="dashboard-kpi-note">Interacciones recientes</div></div>
-              </div>
-              <div class="dashboard-chart" id="actividad-admin"><div class="dashboard-chart-title">Actividad combinada · últimos 7 días</div><div class="sparkline">${barraSemana(dias7Global)}</div></div>
-              <div class="dashboard-lower"><div class="dashboard-mini"><div class="dashboard-mini-title">Calificación promedio</div><div class="dashboard-mini-value">${promedioEstrellas !== null ? promedioEstrellas + " / 5 ★" : "Sin calificaciones"}</div><div class="dashboard-mini-copy">Incluye positivas y negativas del filtro Tapin.</div></div><div class="dashboard-mini" id="negocios-admin"><div class="dashboard-mini-title">Gestión</div><div class="dashboard-mini-value">${totalNegocios} negocios</div><div class="dashboard-mini-copy">Revisa cada panel desde las tarjetas inferiores.</div></div></div>
-
           <div class="seccion">
             <div class="seccion-header">
               <div class="eyebrow">Resumen general</div>
@@ -2878,8 +2851,6 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
             ${seccionesPaises}
           </div>
 
-            </main>
-          </div>
         </div>
       </body>
     </html>
@@ -3286,6 +3257,26 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   const recomendaciones = generarRecomendaciones(eventos, r, negocio);
   const horas = analizarHoras(eventos, negocio);
 
+  // Variación real vs. ayer y vs. la semana anterior — usa r.dias7 (que ya
+  // trae [hace 6 días, ..., ayer, hoy]) y el mismo cálculo de "semana
+  // anterior" que ya usa generarRecomendaciones más abajo, solo que aquí se
+  // expone como número para mostrarlo junto a las tarjetas del resumen.
+  const ayerToques = r.dias7[5] || 0;
+  const cambioVsAyer = ayerToques > 0 ? Math.round(((r.hoy - ayerToques) / ayerToques) * 100) : null;
+  const inicioHoyCmp = new Date();
+  inicioHoyCmp.setHours(0, 0, 0, 0);
+  const inicioSemanaAnteriorCmp = new Date(inicioHoyCmp);
+  inicioSemanaAnteriorCmp.setDate(inicioSemanaAnteriorCmp.getDate() - 13);
+  const finSemanaAnteriorCmp = new Date(inicioHoyCmp);
+  finSemanaAnteriorCmp.setDate(finSemanaAnteriorCmp.getDate() - 6);
+  const semanaAnteriorToques = eventos.filter((e) => {
+    const f = new Date(e.fechaISO);
+    return f >= inicioSemanaAnteriorCmp && f < finSemanaAnteriorCmp;
+  }).length;
+  const cambioVsSemanaAnterior = semanaAnteriorToques > 0
+    ? Math.round(((r.semana - semanaAnteriorToques) / semanaAnteriorToques) * 100)
+    : null;
+
   const testimonios = (datos[slug] && datos[slug].testimonios) || [];
   const quejas = (datos[slug] && datos[slug].quejas) || [];
   const totalCalificado = testimonios.length + quejas.length;
@@ -3352,8 +3343,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          .topbar{display:none;}
-          .content{max-width:1120px;padding-top:34px;}
+          .content{max-width:660px;}
           .seccion{margin-bottom:26px;}
           .seccion-header{text-align:center;margin-bottom:14px;}
           .seccion-header .eyebrow{justify-content:center;}
@@ -3423,39 +3413,137 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .btn-reporte-pdf b{font-size:0.92rem;}
           .btn-reporte-pdf span{font-size:0.76rem;color:#CFE3D6;display:block;margin-top:2px;}
           .btn-reporte-pdf .flecha{font-size:1.3rem;flex-shrink:0;}
+
+          /* ---------- Layout tipo dashboard (sidebar + contenido) ---------- */
+          html,body{height:100%;}
+          body{background:${MARCA.crema};}
+          .dashboard-layout{display:flex;min-height:100vh;align-items:stretch;}
+          .sidebar{width:236px;flex-shrink:0;background:linear-gradient(180deg,${MARCA.verdeOscuro} 0%,#082c1c 100%);
+                   color:#fff;display:flex;flex-direction:column;padding:26px 18px;box-sizing:border-box;position:sticky;top:0;height:100vh;}
+          .sidebar-logo{padding:0 8px;margin-bottom:34px;}
+          .sidebar-nav{display:flex;flex-direction:column;gap:3px;flex:1;}
+          .sidebar-nav a{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;
+                         color:#CFE3D8;text-decoration:none;font-size:0.86rem;font-weight:600;transition:background .15s,color .15s;}
+          .sidebar-nav a:hover{background:rgba(255,255,255,0.08);color:#fff;}
+          .sidebar-nav a.activo{background:#fff;color:${MARCA.verdeOscuro};}
+          .sidebar-nav a svg{flex-shrink:0;width:17px;height:17px;}
+          .sidebar-nav a.deshabilitado{opacity:0.45;pointer-events:none;}
+          .sidebar-pie{border-top:1px solid rgba(255,255,255,0.14);padding-top:14px;margin-top:14px;}
+          .sidebar-pie a{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;
+                         color:#CFE3D8;text-decoration:none;font-size:0.84rem;font-weight:600;}
+          .sidebar-pie a:hover{background:rgba(255,255,255,0.08);color:#fff;}
+          .dashboard-main{flex:1;min-width:0;padding:34px 40px 60px;box-sizing:border-box;}
+          @media (max-width:900px){
+            .dashboard-layout{flex-direction:column;}
+            .sidebar{width:100%;height:auto;position:relative;flex-direction:row;align-items:center;
+                     overflow-x:auto;padding:14px 16px;gap:8px;}
+            .sidebar-logo{margin-bottom:0;}
+            .sidebar-nav{flex-direction:row;flex:none;}
+            .sidebar-nav a{padding:8px 12px;white-space:nowrap;}
+            .sidebar-pie{border-top:none;margin-top:0;padding-top:0;}
+            .sidebar-pie a{padding:8px 12px;white-space:nowrap;}
+            .dashboard-main{padding:22px 16px 50px;}
+          }
+
+          .dash-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
+          .dash-header h1{font-family:'Playfair Display',Georgia,serif;font-size:1.7rem;margin:0;color:${MARCA.texto};letter-spacing:-.02em;}
+          .dash-header-chip{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid ${MARCA.borde};
+                            border-radius:100px;padding:8px 16px;font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};
+                            box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+
+          .dash-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px;}
+          @media (max-width:760px){.dash-cards{grid-template-columns:1fr;}}
+          .dash-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:20px 22px;
+                     box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .dash-card-lbl{font-size:0.74rem;color:${MARCA.textoSuave};font-weight:600;margin-bottom:10px;}
+          .dash-card-num{font-size:1.9rem;font-weight:800;color:${MARCA.texto};line-height:1;}
+          .dash-card-sub{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:4px;}
+          .dash-card-delta{display:inline-flex;align-items:center;gap:3px;font-size:0.74rem;font-weight:700;margin-top:10px;}
+          .dash-card-delta.up{color:${MARCA.verde};}
+          .dash-card-delta.down{color:${MARCA.rojo};}
+          .dash-card-estrellas{color:${MARCA.oro};font-size:1rem;letter-spacing:2px;margin-top:6px;}
+
+          .dash-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+          @media (max-width:900px){.dash-charts{grid-template-columns:1fr;}}
+          .dash-panel{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:20px 22px;
+                      box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .dash-panel-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:16px;}
+          .dash-panel-titulo{font-size:0.92rem;font-weight:700;color:${MARCA.texto};}
+          .dash-panel-sub{font-size:0.72rem;color:${MARCA.textoSuave};margin-top:2px;}
+          .dash-panel-num{font-size:1.5rem;font-weight:800;color:${MARCA.texto};text-align:right;}
+          .dash-panel-numlbl{font-size:0.7rem;color:${MARCA.textoSuave};text-align:right;}
+          .dash-actividad-bars{display:flex;align-items:flex-end;gap:8px;height:110px;}
         </style>
       </head>
       <body>
-        <div class="topbar" style="justify-content:center;">
-          <div>${logoSvg("#FFFFFF", 30)}</div>
-        </div>
-        <div class="content">
+        <div class="dashboard-layout">
+          <aside class="sidebar">
+            <div class="sidebar-logo">${logoSvg("#FFFFFF", 26)}</div>
+            <nav class="sidebar-nav">
+              <a href="/mi-panel/${slug}?key=${req.query.key}" class="activo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+                Resumen
+              </a>
+              <a href="/mi-panel/${slug}?key=${req.query.key}#actividad">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+                Actividad
+              </a>
+              ${!soloLectura ? `
+              <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3.5a2 2 0 010-4h.09A1.65 1.65 0 005 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09c0 .68.39 1.29 1 1.51.63.28 1.36.15 1.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06c-.48.46-.61 1.19-.33 1.82.22.61.83 1 1.51 1H21a2 2 0 010 4h-.09c-.68 0-1.29.39-1.51 1z"/></svg>
+                Opciones
+              </a>
+              <a href="${esPro(negocio) ? `/mi-panel/${slug}/fidelizacion?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.24L3 3v6.59a2 2 0 00.59 1.41l9.58 9.58a2 2 0 002.83 0l6.59-6.59a2 2 0 000-2.83z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+                Promociones
+              </a>
+              <a href="${esPro(negocio) ? `/suscripcion/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                ${esPro(negocio) ? "Mi suscripción" : "Plan de pago"}
+              </a>
+              <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+                Configuración
+              </a>
+              ` : ""}
+            </nav>
+            <div class="sidebar-pie">
+              <a href="/">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Cerrar sesión
+              </a>
+            </div>
+          </aside>
+          <main class="dashboard-main">
+        <div class="content" style="padding:0;max-width:none;">
 
-          <div class="dashboard-shell">
-            <aside class="dashboard-sidebar">
-              <div class="dashboard-brand">Tapin<span>·</span></div>
-              <nav class="dashboard-nav">
-                <small>Mi negocio</small>
-                <a class="active" href="#resumen-negocio">⌂ &nbsp;Resumen</a>
-                <a href="#actividad-negocio">▥ &nbsp;Actividad</a>
-                <a href="#opiniones-negocio">☆ &nbsp;Opiniones</a>
-                <a href="#proyeccion-negocio">↗ &nbsp;Proyecciones</a>
-                <small>Cuenta</small>
-                <a href="/mi-panel/${slug}/editar?key=${req.query.key}">♙ &nbsp;Mi perfil</a>
-                <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}">⚙ &nbsp;Configuración</a>
-              </nav>
-            </aside>
-            <main class="dashboard-main" id="resumen-negocio">
-              <div class="dashboard-toolbar"><div><h2>Resumen</h2><p>${negocio.nombre}</p></div><span class="dashboard-select">Este mes⌄</span></div>
-              <div class="dashboard-kpis">
-                <div class="dashboard-kpi"><div class="dashboard-kpi-label">Hoy</div><div class="dashboard-kpi-value">${r.hoy}</div><div class="dashboard-kpi-note">Interacciones</div></div>
-                <div class="dashboard-kpi"><div class="dashboard-kpi-label">Últimos 7 días</div><div class="dashboard-kpi-value">${r.semana}</div><div class="dashboard-kpi-note">Actividad reciente</div></div>
-                <div class="dashboard-kpi"><div class="dashboard-kpi-label">Calificación promedio</div><div class="dashboard-kpi-value">${promedioEstrellas !== null ? promedioEstrellas : "—"}</div><div class="dashboard-kpi-note">Sobre 5 estrellas</div></div>
-              </div>
-              <div class="dashboard-chart" id="actividad-negocio"><div class="dashboard-chart-title">Actividad · últimos 7 días</div><div class="sparkline">${barraSemana(r.dias7)}</div></div>
-              <div class="dashboard-lower"><div class="dashboard-mini" id="opiniones-negocio"><div class="dashboard-mini-title">Opiniones</div><div class="dashboard-mini-value">${totalCalificado} evaluaciones</div><div class="dashboard-mini-copy">Incluye calificaciones positivas y negativas recibidas.</div></div><div class="dashboard-mini" id="proyeccion-negocio"><div class="dashboard-mini-title">Proyección seleccionada</div><div class="dashboard-mini-value">${proyeccion.nombrePeriodo}</div><div class="dashboard-mini-copy">Consulta el estimado desde la sección de proyecciones.</div></div></div>
-              <div class="dashboard-status-row"><span class="dashboard-plan ${esPro(negocio) ? "pro" : "basico"}">${esPro(negocio) ? "Plan Pro" : "Plan Básico"}</span>${negocio.pausado ? `<span class="dashboard-plan paused">Pausado</span>` : ""}${soloLectura ? `<span class="dashboard-plan readonly">Solo lectura</span>` : ""}</div>
-              ${!soloLectura ? `<div class="dashboard-actions"><a href="/mi-panel/${slug}/editar?key=${req.query.key}">Editar negocio</a><a href="/mi-panel/${slug}/clave?key=${req.query.key}">Cambiar clave</a>${esPro(negocio) ? `<a href="/suscripcion/${slug}?key=${req.query.key}">Suscripción</a>` : ""}<a class="primary" href="/mi-panel/${slug}/configuracion?key=${req.query.key}">Configuración</a></div>` : ""}
+          <div class="dash-header">
+            <div>
+              <div class="eyebrow" style="margin-bottom:2px;">${escaparHtml(negocio.nombre)}</div>
+              <h1>Resumen</h1>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              ${negocio.pausado ? `<span class="dash-header-chip" style="background:#FBEFE9;color:#993C1D;border-color:#F0D5C8;">Pausado</span>` : ""}
+              ${soloLectura ? `<span class="dash-header-chip">Solo lectura</span>` : ""}
+              <span class="dash-header-chip" style="${esPro(negocio) ? "" : `color:${MARCA.textoSuave};`}">${esPro(negocio) ? "Plan Pro" : "Plan Básico"}</span>
+              <span class="dash-header-chip" style="font-weight:500;color:${MARCA.textoSuave};">Actualizado al ${new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) })}</span>
+            </div>
+          </div>
+
+          ${!soloLectura ? `
+          <div style="margin:0 0 22px;display:flex;gap:10px;flex-wrap:wrap;">
+            <a href="/mi-panel/${slug}/editar?key=${req.query.key}"
+               style="font-size:0.76rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
+                      border:1.5px solid ${MARCA.borde};border-radius:100px;padding:8px 16px;text-decoration:none;">
+              Editar mi negocio
+            </a>
+            <a href="/mi-panel/${slug}/clave?key=${req.query.key}"
+               style="font-size:0.76rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
+                      border:1.5px solid ${MARCA.borde};border-radius:100px;padding:8px 16px;text-decoration:none;">
+              Cambiar mi clave
+            </a>
+          </div>
+          ` : ""}
 
           ${otrasSedes.length > 0 ? `
           <div class="seccion">
@@ -3477,43 +3565,67 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           </div>
           ` : ""}
 
-          <div class="seccion">
-            <div class="card-titulo">Resumen general</div>
-            <div class="resumen-grid">
-              <div class="resumen-box"><div class="resumen-num">${r.total}</div><div class="resumen-lbl">Total</div></div>
-              <div class="resumen-box"><div class="resumen-num">${r.hoy}</div><div class="resumen-lbl">Hoy</div></div>
-              <div class="resumen-box"><div class="resumen-num">${r.semana}</div><div class="resumen-lbl">Últimos 7 días</div></div>
+          <div class="dash-cards">
+            <div class="dash-card">
+              <div class="dash-card-lbl">Hoy</div>
+              <div class="dash-card-num">${r.hoy}</div>
+              <div class="dash-card-sub">interacciones</div>
+              ${cambioVsAyer !== null ? `<div class="dash-card-delta ${cambioVsAyer >= 0 ? "up" : "down"}">${cambioVsAyer >= 0 ? "▲" : "▼"} ${cambioVsAyer >= 0 ? "+" : ""}${cambioVsAyer}% vs. ayer</div>` : ""}
             </div>
-            <div class="chart-card">
-              <div class="chart-card-titulo">Toques de los últimos 7 días</div>
-              <div class="sparkline sparkline-grande">${barraSemana(r.dias7)}</div>
+            <div class="dash-card">
+              <div class="dash-card-lbl">Últimos 7 días</div>
+              <div class="dash-card-num">${r.semana}</div>
+              <div class="dash-card-sub">interacciones</div>
+              ${cambioVsSemanaAnterior !== null ? `<div class="dash-card-delta ${cambioVsSemanaAnterior >= 0 ? "up" : "down"}">${cambioVsSemanaAnterior >= 0 ? "▲" : "▼"} ${cambioVsSemanaAnterior >= 0 ? "+" : ""}${cambioVsSemanaAnterior}% vs. semana anterior</div>` : ""}
             </div>
-            <div class="ultimo-toque">Último toque: <b>${ultimoTexto}</b></div>
+            <div class="dash-card">
+              <div class="dash-card-lbl">Calificación promedio</div>
+              ${promedioEstrellas !== null ? `
+                <div class="dash-card-num">${promedioEstrellas}</div>
+                <div class="dash-card-estrellas">${"★".repeat(Math.round(promedioEstrellas))}${"☆".repeat(5 - Math.round(promedioEstrellas))}</div>
+                <div class="dash-card-sub">basado en ${testimonios.length + quejas.length} opinion${testimonios.length + quejas.length === 1 ? "" : "es"}</div>
+              ` : `<div class="dash-card-sub" style="margin-top:6px;">Sin calificaciones filtradas todavía</div>`}
+            </div>
           </div>
 
-          <div class="seccion">
-            <div class="card-titulo">Promedio de estrellas recibidas</div>
-            <div class="chart-card" style="margin-top:0;text-align:center;">
-              <div style="font-size:1.5rem;font-weight:800;color:${MARCA.oro};">${promedioEstrellas !== null ? promedioEstrellas + " / 5 ★" : "Sin calificaciones filtradas"}</div>
-              <div class="suave" style="font-size:0.72rem;margin-top:4px;">Incluye calificaciones positivas y negativas que pasaron el filtro de Tapin${testimonios.length + quejas.length ? " · " + (testimonios.length + quejas.length) + " evaluaciones" : ""}. Las negativas se guardan privadas y no se publican en Google.</div>
-            </div>
-          </div>
-
-          <div class="seccion">
-            <div class="card-titulo">Proyeccion <span class="suave">${proyeccion.nombrePeriodo}</span></div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px;">
-              ${[["dia","1 día"],["semana","1 semana"],["mes","1 mes"],["semestre","6 meses"],["anio","1 año"]].map(([valor, texto]) => `<a href="/mi-panel/${slug}?key=${encodeURIComponent(req.query.key)}&proyeccion=${valor}" style="text-decoration:none;font-size:0.72rem;font-weight:700;padding:7px 10px;border-radius:999px;border:1px solid ${periodoProyeccion === valor ? MARCA.verde : MARCA.borde};background:${periodoProyeccion === valor ? MARCA.verdeClaro : "#fff"};color:${MARCA.verdeOscuro};">${texto}</a>`).join("")}
-            </div>
-            <div class="chart-card" style="margin-top:0;">
-              ${proyeccion.suficiente ? `
-                <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;text-align:center;">
-                  <div><div class="suave" style="font-size:0.68rem;text-transform:uppercase;font-weight:700;">Hasta hoy</div><div style="font-size:1.65rem;font-weight:800;color:${MARCA.verdeOscuro};">${proyeccion.toquesMes}</div><div class="suave" style="font-size:0.72rem;">toques registrados</div></div>
-                  <div style="font-size:1.4rem;color:${MARCA.oro};font-weight:800;">→</div>
-                  <div><div class="suave" style="font-size:0.68rem;text-transform:uppercase;font-weight:700;">Al cierre</div><div style="font-size:1.65rem;font-weight:800;color:${MARCA.verde};">${proyeccion.proyectado}</div><div class="suave" style="font-size:0.72rem;">toques estimados</div></div>
+          <div class="dash-charts" id="actividad">
+            <div class="dash-panel">
+              <div class="dash-panel-top">
+                <div>
+                  <div class="dash-panel-titulo">Actividad</div>
+                  <div class="dash-panel-sub">Últimos 7 días</div>
                 </div>
-                <div class="ultimo-toque" style="border-top:1px solid ${MARCA.borde};padding-top:12px;">Rango orientativo: <b>${proyeccion.minimo}–${proyeccion.maximo}</b> toques · promedio actual <b>${proyeccion.promedio}/día</b></div>
-                <div class="suave" style="text-align:center;font-size:0.7rem;margin-top:8px;line-height:1.45;">Estimación basada en tu ritmo actual durante los ${proyeccion.restantes} días restantes. Es una referencia, no una garantía.</div>
-              ` : `<div style="text-align:center;color:${MARCA.textoSuave};font-size:0.82rem;line-height:1.5;"><b>Estamos reuniendo datos</b><br>Cuando haya al menos 3 días y 3 toques registrados este mes, aquí verás la estimación.</div>`}
+                <div>
+                  <div class="dash-panel-num">${r.semana}</div>
+                  <div class="dash-panel-numlbl">interacciones</div>
+                </div>
+              </div>
+              <div class="dash-actividad-bars sparkline">${barraSemana(r.dias7)}</div>
+              <div class="ultimo-toque" style="margin-top:12px;">Total histórico: <b>${r.total}</b> · Último toque: <b>${ultimoTexto}</b></div>
+            </div>
+
+            <div class="dash-panel">
+              <div class="dash-panel-top">
+                <div>
+                  <div class="dash-panel-titulo">Proyección</div>
+                  <div class="dash-panel-sub">Proyectas ${proyeccion.etiqueta}</div>
+                </div>
+                <div>
+                  <div class="dash-panel-num">${proyeccion.suficiente ? proyeccion.proyectado : "—"}</div>
+                  ${comparativoMes.disponible
+                    ? `<div class="dash-panel-numlbl" style="color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};font-weight:700;">${comparativoMes.cambioPct >= 0 ? "+" : ""}${comparativoMes.cambioPct}% vs. mes anterior</div>`
+                    : `<div class="dash-panel-numlbl">interacciones</div>`}
+                </div>
+              </div>
+              ${calendario.dias.some((v) => v > 0)
+                ? graficaLinea(calendario.dias, { alto: 90, color: MARCA.verde })
+                : `<div style="text-align:center;color:${MARCA.textoSuave};font-size:0.8rem;padding:20px 0;">Todavía no hay suficientes datos este mes.</div>`}
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;">
+                ${[["dia","1 día"],["semana","1 semana"],["mes","1 mes"],["semestre","6 meses"],["anio","1 año"]].map(([valor, texto]) => `<a href="/mi-panel/${slug}?key=${encodeURIComponent(req.query.key)}&proyeccion=${valor}#actividad" style="text-decoration:none;font-size:0.68rem;font-weight:700;padding:6px 10px;border-radius:999px;border:1px solid ${periodoProyeccion === valor ? MARCA.verde : MARCA.borde};background:${periodoProyeccion === valor ? MARCA.verdeClaro : "#fff"};color:${MARCA.verdeOscuro};">${texto}</a>`).join("")}
+              </div>
+              ${proyeccion.suficiente
+                ? `<div class="ultimo-toque" style="margin-top:12px;">Rango orientativo: <b>${proyeccion.minimo}–${proyeccion.maximo}</b> toques · promedio actual <b>${proyeccion.promedio}/día</b> · ${proyeccion.restantes} días restantes</div>`
+                : `<div class="ultimo-toque" style="margin-top:12px;">Estamos reuniendo datos — cuando haya al menos 3 días y 3 toques registrados este período, aquí verás la estimación.</div>`}
             </div>
           </div>
 
@@ -3770,8 +3882,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           </div>
           `}
 
-            </main>
-          </div>
+        </div>
+          </main>
         </div>
       </body>
     </html>
