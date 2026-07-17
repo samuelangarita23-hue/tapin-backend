@@ -732,6 +732,37 @@ function leerCookies(req) {
   return cookies;
 }
 
+// Sesión corta del administrador. Permite que, después de validar ADMIN_KEY
+// en /stats o /admin/entrar, el administrador abra cualquier panel de negocio
+// sin volver a escribir la clave del negocio. La cookie no contiene ADMIN_KEY.
+const ADMIN_SESSION_COOKIE = "tapin_admin_sesion";
+const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
+const ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || ADMIN_KEY;
+function firmaSesionAdmin(valor) {
+  return crypto.createHmac("sha256", ADMIN_SESSION_SECRET).update(valor).digest("hex");
+}
+function iniciarSesionAdmin(res) {
+  const payload = `${Date.now()}.${generarToken()}`;
+  const valor = `${payload}.${firmaSesionAdmin(payload)}`;
+  res.setHeader(
+    "Set-Cookie",
+    `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(valor)}; Max-Age=${ADMIN_SESSION_TTL_SECONDS}; Path=/; HttpOnly; Secure; SameSite=Lax`
+  );
+}
+function adminSesionValida(req) {
+  const valor = leerCookies(req)[ADMIN_SESSION_COOKIE];
+  if (!valor) return false;
+  const partes = valor.split(".");
+  if (partes.length !== 3) return false;
+  const [momento, aleatorio, firma] = partes;
+  const edad = Date.now() - Number(momento);
+  if (!aleatorio || !Number.isFinite(edad) || edad < 0 || edad > ADMIN_SESSION_TTL_SECONDS * 1000) return false;
+  const esperada = firmaSesionAdmin(`${momento}.${aleatorio}`);
+  const a = Buffer.from(firma || "", "hex");
+  const b = Buffer.from(esperada, "hex");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 // Dado un request, devuelve el cliente logueado (o null) a partir de la cookie de sesión.
 function clienteActual(req) {
   const cookies = leerCookies(req);
@@ -2517,6 +2548,7 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
+  iniciarSesionAdmin(res);
 
   const datos = leerDatos();
   const key = req.query.key;
@@ -3179,12 +3211,21 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   // (scrypt + tiempo constante) que el resto del panel de negocio, en vez de
   // comparar la clave en texto plano — así un negocio ya migrado a clave
   // cifrada puede seguir entrando a su panel principal sin quedar bloqueado.
-  const claveUsada = claveEfectiva(req, slug);
-  const autorizado = claveNegocioValida(negocio, slug, claveUsada) ||
+  // También aceptamos el ADMIN_KEY en enlaces antiguos del panel admin para
+  // que no se rompan los accesos ya generados. Los enlaces nuevos usan la
+  // cookie de sesión y no exponen esa clave.
+  const adminAutorizado = adminSesionValida(req) || req.query.key === ADMIN_KEY;
+  const claveUsada = adminAutorizado
+    ? generarLinkAccesoNegocio(slug, 1)
+    : claveEfectiva(req, slug);
+  const autorizado = adminAutorizado || claveNegocioValida(negocio, slug, claveUsada) ||
     (negocio.claveSoloLectura && claveUsada === negocio.claveSoloLectura);
   if (!tieneClaveConfigurada(negocio) || !autorizado) {
     return res.status(401).send("No autorizado. Verifica el enlace que te dio Tapin, debe incluir tu clave personal (?key=...).");
   }
+  // Los botones del panel necesitan conservar una autorización; para el
+  // administrador usamos un token temporal por negocio, nunca su clave.
+  if (adminAutorizado) req.query.key = claveUsada;
   if (req.query.key && autorizado && claveUsada !== negocio.claveSoloLectura && !String(claveUsada).startsWith("tok_")) ponerCookieSesion(res, slug, req.query.key);
   req.query.key = claveUsada;
 
