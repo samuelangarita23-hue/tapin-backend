@@ -3350,15 +3350,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .seccion-header h2{font-size:1.1rem;font-weight:700;margin:0 0 4px;}
           .seccion-header p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0;}
 
-          .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch;}
-          @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
-          .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:stretch;}
-          @media (max-width:920px){.grid-3{grid-template-columns:1fr 1fr;}}
-          @media (max-width:640px){.grid-3{grid-template-columns:1fr;}}
-          .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:stretch;}
+          .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;align-items:stretch;}
+          .grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;align-items:stretch;}
           .grid-3 .reco{margin-bottom:0;height:100%;box-sizing:border-box;}
-          @media (max-width:900px){.grid-3{grid-template-columns:1fr 1fr;}}
-          @media (max-width:560px){.grid-3{grid-template-columns:1fr;}}
           @media (max-width:480px){
             .fila-herramientas{flex-direction:column;}
             .btn-herramienta{min-width:0;}
