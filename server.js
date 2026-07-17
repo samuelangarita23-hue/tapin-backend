@@ -3500,8 +3500,16 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .barra-vertical-valor{font-size:.76rem;font-weight:800;margin-bottom:6px;}
           .barra-vertical{width:52px;min-height:8px;border-radius:8px 8px 3px 3px;}
           .barra-vertical-etiqueta{font-size:.69rem;color:${MARCA.textoSuave};text-align:center;margin-top:7px;line-height:1.25;}
-          .boceto-fila-media .horas-chart{width:86%;max-width:720px;height:96px;margin:18px auto 0;}
-          .boceto-fila-media .horas-labels{width:86%;max-width:720px;margin:7px auto 0;}
+          .horas-visual{width:92%;max-width:760px;margin:0 auto;padding:15px 18px 12px;box-sizing:border-box;
+                        border:1px solid ${MARCA.borde};border-radius:13px;background:linear-gradient(180deg,#FBFCF9 0%,#F5F8F3 100%);}
+          .horas-visual-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;
+                            font-size:.7rem;font-weight:700;color:${MARCA.textoSuave};}
+          .hora-pico-badge{padding:5px 9px;border-radius:999px;background:#FBF1D8;color:#7A5A00;font-weight:800;}
+          .boceto-fila-media .horas-chart{position:relative;width:100%;max-width:none;height:118px;margin:0;gap:4px;
+                                         border-bottom:1px solid ${MARCA.borde};
+                                         background:repeating-linear-gradient(to bottom,transparent 0,transparent 28px,rgba(15,81,50,.08) 29px);}
+          .boceto-fila-media .horas-chart>div{min-width:3px;border-radius:3px 3px 0 0!important;}
+          .boceto-fila-media .horas-labels{width:100%;max-width:none;margin:8px 0 0;font-size:.64rem;}
           .tarjeta-bloqueada{position:relative;overflow:hidden;min-height:170px;}
           .tarjeta-bloqueada>*{filter:blur(3px);opacity:.38;pointer-events:none;user-select:none;}
           .tarjeta-bloqueada::after{content:"Disponible con Plan Pro";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
@@ -3792,7 +3800,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             <div class="boceto-fila-superior">
               <div class="boceto-bloque">
                 <div class="card-titulo">Calendario del mes</div>
-                <div class="chart-card">
+                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
                   <div class="boceto-calendario">
                     ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
                     ${calendario.dias.map((v, i) => {
@@ -3832,7 +3840,14 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             <div class="boceto-fila-media" id="actividad">
               <div class="boceto-bloque">
                 <div class="card-titulo">Tus horas pico <span class="suave">30 días</span></div>
-                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}"><div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div><div class="horas-labels"><span>12am</span><span>12pm</span><span>11pm</span></div>${horas.totalMes > 0 ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques})</div>` : `<div class="horas-nota">Sin suficientes datos.</div>`}</div>
+                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
+                  <div class="horas-visual">
+                    <div class="horas-visual-top"><span>Actividad por hora</span>${horas.totalMes > 0 ? `<span class="hora-pico-badge">Pico ${horas.picoHora}:00</span>` : `<span class="hora-pico-badge">Sin datos</span>`}</div>
+                    <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
+                    <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+                  </div>
+                  ${horas.totalMes > 0 ? `<div class="horas-nota">La barra dorada marca tu hora con mayor actividad · <b>${horas.maxToques} toques</b></div>` : `<div class="horas-nota">Aún no hay suficientes datos para identificar tu hora pico.</div>`}
+                </div>
               </div>
               <div class="boceto-bloque">
                 <div class="card-titulo">Actividad reciente</div>
@@ -3848,8 +3863,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
 
             <div class="boceto-contenidos">
               <div class="boceto-contenido"><div class="boceto-contenido-titulo">Recomendaciones</div>${esPro(negocio) ? recomendacionesHtml : `<div class="reco">Sigue reuniendo toques para conocer el comportamiento general de tu negocio.</div><div class="reco">Con Pro recibirás recomendaciones automáticas basadas en tus resultados.</div>`}</div>
-              <div class="boceto-contenido"><div class="boceto-contenido-titulo">${esPro(negocio) ? "Más de tu plan Pro" : "Desbloquea con Pro"}</div>${esPro(negocio) ? `<div class="reco"><b>Alertas instantáneas activas</b> — recibirás un correo en <b>${negocio.email || "tu correo"}</b> cuando llegue una queja privada.</div><div class="reco"><b>Generador para redes</b> — convierte tus resultados en ideas de contenido listas para publicar.</div>` : `<div class="reco"><b>Todo el análisis:</b> horas pico, comparación con el sector, actividad detallada, alertas y contenido para redes.</div><div class="reco"><b>Reportes automáticos:</b> recibe cada mes un PDF con los resultados de tu negocio.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}"><span>Ver Plan Pro</span><b>→</b></a>`}</div>
-              <div class="boceto-contenido"><div class="boceto-contenido-titulo">${esPro(negocio) ? "Tu plan" : "Tu plan actual"}</div>${esPro(negocio) ? `<div class="reco"><b>Plan Pro activo</b> — tienes acceso a todas las estadísticas y herramientas avanzadas.</div><div class="reco"><b>Reporte PDF mensual</b> — al final de cada mes recibirás automáticamente el análisis completo de tu negocio.</div>` : `<div class="reco"><b>Plan Gratis activo</b> — conservas el calendario y el resumen esencial de tus toques.</div><div class="reco"><b>Mejora cuando quieras:</b> el cambio se activa al instante y no pierdes tus datos actuales.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}"><span>Mejorar a Pro</span><b>→</b></a>`}</div>
+              <div class="boceto-contenido"><div class="boceto-contenido-titulo">${esPro(negocio) ? "Más de tu plan Pro" : "Desbloquea con Pro"}</div>${esPro(negocio) ? `<div class="reco"><b>Alertas instantáneas activas</b> — recibirás un correo en <b>${negocio.email || "tu correo"}</b> cuando llegue una queja privada.</div><div class="reco"><b>Generador para redes</b> — convierte tus resultados en ideas de contenido listas para publicar.</div>` : `<div class="reco"><b>Todo el análisis:</b> calendario, horas pico, comparación con el sector, actividad detallada, alertas y contenido para redes.</div><div class="reco"><b>Reportes automáticos:</b> recibe cada mes un PDF con los resultados de tu negocio.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}"><span>Ver Plan Pro</span><b>→</b></a>`}</div>
+              <div class="boceto-contenido"><div class="boceto-contenido-titulo">${esPro(negocio) ? "Tu plan" : "Tu plan actual"}</div>${esPro(negocio) ? `<div class="reco"><b>Plan Pro activo</b> — tienes acceso a todas las estadísticas y herramientas avanzadas.</div><div class="reco"><b>Reporte PDF mensual</b> — al final de cada mes recibirás automáticamente el análisis completo de tu negocio.</div>` : `<div class="reco"><b>Plan Gratis activo</b> — conservas el resumen esencial de tus toques.</div><div class="reco"><b>Mejora cuando quieras:</b> el cambio se activa al instante y no pierdes tus datos actuales.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}"><span>Mejorar a Pro</span><b>→</b></a>`}</div>
             </div>
           </section>
 
