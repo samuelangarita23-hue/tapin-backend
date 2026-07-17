@@ -3669,18 +3669,18 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           <div class="seccion">
             <div class="card-titulo">Calendario del mes</div>
             <div class="chart-card" style="margin-top:0;">
-              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">
+              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:340px;margin:0 auto;">
                 ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
                 ${calendario.dias.map((v, i) => {
                   const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
                   const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
-                  return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:5px;
+                  return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;
                           background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
-                          display:flex;align-items:center;justify-content:center;font-size:0.6rem;
+                          display:flex;align-items:center;justify-content:center;font-size:0.66rem;font-weight:600;
                           color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
                 }).join("")}
               </div>
-              <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:12px;">Más oscuro = más toques</div>
+              <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:14px;">Más oscuro = más toques</div>
             </div>
           </div>
 
