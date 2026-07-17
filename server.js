@@ -3629,7 +3629,41 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
           </div>
 
-          ${meta ? `
+          ${meta && comparativoMes.disponible ? `
+          <div class="seccion grid-2">
+            <div>
+              <div class="card-titulo">Meta del mes</div>
+              <div class="chart-card" style="margin-top:0;">
+                <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:6px;">
+                  <span>${meta.toquesMes} de ${meta.metaMensual} toques</span><b>${meta.pct}%</b>
+                </div>
+                <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                  <div style="height:100%;border-radius:100px;background:${meta.pct >= 100 ? MARCA.oro : MARCA.verde};width:${meta.pct}%;"></div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="card-titulo">Este mes vs. el anterior</div>
+              <div class="chart-card" style="margin-top:0;display:flex;gap:14px;align-items:center;">
+                <div style="text-align:center;flex:1;">
+                  <div style="font-size:1.3rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
+                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
+                </div>
+                <div style="text-align:center;flex:1;">
+                  <div style="font-size:1.3rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
+                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
+                </div>
+                <div style="text-align:center;flex:1;">
+                  <div style="font-size:1.05rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
+                    ${comparativoMes.cambioPct >= 0 ? "+" : ""}${comparativoMes.cambioPct}%
+                  </div>
+                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
+                </div>
+              </div>
+              ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:8px;">Vs. el mismo mes del año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
+            </div>
+          </div>
+          ` : meta ? `
           <div class="seccion">
             <div class="card-titulo">Meta del mes</div>
             <div class="chart-card" style="margin-top:0;">
@@ -3641,9 +3675,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               </div>
             </div>
           </div>
-          ` : ""}
-
-          ${comparativoMes.disponible ? `
+          ` : comparativoMes.disponible ? `
           <div class="seccion">
             <div class="card-titulo">Este mes vs. el anterior</div>
             <div class="chart-card" style="margin-top:0;display:flex;gap:20px;align-items:center;">
@@ -3666,6 +3698,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           </div>
           ` : ""}
 
+
+          ${!esPro(negocio) ? `
           <div class="seccion">
             <div class="card-titulo">Calendario del mes</div>
             <div class="chart-card" style="margin-top:0;">
@@ -3683,6 +3717,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:14px;">Más oscuro = más toques</div>
             </div>
           </div>
+          ` : ""}
 
           ${r.total === 0 ? `
           <div class="seccion">
@@ -3722,14 +3757,33 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
           </div>
           ` : ""}
-          <div class="seccion">
-            <div class="card-titulo">Tus horas pico <span class="suave">últimos 30 días</span></div>
-            <div class="chart-card" style="margin-top:0;">
-              <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
-              <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
-              ${horas.totalMes > 0
-                ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques} toques)</div>`
-                : `<div class="horas-nota">Todavía no hay suficientes toques este mes.</div>`}
+          <div class="seccion grid-2">
+            <div>
+              <div class="card-titulo">Calendario del mes</div>
+              <div class="chart-card" style="margin-top:0;">
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:290px;margin:0 auto;">
+                  ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
+                  ${calendario.dias.map((v, i) => {
+                    const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
+                    const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
+                    return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;
+                            background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
+                            display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:600;
+                            color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
+                  }).join("")}
+                </div>
+                <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:14px;">Más oscuro = más toques</div>
+              </div>
+            </div>
+            <div>
+              <div class="card-titulo">Tus horas pico <span class="suave">últimos 30 días</span></div>
+              <div class="chart-card" style="margin-top:0;">
+                <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
+                <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+                ${horas.totalMes > 0
+                  ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques} toques)</div>`
+                  : `<div class="horas-nota">Todavía no hay suficientes toques este mes.</div>`}
+              </div>
             </div>
           </div>
 
@@ -3812,24 +3866,25 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
           </div>
 
-          <div class="seccion">
-            <div class="card-titulo">Más de tu plan Pro</div>
-            <div class="reco" style="border-left-color:${MARCA.verde};">
-              <b>Alertas instantáneas activas</b> — te llega un correo a <b>${negocio.email || "tu correo"}</b> apenas alguien deja una queja privada.
+          <div class="seccion grid-2">
+            <div>
+              <div class="card-titulo">Más de tu plan Pro</div>
+              <div class="reco" style="border-left-color:${MARCA.verde};">
+                <b>Alertas instantáneas activas</b> — te llega un correo a <b>${negocio.email || "tu correo"}</b> apenas alguien deja una queja privada.
+              </div>
+              <div class="reco" style="border-left-color:${MARCA.verde};">
+                <b>Reporte PDF mensual</b> — a fin de mes te llega por correo el análisis completo de tu negocio, automáticamente.
+              </div>
+              <div class="fila-herramientas">
+                <a href="/quejas/${slug}?key=${req.query.key}" class="btn-herramienta">Retroalimentación privada</a>
+                <a href="/contenido/${slug}?key=${req.query.key}" class="btn-herramienta">Generador de contenido</a>
+                <a href="/reportes-guardados/${slug}?key=${req.query.key}" class="btn-herramienta">Reportes guardados</a>
+              </div>
             </div>
-            <div class="reco" style="border-left-color:${MARCA.verde};">
-              <b>Reporte PDF mensual</b> — a fin de mes te llega por correo el análisis completo de tu negocio, automáticamente.
+            <div>
+              <div class="card-titulo">Recomendaciones para ti</div>
+              ${recomendacionesHtml}
             </div>
-            <div class="fila-herramientas">
-              <a href="/quejas/${slug}?key=${req.query.key}" class="btn-herramienta">Retroalimentación privada</a>
-              <a href="/contenido/${slug}?key=${req.query.key}" class="btn-herramienta">Generador de contenido</a>
-              <a href="/reportes-guardados/${slug}?key=${req.query.key}" class="btn-herramienta">Reportes guardados</a>
-            </div>
-          </div>
-
-          <div class="seccion">
-            <div class="card-titulo">Recomendaciones para ti</div>
-            ${recomendacionesHtml}
           </div>
           ` : `
           <div class="seccion">
