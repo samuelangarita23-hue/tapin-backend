@@ -3343,7 +3343,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          .content{max-width:1120px;width:100%;}
+          .content{max-width:660px;}
           .seccion{margin-bottom:26px;}
           .seccion-header{text-align:center;margin-bottom:14px;}
           .seccion-header .eyebrow{justify-content:center;}
@@ -3352,20 +3352,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
 
           .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch;}
           @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
-          .panel-analitica-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(220px,.72fr);gap:16px;align-items:stretch;margin-top:6px;}
-          .panel-analitica-grid>.analitica-principal{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;grid-column:1 / span 2;grid-row:1;margin:0;}
-          .panel-analitica-grid>.analitica-principal>div:first-child,.panel-analitica-grid>.analitica-principal>div:nth-child(2){grid-column:auto;grid-row:auto;min-width:0;}
-          .panel-analitica-grid>.analitica-reputacion{display:flex!important;flex-direction:column;gap:14px;grid-column:3;grid-row:1;margin:0;min-width:0;}
-          .panel-analitica-grid>.analitica-reputacion>div{min-width:0;display:flex;flex-direction:column;}
-          .panel-analitica-grid>.analitica-reputacion .card-titulo{font-size:.78rem;line-height:1.25;min-height:24px;white-space:normal;}
-          .panel-analitica-grid>.analitica-reputacion .chart-card{height:calc(100% - 28px);font-size:.76rem;line-height:1.45;}
-          .panel-analitica-grid>.analitica-reputacion .sentimiento-leyenda{font-size:.74rem;line-height:1.35;}
-          .panel-analitica-grid>.analitica-reputacion .horas-nota{font-size:.72rem;line-height:1.4;}
-          .panel-analitica-grid>.seccion-actividad{grid-column:1;grid-row:2;margin:0;min-width:0;}
-          .panel-analitica-grid>.seccion-actividad .chart-card{height:100%;}
-          .seccion-datos .grid-3{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}.seccion-datos .grid-3 .reco{margin-bottom:0;min-height:64px;display:flex;align-items:center;line-height:1.4;}
-          @media (max-width:900px){.panel-analitica-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.panel-analitica-grid>.analitica-principal{grid-column:1 / span 2;grid-row:auto;}.panel-analitica-grid>.analitica-reputacion{grid-column:1 / span 2;grid-row:auto;flex-direction:row!important;}.panel-analitica-grid>.seccion-actividad{grid-column:1 / span 2;grid-row:auto;}}
-          @media (max-width:560px){.panel-analitica-grid{grid-template-columns:1fr;}.panel-analitica-grid>.analitica-principal{grid-column:auto;grid-template-columns:1fr;}.panel-analitica-grid>.analitica-reputacion{grid-column:auto;flex-direction:column!important;}.panel-analitica-grid>.seccion-actividad{grid-column:auto;}.seccion-datos .grid-3{grid-template-columns:1fr;}}
+          .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:stretch;}
+          @media (max-width:920px){.grid-3{grid-template-columns:1fr 1fr;}}
+          @media (max-width:640px){.grid-3{grid-template-columns:1fr;}}
           .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:stretch;}
           .grid-3 .reco{margin-bottom:0;height:100%;box-sizing:border-box;}
           @media (max-width:900px){.grid-3{grid-template-columns:1fr 1fr;}}
@@ -3446,11 +3435,11 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .sidebar-nav a.activo{background:#fff;color:${MARCA.verdeOscuro};}
           .sidebar-nav a svg{flex-shrink:0;width:17px;height:17px;}
           .sidebar-nav a.deshabilitado{opacity:0.45;pointer-events:none;}
-          .sidebar-pie{border-top:1px solid rgba(255,255,255,0.14);padding-top:14px;margin-top:14px;}
-          .sidebar-pie a{display:inline-flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;
-                         color:#CFE3D8;text-decoration:none;font-size:0.7rem;font-weight:600;}
-          .sidebar-pie a svg{flex-shrink:0;width:14px;height:14px;}
-          .sidebar-pie a:hover{background:rgba(255,255,255,0.08);color:#fff;}
+          .sidebar-pie{border-top:1px solid rgba(255,255,255,0.14);padding-top:10px;margin-top:10px;}
+          .sidebar-pie a{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;
+                         color:#9FBBAE;text-decoration:none;font-size:0.74rem;font-weight:600;opacity:0.85;}
+          .sidebar-pie a svg{flex-shrink:0;width:13px;height:13px;}
+          .sidebar-pie a:hover{background:rgba(255,255,255,0.08);color:#fff;opacity:1;}
           .dashboard-main{flex:1;min-width:0;padding:34px 40px 60px;box-sizing:border-box;}
           @media (max-width:900px){
             .dashboard-layout{flex-direction:column;}
@@ -3460,7 +3449,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             .sidebar-nav{flex-direction:row;flex:none;}
             .sidebar-nav a{padding:8px 12px;white-space:nowrap;}
             .sidebar-pie{border-top:none;margin-top:0;padding-top:0;}
-            .sidebar-pie a{padding:8px 12px;white-space:nowrap;}
+            .sidebar-pie a{padding:6px 10px;white-space:nowrap;}
             .dashboard-main{padding:22px 16px 50px;}
           }
 
@@ -3648,8 +3637,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
           </div>
 
-          ${meta && comparativoMes.disponible ? `
-          <div class="seccion grid-2">
+          <div class="seccion grid-3">
+            ${meta ? `
             <div>
               <div class="card-titulo">Meta del mes</div>
               <div class="chart-card" style="margin-top:0;">
@@ -3661,82 +3650,47 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 </div>
               </div>
             </div>
+            ` : ""}
+            ${comparativoMes.disponible ? `
             <div>
               <div class="card-titulo">Este mes vs. el anterior</div>
-              <div class="chart-card" style="margin-top:0;display:flex;gap:14px;align-items:center;">
+              <div class="chart-card" style="margin-top:0;display:flex;gap:10px;align-items:center;">
                 <div style="text-align:center;flex:1;">
-                  <div style="font-size:1.3rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
-                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
+                  <div style="font-size:1.2rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
+                  <div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
                 </div>
                 <div style="text-align:center;flex:1;">
-                  <div style="font-size:1.3rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
-                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
+                  <div style="font-size:1.2rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
+                  <div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
                 </div>
                 <div style="text-align:center;flex:1;">
-                  <div style="font-size:1.05rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
+                  <div style="font-size:1rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
                     ${comparativoMes.cambioPct >= 0 ? "+" : ""}${comparativoMes.cambioPct}%
                   </div>
-                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
+                  <div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
                 </div>
               </div>
-              ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:8px;">Vs. el mismo mes del año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
+              ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:8px;font-size:0.72rem;">Vs. año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
             </div>
-          </div>
-          ` : meta ? `
-          <div class="seccion">
-            <div class="card-titulo">Meta del mes</div>
-            <div class="chart-card" style="margin-top:0;">
-              <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:6px;">
-                <span>${meta.toquesMes} de ${meta.metaMensual} toques</span><b>${meta.pct}%</b>
-              </div>
-              <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
-                <div style="height:100%;border-radius:100px;background:${meta.pct >= 100 ? MARCA.oro : MARCA.verde};width:${meta.pct}%;"></div>
-              </div>
-            </div>
-          </div>
-          ` : comparativoMes.disponible ? `
-          <div class="seccion">
-            <div class="card-titulo">Este mes vs. el anterior</div>
-            <div class="chart-card" style="margin-top:0;display:flex;gap:20px;align-items:center;">
-              <div style="text-align:center;flex:1;">
-                <div style="font-size:1.4rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
-                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
-              </div>
-              <div style="text-align:center;flex:1;">
-                <div style="font-size:1.4rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
-                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
-              </div>
-              <div style="text-align:center;flex:1;">
-                <div style="font-size:1.1rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
-                  ${comparativoMes.cambioPct >= 0 ? "+" : ""}${comparativoMes.cambioPct}%
+            ` : ""}
+            <div>
+              <div class="card-titulo">Calendario del mes</div>
+              <div class="chart-card" style="margin-top:0;">
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;max-width:230px;margin:0 auto;">
+                  ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
+                  ${calendario.dias.map((v, i) => {
+                    const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
+                    const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
+                    return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:5px;
+                            background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
+                            display:flex;align-items:center;justify-content:center;font-size:0.56rem;font-weight:600;
+                            color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
+                  }).join("")}
                 </div>
-                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
+                <div class="cal-leyenda" style="text-align:center;font-size:0.66rem;color:${MARCA.textoSuave};margin-top:10px;">Más oscuro = más toques</div>
               </div>
             </div>
-            ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:10px;">Vs. el mismo mes del año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
           </div>
-          ` : ""}
-
-
-          ${!esPro(negocio) ? `
-          <div class="seccion">
-            <div class="card-titulo">Calendario del mes</div>
-            <div class="chart-card" style="margin-top:0;">
-              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:340px;margin:0 auto;">
-                ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
-                ${calendario.dias.map((v, i) => {
-                  const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
-                  const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
-                  return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;
-                          background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
-                          display:flex;align-items:center;justify-content:center;font-size:0.66rem;font-weight:600;
-                          color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
-                }).join("")}
-              </div>
-              <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:14px;">Más oscuro = más toques</div>
-            </div>
-          </div>
-          ` : ""}
 
           ${r.total === 0 ? `
           <div class="seccion">
@@ -3757,7 +3711,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
 
           ${esPro(negocio) ? `
           ${resumenFrase || caida || diaFlojo || clientesRecurrentes > 0 || percentil !== null ? `
-          <div class="seccion seccion-datos">
+          <div class="seccion">
             <div class="card-titulo">Lo que dicen tus datos</div>
             <div class="grid-3">
               ${resumenFrase ? `<div class="reco" style="border-left-color:${MARCA.verde};"><b>Resumen (30 días):</b> ${resumenFrase}</div>` : ""}
@@ -3776,39 +3730,17 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
           </div>
           ` : ""}
-          <div class="panel-analitica-grid">
-          <div class="seccion grid-2 analitica-principal">
+          <div class="seccion grid-3">
             <div>
-              <div class="card-titulo">Calendario del mes</div>
-              <div class="chart-card" style="margin-top:0;">
-                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:290px;margin:0 auto;">
-                  ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
-                  ${calendario.dias.map((v, i) => {
-                    const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
-                    const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
-                    return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;
-                            background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
-                            display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:600;
-                            color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
-                  }).join("")}
-                </div>
-                <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:14px;">Más oscuro = más toques</div>
-              </div>
-            </div>
-            <div>
-              <div class="card-titulo">Tus horas pico <span class="suave">últimos 30 días</span></div>
+              <div class="card-titulo">Tus horas pico <span class="suave">30 días</span></div>
               <div class="chart-card" style="margin-top:0;">
                 <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
-                <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+                <div class="horas-labels"><span>12am</span><span>12pm</span><span>11pm</span></div>
                 ${horas.totalMes > 0
-                  ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques} toques)</div>`
-                  : `<div class="horas-nota">Todavía no hay suficientes toques este mes.</div>`}
+                  ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques})</div>`
+                  : `<div class="horas-nota">Sin suficientes datos.</div>`}
               </div>
             </div>
-          </div>
-
-          ${promSector !== null ? `
-          <div class="seccion grid-2">
             <div>
               <div class="card-titulo">Cómo te calificaron</div>
               <div class="chart-card" style="margin-top:0;">
@@ -3821,60 +3753,41 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                        <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
                        <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
                      </div>
-                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
-                  : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
+                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Recuperación: <b>${tasaRecuperacion}%</b></div>` : ""}`
+                  : `<div class="sentimiento-vacio">Sin calificaciones todavía.</div>`}
               </div>
             </div>
-
+            ${promSector !== null ? `
             <div>
               <div class="card-titulo">Tú vs. tu sector</div>
               <div class="chart-card" style="margin-top:0;">
-                <div style="display:flex;flex-direction:column;gap:12px;">
+                <div style="display:flex;flex-direction:column;gap:10px;">
                   <div>
-                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:4px;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.76rem;margin-bottom:4px;">
                       <span>Tú</span><b>${r.semana}</b>
                     </div>
-                    <div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                    <div style="height:8px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
                       <div style="height:100%;border-radius:100px;background:${MARCA.verde};
                                   width:${Math.min(100, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
                     </div>
                   </div>
                   <div>
-                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:4px;color:${MARCA.textoSuave};">
+                    <div style="display:flex;justify-content:space-between;font-size:0.76rem;margin-bottom:4px;color:${MARCA.textoSuave};">
                       <span>Sector</span><b>${promSector}</b>
                     </div>
-                    <div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                    <div style="height:8px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
                       <div style="height:100%;border-radius:100px;background:${MARCA.oro};
                                   width:${Math.min(100, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
                     </div>
                   </div>
                 </div>
-                <div class="horas-nota">
-                  ${r.semana >= promSector
-                    ? `Vas por encima del promedio de tu sector.`
-                    : `${promSector - r.semana} toques por debajo del promedio de tu sector.`}
+                <div class="horas-nota" style="margin-top:8px;">
+                  ${r.semana >= promSector ? `Por encima del promedio.` : `${promSector - r.semana} bajo el promedio.`}
                 </div>
               </div>
             </div>
+            ` : ""}
           </div>
-          ` : `
-          <div class="seccion analitica-reputacion">
-            <div class="card-titulo">Cómo te calificaron</div>
-            <div class="chart-card" style="margin-top:0;">
-              ${totalCalificado > 0
-                ? `<div class="sentimiento-barra">
-                     <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
-                     <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
-                   </div>
-                   <div class="sentimiento-leyenda">
-                     <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                     <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-                   </div>
-                   ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
-                : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
-            </div>
-          </div>
-          `}
 
           <div class="seccion seccion-actividad">
             <div class="card-titulo">Actividad reciente</div>
@@ -3885,9 +3798,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               </table>
             </div>
           </div>
-          </div>
 
-          <div class="seccion grid-2 analitica-reputacion">
+          <div class="seccion grid-2">
             <div>
               <div class="card-titulo">Más de tu plan Pro</div>
               <div class="reco" style="border-left-color:${MARCA.verde};">
