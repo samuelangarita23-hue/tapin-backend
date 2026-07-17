@@ -3631,7 +3631,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
           </div>
 
-          <div class="seccion grid-3">
+          <div class="seccion grid-2">
             ${meta ? `
             <div>
               <div class="card-titulo">Meta del mes</div>
@@ -3667,21 +3667,40 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:8px;font-size:0.72rem;">Vs. año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
             </div>
             ` : ""}
-            <div>
-              <div class="card-titulo">Calendario del mes</div>
-              <div class="chart-card" style="margin-top:0;">
-                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;max-width:230px;margin:0 auto;">
-                  ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
-                  ${calendario.dias.map((v, i) => {
-                    const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
-                    const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
-                    return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:5px;
-                            background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
-                            display:flex;align-items:center;justify-content:center;font-size:0.56rem;font-weight:600;
-                            color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
-                  }).join("")}
+          </div>
+
+          <div class="seccion">
+            <div class="card-titulo">Calendario del mes</div>
+            <div class="chart-card" style="margin-top:0;">
+              <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+                <div style="flex-shrink:0;">
+                  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:260px;">
+                    ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
+                    ${calendario.dias.map((v, i) => {
+                      const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
+                      const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
+                      return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;
+                              background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
+                              display:flex;align-items:center;justify-content:center;font-size:0.66rem;font-weight:600;
+                              color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
+                    }).join("")}
+                  </div>
+                  <div class="cal-leyenda" style="text-align:left;font-size:0.7rem;color:${MARCA.textoSuave};margin-top:12px;">Más oscuro = más toques</div>
                 </div>
-                <div class="cal-leyenda" style="text-align:center;font-size:0.66rem;color:${MARCA.textoSuave};margin-top:10px;">Más oscuro = más toques</div>
+                ${totalCalificado > 0 ? `
+                <div style="display:flex;gap:14px;align-items:flex-end;height:150px;flex-shrink:0;border-left:1px solid ${MARCA.borde};padding-left:24px;">
+                  <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">
+                    <div style="font-size:0.8rem;font-weight:800;color:${MARCA.verde};margin-bottom:6px;">${pctPositivas}%</div>
+                    <div style="width:38px;border-radius:7px 7px 3px 3px;background:${MARCA.verde};height:${Math.max(6, pctPositivas)}%;"></div>
+                    <div style="font-size:0.68rem;color:${MARCA.textoSuave};margin-top:8px;text-align:center;">Positivas<br><b style="color:${MARCA.texto};">${testimonios.length}</b></div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">
+                    <div style="font-size:0.8rem;font-weight:800;color:${MARCA.rojo};margin-bottom:6px;">${pctNegativas}%</div>
+                    <div style="width:38px;border-radius:7px 7px 3px 3px;background:${MARCA.rojo};height:${Math.max(6, pctNegativas)}%;"></div>
+                    <div style="font-size:0.68rem;color:${MARCA.textoSuave};margin-top:8px;text-align:center;">Quejas<br><b style="color:${MARCA.texto};">${quejas.length}</b></div>
+                  </div>
+                </div>
+                ` : ""}
               </div>
             </div>
           </div>
