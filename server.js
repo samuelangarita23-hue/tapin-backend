@@ -511,6 +511,7 @@ const ESTILO_BASE = `
   .tapin-panel-card-stars{color:#d89412;font-size:.75rem;letter-spacing:2px;margin:4px 0 2px}.tapin-panel-card-copy{font-size:.52rem;color:#26342b;text-align:center;font-weight:700}
   .panel-metric-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:26px}.panel-metric{background:#fffefd;border:1px solid var(--line);border-radius:16px;padding:16px 14px;box-shadow:0 8px 20px rgba(9,49,30,.05)}.panel-metric strong{display:block;color:var(--ink);font-size:1.55rem;line-height:1}.panel-metric span{display:block;color:var(--muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;font-weight:800;margin-top:7px}
   @media(max-width:700px){.tapin-dashboard-hero{grid-template-columns:1fr;text-align:center;padding:24px 20px}.tapin-dashboard-hero p{margin:auto}.tapin-panel-card{width:205px;height:132px}.panel-metric-strip{grid-template-columns:repeat(2,1fr)}}
+  .dashboard-shell{display:grid;grid-template-columns:190px minmax(0,1fr);background:#fffefd;border:1px solid var(--line);border-radius:22px;overflow:hidden;box-shadow:0 16px 38px rgba(9,49,30,.09);margin-bottom:32px;min-height:430px}.dashboard-sidebar{background:linear-gradient(180deg,#0d432b,#092e20);padding:24px 14px;color:#d7eadf}.dashboard-brand{font-size:1.08rem;font-weight:800;color:#fff;padding:0 12px 26px;letter-spacing:-.03em}.dashboard-brand span{color:#e8a623}.dashboard-nav{display:flex;flex-direction:column;gap:5px}.dashboard-nav a{color:#bed4c7;text-decoration:none;font-size:.75rem;font-weight:600;padding:10px 12px;border-radius:9px}.dashboard-nav a.active,.dashboard-nav a:hover{background:#f3f6ee;color:#0d432b}.dashboard-nav small{font-size:.62rem;color:#8fac9b;text-transform:uppercase;letter-spacing:.1em;padding:17px 12px 5px}.dashboard-main{padding:28px 30px;background:#fffefd}.dashboard-toolbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:22px}.dashboard-toolbar h2{font-family:'DM Sans','Segoe UI',sans-serif;font-size:1.35rem;color:#102c20;margin:0 0 3px}.dashboard-toolbar p{font-size:.76rem;color:#718278;margin:0}.dashboard-select{border:1px solid #dbe1d8;background:#fff;border-radius:8px;padding:8px 11px;font-size:.72rem;color:#355345}.dashboard-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}.dashboard-kpi{border:1px solid #e1e7df;border-radius:12px;padding:15px 14px;background:#fff}.dashboard-kpi-label{font-size:.63rem;color:#7c8b82;text-transform:uppercase;font-weight:800;letter-spacing:.06em}.dashboard-kpi-value{font-size:1.55rem;font-weight:800;color:#123b29;margin-top:6px;line-height:1}.dashboard-kpi-note{font-size:.63rem;color:#4f8066;margin-top:7px}.dashboard-chart{border:1px solid #e1e7df;border-radius:14px;padding:17px 18px;background:#fff}.dashboard-chart-title{font-size:.75rem;color:#52655a;font-weight:700;margin-bottom:14px}.dashboard-chart .sparkline{max-width:none;height:105px}.dashboard-lower{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.dashboard-mini{border:1px solid #e1e7df;border-radius:12px;padding:15px;background:#fff}.dashboard-mini-title{font-size:.67rem;color:#839087;text-transform:uppercase;font-weight:800;letter-spacing:.05em}.dashboard-mini-value{font-size:1.15rem;color:#123b29;font-weight:800;margin-top:7px}.dashboard-mini-copy{font-size:.68rem;color:#6c7d73;margin-top:4px}@media(max-width:760px){.dashboard-shell{grid-template-columns:1fr}.dashboard-sidebar{padding:15px}.dashboard-brand{padding:0 10px 12px}.dashboard-nav{display:grid;grid-template-columns:repeat(3,1fr)}.dashboard-nav small{display:none}.dashboard-main{padding:22px 18px}.dashboard-kpis{grid-template-columns:1fr 1fr}.dashboard-lower{grid-template-columns:1fr}}
 `;
 
 // ---------- Configuración de negocios ----------
@@ -2809,17 +2810,30 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
         </div>
         <div class="content">
 
-          <div class="tapin-dashboard-hero">
-            <div>
-              <div class="hero-kicker">Tapin · panel de administración</div>
-              <h2>Todo lo que pasa en tus negocios, en un solo lugar.</h2>
-              <p>Consulta actividad, calificaciones, reportes y accesos de cada tarjeta Tapin desde una vista clara y ordenada.</p>
-            </div>
-            <div class="tapin-panel-card" aria-label="Tarjeta Tapin de ejemplo">
-              <div class="tapin-panel-card-brand">Tapin</div><div class="tapin-panel-card-nfc">NFC )))</div>
-              <div class="tapin-panel-card-google"><span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span></div>
-              <div class="tapin-panel-card-stars">★★★★★</div><div class="tapin-panel-card-copy">Déjanos una reseña en Google</div>
-            </div>
+          <div class="dashboard-shell">
+            <aside class="dashboard-sidebar">
+              <div class="dashboard-brand">Tapin<span>·</span></div>
+              <nav class="dashboard-nav">
+                <small>Administración</small>
+                <a class="active" href="#resumen-admin">⌂ &nbsp;Resumen</a>
+                <a href="#actividad-admin">▥ &nbsp;Actividad</a>
+                <a href="#negocios-admin">▣ &nbsp;Negocios</a>
+                <small>Herramientas</small>
+                <a href="/codigos?key=${key}">＋ &nbsp;Tarjetas</a>
+                <a href="/auditoria?key=${key}">◌ &nbsp;Auditoría</a>
+                <a href="/respaldo?key=${key}">⚙ &nbsp;Configuración</a>
+              </nav>
+            </aside>
+            <main class="dashboard-main" id="resumen-admin">
+              <div class="dashboard-toolbar"><div><h2>Resumen general</h2><p>Todas tus tarjetas Tapin</p></div><span class="dashboard-select">Este mes⌄</span></div>
+              <div class="dashboard-kpis">
+                <div class="dashboard-kpi"><div class="dashboard-kpi-label">Tarjetas activas</div><div class="dashboard-kpi-value">${totalNegocios}</div><div class="dashboard-kpi-note">Negocios registrados</div></div>
+                <div class="dashboard-kpi"><div class="dashboard-kpi-label">Toques totales</div><div class="dashboard-kpi-value">${totalToquesGlobal}</div><div class="dashboard-kpi-note">Actividad acumulada</div></div>
+                <div class="dashboard-kpi"><div class="dashboard-kpi-label">Últimos 7 días</div><div class="dashboard-kpi-value">${totalSemanaGlobal}</div><div class="dashboard-kpi-note">Interacciones recientes</div></div>
+              </div>
+              <div class="dashboard-chart" id="actividad-admin"><div class="dashboard-chart-title">Actividad combinada · últimos 7 días</div><div class="sparkline">${barraSemana(dias7Global)}</div></div>
+              <div class="dashboard-lower"><div class="dashboard-mini"><div class="dashboard-mini-title">Calificación promedio</div><div class="dashboard-mini-value">${promedioEstrellas !== null ? promedioEstrellas + " / 5 ★" : "Sin calificaciones"}</div><div class="dashboard-mini-copy">Incluye positivas y negativas del filtro Tapin.</div></div><div class="dashboard-mini" id="negocios-admin"><div class="dashboard-mini-title">Gestión</div><div class="dashboard-mini-value">${totalNegocios} negocios</div><div class="dashboard-mini-copy">Revisa cada panel desde las tarjetas inferiores.</div></div></div>
+            </main>
           </div>
 
           <div class="seccion">
@@ -3406,17 +3420,30 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
         </div>
         <div class="content">
 
-          <div class="tapin-dashboard-hero">
-            <div>
-              <div class="hero-kicker">Tapin · panel del negocio</div>
-              <h2>${negocio.nombre}</h2>
-              <p>Una vista práctica para entender la actividad de tu tarjeta y tomar mejores decisiones con datos reales.</p>
-            </div>
-            <div class="tapin-panel-card" aria-label="Tarjeta Tapin de ejemplo">
-              <div class="tapin-panel-card-brand">Tapin</div><div class="tapin-panel-card-nfc">NFC )))</div>
-              <div class="tapin-panel-card-google"><span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span></div>
-              <div class="tapin-panel-card-stars">★★★★★</div><div class="tapin-panel-card-copy">Déjanos una reseña en Google</div>
-            </div>
+          <div class="dashboard-shell">
+            <aside class="dashboard-sidebar">
+              <div class="dashboard-brand">Tapin<span>·</span></div>
+              <nav class="dashboard-nav">
+                <small>Mi negocio</small>
+                <a class="active" href="#resumen-negocio">⌂ &nbsp;Resumen</a>
+                <a href="#actividad-negocio">▥ &nbsp;Actividad</a>
+                <a href="#opiniones-negocio">☆ &nbsp;Opiniones</a>
+                <a href="#proyeccion-negocio">↗ &nbsp;Proyecciones</a>
+                <small>Cuenta</small>
+                <a href="/mi-panel/${slug}/editar?key=${req.query.key}">♙ &nbsp;Mi perfil</a>
+                <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}">⚙ &nbsp;Configuración</a>
+              </nav>
+            </aside>
+            <main class="dashboard-main" id="resumen-negocio">
+              <div class="dashboard-toolbar"><div><h2>Resumen</h2><p>${negocio.nombre}</p></div><span class="dashboard-select">Este mes⌄</span></div>
+              <div class="dashboard-kpis">
+                <div class="dashboard-kpi"><div class="dashboard-kpi-label">Hoy</div><div class="dashboard-kpi-value">${r.hoy}</div><div class="dashboard-kpi-note">Interacciones</div></div>
+                <div class="dashboard-kpi"><div class="dashboard-kpi-label">Últimos 7 días</div><div class="dashboard-kpi-value">${r.semana}</div><div class="dashboard-kpi-note">Actividad reciente</div></div>
+                <div class="dashboard-kpi"><div class="dashboard-kpi-label">Calificación promedio</div><div class="dashboard-kpi-value">${promedioEstrellas !== null ? promedioEstrellas : "—"}</div><div class="dashboard-kpi-note">Sobre 5 estrellas</div></div>
+              </div>
+              <div class="dashboard-chart" id="actividad-negocio"><div class="dashboard-chart-title">Actividad · últimos 7 días</div><div class="sparkline">${barraSemana(r.dias7)}</div></div>
+              <div class="dashboard-lower"><div class="dashboard-mini" id="opiniones-negocio"><div class="dashboard-mini-title">Opiniones</div><div class="dashboard-mini-value">${totalCalificado} evaluaciones</div><div class="dashboard-mini-copy">Incluye calificaciones positivas y negativas recibidas.</div></div><div class="dashboard-mini" id="proyeccion-negocio"><div class="dashboard-mini-title">Proyección seleccionada</div><div class="dashboard-mini-value">${proyeccion.nombrePeriodo}</div><div class="dashboard-mini-copy">Consulta el estimado desde la sección de proyecciones.</div></div></div>
+            </main>
           </div>
 
           <div class="seccion" style="text-align:center;">
