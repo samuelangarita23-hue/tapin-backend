@@ -3343,15 +3343,15 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          .content{max-width:660px;}
+          .content{max-width:1120px;width:100%;}
           .seccion{margin-bottom:26px;}
           .seccion-header{text-align:center;margin-bottom:14px;}
           .seccion-header .eyebrow{justify-content:center;}
           .seccion-header h2{font-size:1.1rem;font-weight:700;margin:0 0 4px;}
           .seccion-header p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0;}
 
-          .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;align-items:stretch;}
-          .grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;align-items:stretch;}
+          .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch;}
+          @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
           .panel-analitica-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(220px,.72fr);gap:16px;align-items:stretch;margin-top:6px;}
           .panel-analitica-grid>.analitica-principal{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;grid-column:1 / span 2;grid-row:1;margin:0;}
           .panel-analitica-grid>.analitica-principal>div:first-child,.panel-analitica-grid>.analitica-principal>div:nth-child(2){grid-column:auto;grid-row:auto;min-width:0;}
@@ -3366,7 +3366,10 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .seccion-datos .grid-3{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}.seccion-datos .grid-3 .reco{margin-bottom:0;min-height:64px;display:flex;align-items:center;line-height:1.4;}
           @media (max-width:900px){.panel-analitica-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.panel-analitica-grid>.analitica-principal{grid-column:1 / span 2;grid-row:auto;}.panel-analitica-grid>.analitica-reputacion{grid-column:1 / span 2;grid-row:auto;flex-direction:row!important;}.panel-analitica-grid>.seccion-actividad{grid-column:1 / span 2;grid-row:auto;}}
           @media (max-width:560px){.panel-analitica-grid{grid-template-columns:1fr;}.panel-analitica-grid>.analitica-principal{grid-column:auto;grid-template-columns:1fr;}.panel-analitica-grid>.analitica-reputacion{grid-column:auto;flex-direction:column!important;}.panel-analitica-grid>.seccion-actividad{grid-column:auto;}.seccion-datos .grid-3{grid-template-columns:1fr;}}
+          .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:stretch;}
           .grid-3 .reco{margin-bottom:0;height:100%;box-sizing:border-box;}
+          @media (max-width:900px){.grid-3{grid-template-columns:1fr 1fr;}}
+          @media (max-width:560px){.grid-3{grid-template-columns:1fr;}}
           @media (max-width:480px){
             .fila-herramientas{flex-direction:column;}
             .btn-herramienta{min-width:0;}
@@ -3449,11 +3452,11 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .sidebar-nav a.activo{background:#fff;color:${MARCA.verdeOscuro};}
           .sidebar-nav a svg{flex-shrink:0;width:17px;height:17px;}
           .sidebar-nav a.deshabilitado{opacity:0.45;pointer-events:none;}
-          .sidebar-pie{border-top:1px solid rgba(255,255,255,0.14);padding-top:10px;margin-top:10px;}
-          .sidebar-pie a{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;
-                         color:#9FBBAE;text-decoration:none;font-size:0.74rem;font-weight:600;opacity:0.85;}
-          .sidebar-pie a svg{flex-shrink:0;width:13px;height:13px;}
-          .sidebar-pie a:hover{background:rgba(255,255,255,0.08);color:#fff;opacity:1;}
+          .sidebar-pie{border-top:1px solid rgba(255,255,255,0.14);padding-top:14px;margin-top:14px;}
+          .sidebar-pie a{display:inline-flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;
+                         color:#CFE3D8;text-decoration:none;font-size:0.7rem;font-weight:600;}
+          .sidebar-pie a svg{flex-shrink:0;width:14px;height:14px;}
+          .sidebar-pie a:hover{background:rgba(255,255,255,0.08);color:#fff;}
           .dashboard-main{flex:1;min-width:0;padding:34px 40px 60px;box-sizing:border-box;}
           @media (max-width:900px){
             .dashboard-layout{flex-direction:column;}
@@ -3463,7 +3466,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             .sidebar-nav{flex-direction:row;flex:none;}
             .sidebar-nav a{padding:8px 12px;white-space:nowrap;}
             .sidebar-pie{border-top:none;margin-top:0;padding-top:0;}
-            .sidebar-pie a{padding:6px 10px;white-space:nowrap;}
+            .sidebar-pie a{padding:8px 12px;white-space:nowrap;}
             .dashboard-main{padding:22px 16px 50px;}
           }
 
@@ -3655,8 +3658,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
           </div>
 
+          ${meta && comparativoMes.disponible ? `
           <div class="seccion grid-2">
-            ${meta ? `
             <div>
               <div class="card-titulo">Meta del mes</div>
               <div class="chart-card" style="margin-top:0;">
@@ -3668,30 +3671,62 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 </div>
               </div>
             </div>
-            ` : ""}
-            ${comparativoMes.disponible ? `
             <div>
               <div class="card-titulo">Este mes vs. el anterior</div>
-              <div class="chart-card" style="margin-top:0;display:flex;gap:10px;align-items:center;">
+              <div class="chart-card" style="margin-top:0;display:flex;gap:14px;align-items:center;">
                 <div style="text-align:center;flex:1;">
-                  <div style="font-size:1.2rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
-                  <div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
+                  <div style="font-size:1.3rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
+                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
                 </div>
                 <div style="text-align:center;flex:1;">
-                  <div style="font-size:1.2rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
-                  <div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
+                  <div style="font-size:1.3rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
+                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
                 </div>
                 <div style="text-align:center;flex:1;">
-                  <div style="font-size:1rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
+                  <div style="font-size:1.05rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
                     ${comparativoMes.cambioPct >= 0 ? "+" : ""}${comparativoMes.cambioPct}%
                   </div>
-                  <div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
+                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
                 </div>
               </div>
-              ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:8px;font-size:0.72rem;">Vs. año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
+              ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:8px;">Vs. el mismo mes del año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
             </div>
-            ` : ""}
           </div>
+          ` : meta ? `
+          <div class="seccion">
+            <div class="card-titulo">Meta del mes</div>
+            <div class="chart-card" style="margin-top:0;">
+              <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:6px;">
+                <span>${meta.toquesMes} de ${meta.metaMensual} toques</span><b>${meta.pct}%</b>
+              </div>
+              <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                <div style="height:100%;border-radius:100px;background:${meta.pct >= 100 ? MARCA.oro : MARCA.verde};width:${meta.pct}%;"></div>
+              </div>
+            </div>
+          </div>
+          ` : comparativoMes.disponible ? `
+          <div class="seccion">
+            <div class="card-titulo">Este mes vs. el anterior</div>
+            <div class="chart-card" style="margin-top:0;display:flex;gap:20px;align-items:center;">
+              <div style="text-align:center;flex:1;">
+                <div style="font-size:1.4rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
+                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
+              </div>
+              <div style="text-align:center;flex:1;">
+                <div style="font-size:1.4rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
+                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
+              </div>
+              <div style="text-align:center;flex:1;">
+                <div style="font-size:1.1rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
+                  ${comparativoMes.cambioPct >= 0 ? "+" : ""}${comparativoMes.cambioPct}%
+                </div>
+                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
+              </div>
+            </div>
+            ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:10px;">Vs. el mismo mes del año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
+          </div>
+          ` : ""}
+
 
           ${!esPro(negocio) ? `
           <div class="seccion">
