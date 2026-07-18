@@ -1634,56 +1634,9 @@ app.get("/calificar/:slug", (req, res) => {
   }
 
   if (valor >= 4) {
-    // El generador de contenido (frases con un toque) es exclusivo del Plan Pro.
-    // Los negocios básicos van directo a Google, sin este paso extra.
-    if (!esPro(negocio)) {
-      return res.redirect(302, negocio.googleUrl);
-    }
-
-    const frases = FRASES_POR_CATEGORIA[negocio.categoria] || FRASES_POR_CATEGORIA.otro;
-    const chips = frases
-      .map(
-        (f) =>
-          `<a href="/testimonio/${slug}?valor=${valor}&frase=${encodeURIComponent(f)}" class="chip">${f}</a>`
-      )
-      .join("");
-
-    return res.send(`
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>${negocio.nombre}</title>
-          <style>
-            *{box-sizing:border-box;}
-            body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F8F4EC;
-                 display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;}
-            .box{background:#fff;border-radius:18px;padding:32px 26px;max-width:380px;width:100%;
-                 text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.08);}
-            h1{font-size:1.15rem;margin:0 0 6px;color:#16201C;}
-            p{color:#777;font-size:0.88rem;margin:0 0 20px;}
-            .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:18px;}
-            .chip{background:#F1F7F4;color:#0F5132;border:1px solid #DCEAE2;border-radius:100px;
-                  padding:10px 14px;font-size:0.85rem;font-weight:600;text-decoration:none;}
-            .chip:active{transform:scale(0.96);}
-            .saltar{display:block;color:#999;font-size:0.82rem;text-decoration:underline;}
-            .sello-aviso{background:#FBF6E9;border-radius:10px;padding:10px 14px;font-size:0.8rem;
-                        color:#7A5A00;margin-bottom:16px;}
-          </style>
-        </head>
-        <body>
-          <div class="box">
-            <h1>¡Qué bueno! 🎉</h1>
-            <p>¿Qué fue lo que más te gustó? (toca una, opcional)</p>
-            ${selloSumado ? `<div class="sello-aviso">${selloSumado.listo
-              ? `¡Beneficio desbloqueado! Ya tienes: ${selloSumado.fid.premio}`
-              : `+1 sello de fidelización — llevas ${selloSumado.actual.sellos} de ${selloSumado.fid.metaSellos}`}</div>` : ""}
-            <div class="chips">${chips}</div>
-            <a class="saltar" href="${negocio.googleUrl}">Saltar e ir directo a Google &rarr;</a>
-          </div>
-        </body>
-      </html>
-    `);
+    // Calificación positiva (4-5): directo a Google, sin pantallas ni
+    // preguntas intermedias — ni siquiera en Plan Pro.
+    return res.redirect(302, negocio.googleUrl);
   }
 
   // Calificación negativa: mostramos un formulario privado en vez de mandarlo a Google.
