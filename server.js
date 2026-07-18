@@ -3439,12 +3439,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .sidebar{width:236px;flex-shrink:0;background:linear-gradient(180deg,${MARCA.verdeOscuro} 0%,#082c1c 100%);
                    color:#fff;display:flex;flex-direction:column;padding:26px 18px;box-sizing:border-box;position:sticky;top:0;height:100vh;}
           .sidebar-logo{padding:0 8px;margin-bottom:34px;}
-          .sidebar-profile{display:flex;align-items:center;gap:10px;padding:11px 12px;margin:-18px 0 18px;border:1px solid rgba(255,255,255,.18);border-radius:12px;background:rgba(255,255,255,.08);color:#fff;text-decoration:none;transition:.18s ease;}
-          .sidebar-profile:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.32);transform:translateY(-1px);}
-          .sidebar-profile svg{width:18px;height:18px;flex-shrink:0;}
-          .sidebar-profile-copy{min-width:0;display:flex;flex-direction:column;gap:2px;}
-          .sidebar-profile-label{font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;opacity:.72;font-weight:700;}
-          .sidebar-profile-name{font-size:.82rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
           .sidebar-nav{display:flex;flex-direction:column;gap:3px;flex:1;}
           .sidebar-nav a{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;
                          color:#CFE3D8;text-decoration:none;font-size:0.86rem;font-weight:600;transition:background .15s,color .15s;}
@@ -3504,10 +3498,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
         <div class="dashboard-layout">
           <aside class="sidebar">
             <div class="sidebar-logo">${logoSvg("#FFFFFF", 26)}</div>
-            <a class="sidebar-profile" href="/mi-panel/${slug}?key=${encodeURIComponent(req.query.key)}#mi-negocio" aria-label="Abrir Mi negocio">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></svg>
-              <span class="sidebar-profile-copy"><span class="sidebar-profile-label">Perfil</span><span class="sidebar-profile-name">Mi negocio</span></span>
-            </a>
             <nav class="sidebar-nav">
               <a href="/mi-panel/${slug}?key=${req.query.key}" class="activo">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
@@ -3546,7 +3536,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           <main class="dashboard-main">
         <div class="content" style="padding:0;max-width:none;">
 
-          <div class="dash-header" id="mi-negocio">
+          <div class="dash-header">
             <div>
               <div class="eyebrow" style="margin-bottom:2px;">${escaparHtml(negocio.nombre)}</div>
               <h1>Resumen</h1>
