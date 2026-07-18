@@ -3505,20 +3505,12 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
 
           .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch;}
           @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
-          .panel-analitica-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(220px,.72fr);gap:16px;align-items:stretch;margin-top:6px;}
-          .panel-analitica-grid>.analitica-principal{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;grid-column:1 / span 2;grid-row:1;margin:0;}
-          .panel-analitica-grid>.analitica-principal>div:first-child,.panel-analitica-grid>.analitica-principal>div:nth-child(2){grid-column:auto;grid-row:auto;min-width:0;}
-          .panel-analitica-grid>.analitica-reputacion{display:flex!important;flex-direction:column;gap:14px;grid-column:3;grid-row:1;margin:0;min-width:0;}
-          .panel-analitica-grid>.analitica-reputacion>div{min-width:0;display:flex;flex-direction:column;}
-          .panel-analitica-grid>.analitica-reputacion .card-titulo{font-size:.78rem;line-height:1.25;min-height:24px;white-space:normal;}
-          .panel-analitica-grid>.analitica-reputacion .chart-card{height:calc(100% - 28px);font-size:.76rem;line-height:1.45;}
-          .panel-analitica-grid>.analitica-reputacion .sentimiento-leyenda{font-size:.74rem;line-height:1.35;}
-          .panel-analitica-grid>.analitica-reputacion .horas-nota{font-size:.72rem;line-height:1.4;}
-          .panel-analitica-grid>.seccion-actividad{grid-column:1;grid-row:2;margin:0;min-width:0;}
-          .panel-analitica-grid>.seccion-actividad .chart-card{height:100%;}
+          .panel-analitica-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch;margin-top:6px;}
+          .panel-analitica-grid>div{min-width:0;}
+          .panel-analitica-grid>.panel-analitica-full{grid-column:1 / -1;}
+          .panel-analitica-grid .chart-card{height:calc(100% - 28px);}
           .seccion-datos .grid-3{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}.seccion-datos .grid-3 .reco{margin-bottom:0;min-height:64px;display:flex;align-items:center;line-height:1.4;}
-          @media (max-width:900px){.panel-analitica-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.panel-analitica-grid>.analitica-principal{grid-column:1 / span 2;grid-row:auto;}.panel-analitica-grid>.analitica-reputacion{grid-column:1 / span 2;grid-row:auto;flex-direction:row!important;}.panel-analitica-grid>.seccion-actividad{grid-column:1 / span 2;grid-row:auto;}}
-          @media (max-width:560px){.panel-analitica-grid{grid-template-columns:1fr;}.panel-analitica-grid>.analitica-principal{grid-column:auto;grid-template-columns:1fr;}.panel-analitica-grid>.analitica-reputacion{grid-column:auto;flex-direction:column!important;}.panel-analitica-grid>.seccion-actividad{grid-column:auto;}.seccion-datos .grid-3{grid-template-columns:1fr;}}
+          @media (max-width:700px){.panel-analitica-grid{grid-template-columns:1fr;}.panel-analitica-grid>div{grid-column:1;}.seccion-datos .grid-3{grid-template-columns:1fr;}}
           .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:stretch;}
           .grid-3 .reco{margin-bottom:0;height:100%;box-sizing:border-box;}
           @media (max-width:900px){.grid-3{grid-template-columns:1fr 1fr;}}
@@ -3871,7 +3863,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           </div>
           ` : ""}
           <div class="panel-analitica-grid">
-          <div class="seccion grid-2 analitica-principal">
             <div>
               <div class="card-titulo">Calendario del mes</div>
               <div class="chart-card" style="margin-top:0;">
@@ -3899,10 +3890,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                   : `<div class="horas-nota">Todavía no hay suficientes toques este mes.</div>`}
               </div>
             </div>
-          </div>
 
-          ${promSector !== null ? `
-          <div class="seccion grid-2 analitica-reputacion">
+            ${promSector !== null ? `
             <div>
               <div class="card-titulo">Cómo te calificaron</div>
               <div class="chart-card" style="margin-top:0;">
@@ -3950,35 +3939,34 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 </div>
               </div>
             </div>
-          </div>
-          ` : `
-          <div class="seccion analitica-reputacion">
-            <div class="card-titulo">Cómo te calificaron</div>
-            <div class="chart-card" style="margin-top:0;">
-              ${totalCalificado > 0
-                ? `<div class="sentimiento-barra">
-                     <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
-                     <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
-                   </div>
-                   <div class="sentimiento-leyenda">
-                     <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                     <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-                   </div>
-                   ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
-                : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
+            ` : `
+            <div class="panel-analitica-full">
+              <div class="card-titulo">Cómo te calificaron</div>
+              <div class="chart-card" style="margin-top:0;">
+                ${totalCalificado > 0
+                  ? `<div class="sentimiento-barra">
+                       <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
+                       <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
+                     </div>
+                     <div class="sentimiento-leyenda">
+                       <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
+                       <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
+                     </div>
+                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
+                  : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
+              </div>
             </div>
-          </div>
-          `}
+            `}
 
-          <div class="seccion seccion-actividad">
-            <div class="card-titulo">Actividad reciente</div>
-            <div class="chart-card" style="margin-top:0;">
-              <table class="tabla-actividad">
-                <tr><th>Fecha</th><th>Dispositivo</th></tr>
-                ${actividadReciente || `<tr><td colspan="2" style="text-align:center;color:${MARCA.textoSuave};">Sin toques todavía</td></tr>`}
-              </table>
+            <div class="panel-analitica-full">
+              <div class="card-titulo">Actividad reciente</div>
+              <div class="chart-card" style="margin-top:0;">
+                <table class="tabla-actividad">
+                  <tr><th>Fecha</th><th>Dispositivo</th></tr>
+                  ${actividadReciente || `<tr><td colspan="2" style="text-align:center;color:${MARCA.textoSuave};">Sin toques todavía</td></tr>`}
+                </table>
+              </div>
             </div>
-          </div>
           </div>
 
           <div class="seccion grid-2 analitica-reputacion">
