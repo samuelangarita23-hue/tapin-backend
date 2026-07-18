@@ -500,6 +500,74 @@ const ESTILO_BASE = `
   h1,h2,h3{font-family:'Playfair Display',Georgia,serif;}
 `;
 
+// Estilo compartido del layout tipo dashboard (sidebar + contenido) usado por
+// el panel del negocio (/mi-panel) y el panel de administrador (/stats).
+// Tratamiento deliberadamente "serio": tipografía de palo seco, fondo gris
+// neutro, tarjetas planas con poco radio -- look de software de gestion, no
+// de landing page.
+const ESTILO_DASHBOARD = `
+  html,body{height:100%;}
+  body{background:#F5F6F8;font-family:'Inter','DM Sans','Segoe UI',-apple-system,Arial,sans-serif;}
+  h1,h2,h3{font-family:'Inter','DM Sans','Segoe UI',-apple-system,Arial,sans-serif;letter-spacing:-.01em;}
+  .dashboard-layout{display:flex;min-height:100vh;align-items:stretch;}
+  .sidebar{width:236px;flex-shrink:0;background:${MARCA.verdeOscuro};
+           color:#fff;display:flex;flex-direction:column;padding:26px 18px;box-sizing:border-box;position:sticky;top:0;height:100vh;}
+  .sidebar-logo{padding:0 8px;margin-bottom:34px;}
+  .sidebar-nav{display:flex;flex-direction:column;gap:2px;flex:1;}
+  .sidebar-nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:8px;
+                 color:#C7D9CE;text-decoration:none;font-size:0.85rem;font-weight:500;transition:background .15s,color .15s;}
+  .sidebar-nav a:hover{background:rgba(255,255,255,0.07);color:#fff;}
+  .sidebar-nav a.activo{background:rgba(255,255,255,0.12);color:#fff;font-weight:600;}
+  .sidebar-nav a svg{flex-shrink:0;width:17px;height:17px;}
+  .sidebar-nav a.deshabilitado{opacity:0.4;pointer-events:none;}
+  .sidebar-pie{border-top:1px solid rgba(255,255,255,0.12);padding-top:14px;margin-top:14px;}
+  .sidebar-pie a{display:inline-flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;
+                 color:#C7D9CE;text-decoration:none;font-size:0.7rem;font-weight:600;}
+  .sidebar-pie a svg{flex-shrink:0;width:14px;height:14px;}
+  .sidebar-pie a:hover{background:rgba(255,255,255,0.07);color:#fff;}
+  .dashboard-main{flex:1;min-width:0;padding:34px 40px 60px;box-sizing:border-box;}
+  @media (max-width:900px){
+    .dashboard-layout{flex-direction:column;}
+    .sidebar{width:100%;height:auto;position:relative;flex-direction:row;align-items:center;
+             overflow-x:auto;padding:14px 16px;gap:8px;}
+    .sidebar-logo{margin-bottom:0;}
+    .sidebar-nav{flex-direction:row;flex:none;}
+    .sidebar-nav a{padding:8px 12px;white-space:nowrap;}
+    .sidebar-pie{border-top:none;margin-top:0;padding-top:0;}
+    .sidebar-pie a{padding:8px 12px;white-space:nowrap;}
+    .dashboard-main{padding:22px 16px 50px;}
+  }
+
+  .dash-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
+  .dash-header h1{font-family:'Inter','DM Sans','Segoe UI',-apple-system,Arial,sans-serif;font-size:1.55rem;font-weight:700;margin:0;color:${MARCA.texto};letter-spacing:-.02em;}
+  .dash-header-chip{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid ${MARCA.borde};
+                    border-radius:8px;padding:7px 14px;font-size:0.76rem;font-weight:600;color:${MARCA.verdeOscuro};
+                    box-shadow:0 1px 2px rgba(16,24,32,.04);}
+
+  .dash-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;}
+  @media (max-width:760px){.dash-cards{grid-template-columns:1fr;}}
+  .dash-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:18px 20px;
+             box-shadow:0 1px 2px rgba(16,24,32,.04);}
+  .dash-card-lbl{font-size:0.74rem;color:${MARCA.textoSuave};font-weight:600;margin-bottom:10px;}
+  .dash-card-num{font-size:1.85rem;font-weight:700;color:${MARCA.texto};line-height:1;}
+  .dash-card-sub{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:4px;}
+  .dash-card-delta{display:inline-flex;align-items:center;gap:3px;font-size:0.74rem;font-weight:700;margin-top:10px;}
+  .dash-card-delta.up{color:${MARCA.verde};}
+  .dash-card-delta.down{color:${MARCA.rojo};}
+  .dash-card-estrellas{color:${MARCA.oro};font-size:1rem;letter-spacing:2px;margin-top:6px;}
+
+  .dash-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media (max-width:900px){.dash-charts{grid-template-columns:1fr;}}
+  .dash-panel{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:18px 20px;
+              box-shadow:0 1px 2px rgba(16,24,32,.04);}
+  .dash-panel-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:16px;}
+  .dash-panel-titulo{font-size:0.9rem;font-weight:700;color:${MARCA.texto};}
+  .dash-panel-sub{font-size:0.72rem;color:${MARCA.textoSuave};margin-top:2px;}
+  .dash-panel-num{font-size:1.45rem;font-weight:700;color:${MARCA.texto};text-align:right;}
+  .dash-panel-numlbl{font-size:0.7rem;color:${MARCA.textoSuave};text-align:right;}
+  .dash-actividad-bars{display:flex;align-items:flex-end;gap:8px;height:110px;}
+`;
+
 // ---------- Configuración de negocios ----------
 // Agrega aquí un negocio por cada Tapin que tengas en la calle.
 // "slug" es lo que va en la URL del QR/NFC, ej: /r/mi-negocio
@@ -1209,15 +1277,11 @@ function barraSemana(dias7) {
   }
   return dias7
     .map((v, i) => {
-      const alturaPx = 10 + Math.round((v / max) * 82);
-      const esPico = v > 0 && v === Math.max(...dias7);
-      const colorBarra = esPico
-        ? `linear-gradient(180deg,#F7D77D,${MARCA.oro})`
-        : `linear-gradient(180deg,#2C9560,${MARCA.verde})`;
+      const alturaPx = 6 + Math.round((v / max) * 46);
       return `
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;height:100%;">
-          <div style="font-size:0.75rem;font-weight:800;color:${esPico ? "#8A6200" : MARCA.textoSuave};line-height:1;">${v}</div>
-          <div style="width:100%;max-width:34px;height:${alturaPx}px;background:${colorBarra};border-radius:6px 6px 2px 2px;box-shadow:inset 0 1px rgba(255,255,255,.28);"></div>
+          <div style="font-size:0.75rem;font-weight:700;color:${MARCA.textoSuave};line-height:1;">${v}</div>
+          <div style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
           <div style="font-size:0.62rem;color:#999;text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
         </div>`;
     })
@@ -1486,13 +1550,6 @@ app.get("/r/:slug", (req, res) => {
   }
 
   registrarToque(slug, req, negocio);
-
-  // El filtro de calificación es exclusivo del Plan Pro. En el plan Gratis
-  // registramos el toque para las estadísticas básicas y enviamos al cliente
-  // directamente al enlace de reseñas de Google.
-  if (!esPro(negocio)) {
-    return res.redirect(302, negocio.googleUrl);
-  }
 
   res.send(`
     <html>
@@ -2745,105 +2802,129 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          .content{max-width:880px;}
-          .seccion{margin-bottom:48px;}
-          .seccion-header{text-align:center;margin-bottom:24px;}
-          .seccion-header .eyebrow{justify-content:center;}
-          .seccion-header h2{font-size:1.15rem;font-weight:700;margin:0 0 4px;}
-          .seccion-header p{color:${MARCA.textoSuave};font-size:0.86rem;margin:0;}
+          ${ESTILO_DASHBOARD}
+          .content{max-width:none;padding:0;}
+          .seccion{margin-bottom:40px;}
+          .seccion-header{text-align:left;margin-bottom:20px;}
+          .seccion-header h2{font-size:1.1rem;font-weight:700;margin:0 0 4px;}
+          .seccion-header p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0;}
 
           /* Resumen global */
-          .resumen-grid{display:flex;gap:14px;flex-wrap:wrap;}
-          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px 16px;text-align:center;
-                       box-shadow:0 1px 2px rgba(11,61,44,0.04);flex:1;min-width:140px;}
-          .resumen-num{font-size:2rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
-          .resumen-lbl{font-size:0.74rem;color:${MARCA.textoSuave};margin-top:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
-          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px 24px;margin-top:16px;
-                      box-shadow:0 1px 2px rgba(11,61,44,0.04);}
-          .chart-card-titulo{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:18px;text-align:center;}
-          .sparkline-grande{height:120px;max-width:520px;margin:0 auto;}
+          .dash-cards-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;}
+          @media (max-width:900px){.dash-cards-4{grid-template-columns:repeat(2,1fr);}}
+          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:20px 22px;margin-top:14px;
+                      box-shadow:0 1px 2px rgba(16,24,32,.04);}
+          .chart-card-titulo{font-size:0.8rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:16px;text-align:center;}
+          .sparkline-grande{height:110px;max-width:520px;margin:0 auto;}
 
           /* Lista de negocios */
-          .lista-negocios{display:flex;flex-direction:column;gap:16px;}
-          .card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 1px 2px rgba(11,61,44,0.04), 0 8px 24px rgba(11,61,44,0.06);border:1px solid ${MARCA.borde};transition:box-shadow .2s;}
-          .card:hover{box-shadow:0 1px 2px rgba(11,61,44,0.05), 0 12px 32px rgba(11,61,44,0.10);}
+          .lista-negocios{display:flex;flex-direction:column;gap:14px;}
+          .card{background:#fff;border-radius:10px;padding:22px;box-shadow:0 1px 2px rgba(16,24,32,.04);border:1px solid ${MARCA.borde};transition:box-shadow .2s;}
+          .card:hover{box-shadow:0 1px 2px rgba(16,24,32,.04), 0 6px 16px rgba(16,24,32,.06);}
           .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
-          .card-nombre{font-weight:700;font-size:1.08rem;letter-spacing:-0.01em;}
-          .badge-pro{background:${MARCA.oro};color:#fff;font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:100px;letter-spacing:0.04em;vertical-align:middle;}
-          .badge-basico{background:${MARCA.borde};color:${MARCA.textoSuave};font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:100px;letter-spacing:0.04em;vertical-align:middle;}
-          .card-slug{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:2px;font-family:monospace;}
-          .card-total{text-align:right;font-size:1.7rem;font-weight:700;color:${MARCA.verde};line-height:1;}
+          .card-nombre{font-weight:700;font-size:1.02rem;letter-spacing:-0.01em;}
+          .badge-pro{background:${MARCA.oro};color:#fff;font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:4px;letter-spacing:0.04em;vertical-align:middle;}
+          .badge-basico{background:${MARCA.borde};color:${MARCA.textoSuave};font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:4px;letter-spacing:0.04em;vertical-align:middle;}
+          .card-slug{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:2px;font-family:'SFMono-Regular',Consolas,monospace;}
+          .card-total{text-align:right;font-size:1.5rem;font-weight:700;color:${MARCA.texto};line-height:1;}
           .card-total span{display:block;font-size:0.6rem;font-weight:600;color:${MARCA.textoSuave};margin-top:4px;letter-spacing:0.04em;text-transform:uppercase;}
-          .card-metrics{display:flex;gap:12px;margin-bottom:26px;max-width:340px;}
-          .metric{background:${MARCA.verdeClaro};border-radius:12px;padding:12px 14px;flex:1;text-align:center;}
-          .metric-num{font-size:1.3rem;font-weight:700;color:${MARCA.verdeOscuro};}
-          .metric-lbl{font-size:0.68rem;color:${MARCA.verde};margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
-          .sparkline{display:flex;align-items:flex-end;gap:5px;height:92px;margin-bottom:16px;max-width:300px;}
+          .card-metrics{display:flex;gap:12px;margin-bottom:22px;max-width:340px;}
+          .metric{background:${MARCA.verdeClaro};border-radius:8px;padding:12px 14px;flex:1;text-align:center;}
+          .metric-num{font-size:1.2rem;font-weight:700;color:${MARCA.verdeOscuro};}
+          .metric-lbl{font-size:0.66rem;color:${MARCA.verde};margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
+          .sparkline{display:flex;align-items:flex-end;gap:5px;height:84px;margin-bottom:16px;max-width:300px;}
           .sector-badge{font-size:0.74rem;font-weight:700;margin-bottom:14px;}
-          .reporte-badge{font-size:0.74rem;font-weight:700;margin-bottom:14px;padding:6px 10px;border-radius:8px;display:inline-block;}
+          .reporte-badge{font-size:0.74rem;font-weight:700;margin-bottom:14px;padding:6px 10px;border-radius:6px;display:inline-block;}
           .reporte-badge.ok{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};}
           .reporte-badge.fail{background:#FBEFE9;color:#993C1D;}
           .reporte-badge.pendiente{background:#F3F1EC;color:${MARCA.textoSuave};}
           .card-ultimo{font-size:0.82rem;color:${MARCA.textoSuave};margin-bottom:16px;padding-top:14px;border-top:1px solid ${MARCA.borde};}
           .card-ultimo b{color:${MARCA.texto};}
-          .card-actions{display:flex;flex-wrap:wrap;gap:8px;}
+          .card-actions{display:flex;flex-wrap:wrap;gap:6px;}
           .card-actions a{color:${MARCA.verdeOscuro};font-weight:600;text-decoration:none;font-size:0.74rem;
-                          white-space:nowrap;background:${MARCA.verdeClaro};padding:6px 12px;border-radius:100px;}
+                          white-space:nowrap;background:${MARCA.verdeClaro};padding:6px 11px;border-radius:6px;}
           .card-actions a:hover{background:${MARCA.verde};color:#fff;}
-          .card-actions a.btn-panel-negocio{background:${MARCA.verdeOscuro};color:#fff;border-color:${MARCA.verdeOscuro};font-weight:800;}
+          .card-actions a.btn-panel-negocio{background:${MARCA.verdeOscuro};color:#fff;border-color:${MARCA.verdeOscuro};font-weight:700;}
           .card-actions a.btn-panel-negocio:hover{background:${MARCA.verde};color:#fff;}
           .card-actions .sin-panel{font-size:0.74rem;color:${MARCA.textoSuave};padding:8px 10px;}
-          .seccion-pais{margin-bottom:36px;}
+          .seccion-pais{margin-bottom:32px;}
           .pais-header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;
-                       border-bottom:2px solid ${MARCA.verdeOscuro};padding-bottom:10px;margin-bottom:18px;}
-          .pais-titulo{font-size:1.15rem;font-weight:800;color:${MARCA.verdeOscuro};}
+                       border-bottom:1px solid ${MARCA.borde};padding-bottom:10px;margin-bottom:16px;}
+          .pais-titulo{font-size:1rem;font-weight:700;color:${MARCA.texto};}
           .pais-conteo{font-size:0.78rem;color:${MARCA.textoSuave};font-weight:600;}
-          .botones-paises{display:flex;flex-wrap:wrap;justify-content:center;margin-bottom:28px;}
-          .btn-pais{background:#fff;border:1px solid ${MARCA.borde};color:${MARCA.texto};font-weight:700;
-                    font-size:0.82rem;padding:9px 18px;border-radius:100px;text-decoration:none;
+          .botones-paises{display:flex;flex-wrap:wrap;margin-bottom:20px;}
+          .btn-pais{background:#fff;border:1px solid ${MARCA.borde};color:${MARCA.texto};font-weight:600;
+                    font-size:0.8rem;padding:8px 16px;border-radius:6px;text-decoration:none;
                     margin:0 8px 8px 0;display:inline-block;}
           .btn-pais:hover{border-color:${MARCA.verdeOscuro};background:${MARCA.verdeClaro};}
-          .topbar-nav{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:flex-end;}
-          .topbar-nav a{color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;white-space:nowrap;}
-          .topbar-nav a:hover{color:#fff;text-decoration:underline;}
           @media (max-width:640px){
-            .topbar{flex-direction:column;align-items:flex-start;gap:10px;padding:16px 20px;}
-            .topbar-nav{justify-content:flex-start;width:100%;}
-            .content{padding:20px 16px 50px;}
             .card{padding:18px;}
             .card-top{flex-wrap:wrap;gap:10px;}
           }
         </style>
       </head>
       <body>
-        <div class="topbar">
-          <div style="display:flex;align-items:center;gap:0;">${logoSvg("#FFFFFF", 30)}</div>
-          <div class="topbar-nav">
-            <a href="/descubre" target="_blank">Mapa público</a>
-            <a href="/editar?key=${key}">Editar negocios</a>
-            <a href="/codigos?key=${key}">+ Generar tarjetas</a>
-            <a href="/auditoria?key=${key}">Auditoría</a>
-            <a href="/respaldo?key=${key}">Respaldo</a>
+        <div class="dashboard-layout">
+          <aside class="sidebar">
+            <div class="sidebar-logo">${logoSvg("#FFFFFF", 26)}</div>
+            <nav class="sidebar-nav">
+              <a href="/stats?key=${key}" class="activo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+                Resumen
+              </a>
+              <a href="/descubre" target="_blank">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20a15.3 15.3 0 010-20z"/></svg>
+                Mapa público
+              </a>
+              <a href="/editar?key=${key}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4z"/></svg>
+                Editar negocios
+              </a>
+              <a href="/codigos?key=${key}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>
+                Generar tarjetas
+              </a>
+              <a href="/auditoria?key=${key}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg>
+                Auditoría
+              </a>
+              <a href="/respaldo?key=${key}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Respaldo
+              </a>
+            </nav>
+            <div class="sidebar-pie">
+              <a href="/">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Cerrar sesión
+              </a>
+            </div>
+          </aside>
+          <main class="dashboard-main">
+        <div class="content" style="padding:0;max-width:none;">
+
+          <div class="dash-header">
+            <div>
+              <div class="eyebrow" style="margin-bottom:2px;">Administrador</div>
+              <h1>Resumen general</h1>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <span class="dash-header-chip">${totalNegocios} ${totalNegocios === 1 ? "tarjeta activa" : "tarjetas activas"}</span>
+              <span class="dash-header-chip" style="font-weight:500;color:${MARCA.textoSuave};">Actualizado al ${new Date().toLocaleDateString("es-CO")}</span>
+            </div>
           </div>
-        </div>
-        <div class="content">
 
           <div class="seccion">
-            <div class="seccion-header">
-              <div class="eyebrow">Resumen general</div>
-              <h2>Todas tus tarjetas Tapin</h2>
-              <p>Suma de actividad de todos los negocios activos.</p>
-            </div>
-            <div class="resumen-grid">
-              <div class="resumen-box"><div class="resumen-num">${totalNegocios}</div><div class="resumen-lbl">Tarjetas activas</div></div>
-              <div class="resumen-box"><div class="resumen-num">${totalToquesGlobal}</div><div class="resumen-lbl">Toques totales</div></div>
-              <div class="resumen-box"><div class="resumen-num">${totalHoyGlobal}</div><div class="resumen-lbl">Toques hoy</div></div>
-              <div class="resumen-box"><div class="resumen-num">${totalSemanaGlobal}</div><div class="resumen-lbl">Últimos 7 días</div></div>
+            <div class="dash-cards-4">
+              <div class="dash-card"><div class="dash-card-lbl">Tarjetas activas</div><div class="dash-card-num">${totalNegocios}</div></div>
+              <div class="dash-card"><div class="dash-card-lbl">Toques totales</div><div class="dash-card-num">${totalToquesGlobal}</div></div>
+              <div class="dash-card"><div class="dash-card-lbl">Toques hoy</div><div class="dash-card-num">${totalHoyGlobal}</div></div>
+              <div class="dash-card"><div class="dash-card-lbl">Últimos 7 días</div><div class="dash-card-num">${totalSemanaGlobal}</div></div>
             </div>
 
-            <div class="chart-card" style="margin-top:10px;text-align:center;">
+            <div class="chart-card" style="margin-top:0;text-align:center;">
               <div class="chart-card-titulo">Promedio de estrellas recibidas</div>
-              <div style="font-size:1.5rem;font-weight:800;color:${MARCA.oro};">${promedioEstrellas !== null ? promedioEstrellas + " / 5 ★" : "Sin calificaciones filtradas"}</div>
+              <div style="font-size:1.4rem;font-weight:700;color:${MARCA.oro};">${promedioEstrellas !== null ? promedioEstrellas + " / 5 ★" : "Sin calificaciones filtradas"}</div>
               <div class="suave" style="font-size:0.72rem;margin-top:4px;">Incluye calificaciones positivas y negativas que pasaron el filtro de Tapin${estrellasGlobales.length ? " · " + estrellasGlobales.length + " evaluaciones" : ""}. Las negativas se guardan privadas y no se publican en Google.</div>
             </div>
             <div class="chart-card">
@@ -2862,6 +2943,8 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
             ${seccionesPaises}
           </div>
 
+        </div>
+          </main>
         </div>
       </body>
     </html>
@@ -3316,9 +3399,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
     .map((texto) => `<div class="reco">${texto}</div>`)
     .join("");
 
-  // El plan Gratis puede ver esta comparación como vista previa, pero sus
-  // controles permanecen desactivados hasta mejorar a Pro.
-  const promSector = promedioSector(negocio.categoria, slug, datos);
+  const promSector = esPro(negocio) ? promedioSector(negocio.categoria, slug, datos) : null;
 
   // Ideas 5-9: solo tienen sentido para negocios Pro (van en esa sección del panel).
   const diaFlojo = esPro(negocio) ? diaMasFlojo(eventos, negocio) : null;
@@ -3356,16 +3437,33 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          .content{max-width:660px;}
+          .content{max-width:1120px;width:100%;}
           .seccion{margin-bottom:26px;}
           .seccion-header{text-align:center;margin-bottom:14px;}
           .seccion-header .eyebrow{justify-content:center;}
           .seccion-header h2{font-size:1.1rem;font-weight:700;margin:0 0 4px;}
           .seccion-header p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0;}
 
-          .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;align-items:stretch;}
-          .grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;align-items:stretch;}
+          .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch;}
+          @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
+          .panel-analitica-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(220px,.72fr);gap:16px;align-items:stretch;margin-top:6px;}
+          .panel-analitica-grid>.analitica-principal{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;grid-column:1 / span 2;grid-row:1;margin:0;}
+          .panel-analitica-grid>.analitica-principal>div:first-child,.panel-analitica-grid>.analitica-principal>div:nth-child(2){grid-column:auto;grid-row:auto;min-width:0;}
+          .panel-analitica-grid>.analitica-reputacion{display:flex!important;flex-direction:column;gap:14px;grid-column:3;grid-row:1;margin:0;min-width:0;}
+          .panel-analitica-grid>.analitica-reputacion>div{min-width:0;display:flex;flex-direction:column;}
+          .panel-analitica-grid>.analitica-reputacion .card-titulo{font-size:.78rem;line-height:1.25;min-height:24px;white-space:normal;}
+          .panel-analitica-grid>.analitica-reputacion .chart-card{height:calc(100% - 28px);font-size:.76rem;line-height:1.45;}
+          .panel-analitica-grid>.analitica-reputacion .sentimiento-leyenda{font-size:.74rem;line-height:1.35;}
+          .panel-analitica-grid>.analitica-reputacion .horas-nota{font-size:.72rem;line-height:1.4;}
+          .panel-analitica-grid>.seccion-actividad{grid-column:1;grid-row:2;margin:0;min-width:0;}
+          .panel-analitica-grid>.seccion-actividad .chart-card{height:100%;}
+          .seccion-datos .grid-3{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}.seccion-datos .grid-3 .reco{margin-bottom:0;min-height:64px;display:flex;align-items:center;line-height:1.4;}
+          @media (max-width:900px){.panel-analitica-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.panel-analitica-grid>.analitica-principal{grid-column:1 / span 2;grid-row:auto;}.panel-analitica-grid>.analitica-reputacion{grid-column:1 / span 2;grid-row:auto;flex-direction:row!important;}.panel-analitica-grid>.seccion-actividad{grid-column:1 / span 2;grid-row:auto;}}
+          @media (max-width:560px){.panel-analitica-grid{grid-template-columns:1fr;}.panel-analitica-grid>.analitica-principal{grid-column:auto;grid-template-columns:1fr;}.panel-analitica-grid>.analitica-reputacion{grid-column:auto;flex-direction:column!important;}.panel-analitica-grid>.seccion-actividad{grid-column:auto;}.seccion-datos .grid-3{grid-template-columns:1fr;}}
+          .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:stretch;}
           .grid-3 .reco{margin-bottom:0;height:100%;box-sizing:border-box;}
+          @media (max-width:900px){.grid-3{grid-template-columns:1fr 1fr;}}
+          @media (max-width:560px){.grid-3{grid-template-columns:1fr;}}
           @media (max-width:480px){
             .fila-herramientas{flex-direction:column;}
             .btn-herramienta{min-width:0;}
@@ -3397,7 +3495,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .reco{background:${MARCA.verdeClaro};border-left:3px solid ${MARCA.verde};border-radius:8px;padding:12px 14px;
                 font-size:0.83rem;margin-bottom:8px;color:${MARCA.verdeOscuro};}
 
-          .horas-chart{display:flex;align-items:flex-end;justify-content:center;gap:2px;height:60px;}
+          .horas-chart{display:flex;align-items:flex-end;gap:2px;height:60px;}
           .horas-labels{display:flex;justify-content:space-between;font-size:0.6rem;color:${MARCA.textoSuave};margin-top:6px;}
           .horas-nota{text-align:center;font-size:0.76rem;color:${MARCA.textoSuave};margin-top:10px;}
           .horas-nota b{color:${MARCA.texto};}
@@ -3428,188 +3526,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .btn-reporte-pdf span{font-size:0.76rem;color:#CFE3D6;display:block;margin-top:2px;}
           .btn-reporte-pdf .flecha{font-size:1.3rem;flex-shrink:0;}
 
-          /* ---------- Layout tipo dashboard (sidebar + contenido) ---------- */
-          html,body{height:100%;}
-          body{background:${MARCA.crema};}
-          .dashboard-layout{display:flex;min-height:100vh;align-items:stretch;}
-          .sidebar{width:236px;flex-shrink:0;background:linear-gradient(180deg,${MARCA.verdeOscuro} 0%,#082c1c 100%);
-                   color:#fff;display:flex;flex-direction:column;padding:26px 18px;box-sizing:border-box;position:sticky;top:0;height:100vh;}
-          .sidebar-logo{padding:0 8px;margin-bottom:34px;}
-          .sidebar-nav{display:flex;flex-direction:column;gap:3px;flex:1;}
-          .sidebar-nav a{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;
-                         color:#CFE3D8;text-decoration:none;font-size:0.86rem;font-weight:600;transition:background .15s,color .15s;}
-          .sidebar-nav a:hover{background:rgba(255,255,255,0.08);color:#fff;}
-          .sidebar-nav a.activo{background:#fff;color:${MARCA.verdeOscuro};}
-          .sidebar-nav a svg{flex-shrink:0;width:17px;height:17px;}
-          .sidebar-nav a.deshabilitado{opacity:0.45;pointer-events:none;}
-          .sidebar-pie{border-top:1px solid rgba(255,255,255,0.14);padding-top:10px;margin-top:10px;}
-          .sidebar-pie a{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;
-                         color:#9FBBAE;text-decoration:none;font-size:0.74rem;font-weight:600;opacity:0.85;}
-          .sidebar-pie a svg{flex-shrink:0;width:13px;height:13px;}
-          .sidebar-pie a:hover{background:rgba(255,255,255,0.08);color:#fff;opacity:1;}
-          .dashboard-main{flex:1;min-width:0;padding:34px 40px 60px;box-sizing:border-box;}
-          @media (max-width:900px){
-            .dashboard-layout{flex-direction:column;}
-            .sidebar{width:100%;height:auto;position:relative;flex-direction:row;align-items:center;
-                     overflow-x:auto;padding:14px 16px;gap:8px;}
-            .sidebar-logo{margin-bottom:0;}
-            .sidebar-nav{flex-direction:row;flex:none;}
-            .sidebar-nav a{padding:8px 12px;white-space:nowrap;}
-            .sidebar-pie{border-top:none;margin-top:0;padding-top:0;}
-            .sidebar-pie a{padding:6px 10px;white-space:nowrap;}
-            .dashboard-main{padding:22px 16px 50px;}
-          }
-
-          .dash-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
-          .dash-header h1{font-family:'Playfair Display',Georgia,serif;font-size:1.7rem;margin:0;color:${MARCA.texto};letter-spacing:-.02em;}
-          .dash-header-chip{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid ${MARCA.borde};
-                            border-radius:100px;padding:8px 16px;font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};
-                            box-shadow:0 1px 2px rgba(11,61,44,0.04);}
-
-          .dash-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px;}
-          @media (max-width:760px){.dash-cards{grid-template-columns:1fr;}}
-          .dash-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:20px 22px;
-                     box-shadow:0 1px 2px rgba(11,61,44,0.04);}
-          .dash-card-lbl{font-size:0.74rem;color:${MARCA.textoSuave};font-weight:600;margin-bottom:10px;}
-          .dash-card-num{font-size:1.9rem;font-weight:800;color:${MARCA.texto};line-height:1;}
-          .dash-card-sub{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:4px;}
-          .dash-card-delta{display:inline-flex;align-items:center;gap:3px;font-size:0.74rem;font-weight:700;margin-top:10px;}
-          .dash-card-delta.up{color:${MARCA.verde};}
-          .dash-card-delta.down{color:${MARCA.rojo};}
-          .dash-card-estrellas{color:${MARCA.oro};font-size:1rem;letter-spacing:2px;margin-top:6px;}
-
-          .dash-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-          @media (max-width:900px){.dash-charts{grid-template-columns:1fr;}}
-          .dash-panel{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:20px 22px;
-                      box-shadow:0 1px 2px rgba(11,61,44,0.04);}
-          .dash-panel-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:16px;}
-          .dash-panel-titulo{font-size:0.92rem;font-weight:700;color:${MARCA.texto};}
-          .dash-panel-sub{font-size:0.72rem;color:${MARCA.textoSuave};margin-top:2px;}
-          .dash-panel-num{font-size:1.5rem;font-weight:800;color:${MARCA.texto};text-align:right;}
-          .dash-panel-numlbl{font-size:0.7rem;color:${MARCA.textoSuave};text-align:right;}
-          .dash-actividad-bars{display:flex;align-items:flex-end;gap:10px;height:150px;}
-          .actividad-visual{padding:14px 14px 10px;border:1px solid ${MARCA.borde};border-radius:13px;
-                            background:repeating-linear-gradient(to bottom,#FBFCF9 0,#FBFCF9 36px,rgba(15,81,50,.07) 37px);}
-          .actividad-visual .dash-actividad-bars{border-bottom:1px solid ${MARCA.borde};}
-          .actividad-resumen{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:12px;}
-          .actividad-metrica{padding:9px 7px;border-radius:10px;background:${MARCA.crema};text-align:center;}
-          .actividad-metrica b{display:block;font-size:.84rem;color:${MARCA.texto};}
-          .actividad-metrica span{font-size:.59rem;color:${MARCA.textoSuave};text-transform:uppercase;letter-spacing:.02em;}
-          .actividad-leyenda{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:9px;
-                             color:${MARCA.textoSuave};font-size:.64rem;}
-          .actividad-leyenda i{width:8px;height:8px;border-radius:2px;background:${MARCA.oro};}
-          .proyeccion-panel{position:relative;overflow:hidden;}
-          .proyeccion-grafica{padding:14px 14px 8px;border:1px solid ${MARCA.borde};border-radius:13px;
-                              background:linear-gradient(180deg,#FBFCF9 0%,#F4F8F3 100%);}
-          .proyeccion-grafica svg{height:112px!important;filter:drop-shadow(0 4px 7px rgba(15,81,50,.10));}
-          .proyeccion-eje{display:flex;justify-content:space-between;margin-top:6px;font-size:.61rem;color:${MARCA.textoSuave};}
-          .proyeccion-periodos{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;}
-          .proyeccion-periodo{text-decoration:none;font-size:.68rem;font-weight:700;padding:7px 10px;border-radius:999px;
-                              border:1px solid ${MARCA.borde};background:#fff;color:${MARCA.verdeOscuro};}
-          .proyeccion-periodo.activo{border-color:${MARCA.verde};background:${MARCA.verdeClaro};box-shadow:inset 0 0 0 1px ${MARCA.verde};}
-          .proyeccion-metricas{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:12px;}
-          .proyeccion-metrica{padding:9px 7px;border-radius:10px;background:${MARCA.crema};text-align:center;}
-          .proyeccion-metrica b{display:block;color:${MARCA.texto};font-size:.82rem;}
-          .proyeccion-metrica span{font-size:.6rem;color:${MARCA.textoSuave};text-transform:uppercase;letter-spacing:.02em;}
-
-          /* Estructura del panel Pro basada en el boceto del negocio. */
-          .panel-boceto{display:flex;flex-direction:column;gap:26px;margin-top:26px;}
-          .boceto-fila-superior{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;}
-          .boceto-fila-media{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.95fr);gap:16px;align-items:stretch;}
-          .boceto-botones,.boceto-contenidos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start;}
-          .boceto-contenidos{margin-top:-14px;}
-          .boceto-bloque{min-width:0;display:flex;flex-direction:column;}
-          .boceto-bloque .chart-card{margin-top:0;flex:1;}
-          .boceto-fila-superior .chart-card{min-height:340px;display:flex;flex-direction:column;justify-content:center;}
-          .boceto-calendario{display:grid;grid-template-columns:repeat(7,minmax(34px,1fr));gap:7px;width:100%;max-width:390px;margin:0 auto;}
-          .boceto-calendario .cal-dia{font-size:.76rem!important;border-radius:8px!important;}
-          .boceto-boton{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;
-                        background:${MARCA.verdeOscuro};color:#fff;text-decoration:none;font-size:.84rem;font-weight:800;
-                        border-radius:12px;box-shadow:0 1px 2px rgba(11,61,44,.08);}
-          .boceto-boton span{font-size:1rem;}
-          .boceto-contenido{min-width:0;padding:4px 2px 0;}
-          .boceto-contenido-titulo{font-size:.92rem;font-weight:800;color:${MARCA.texto};margin:0 0 12px;padding-left:10px;border-left:3px solid ${MARCA.verde};}
-          .boceto-contenido .reco:last-child{margin-bottom:0;}
-          .boceto-alerta{font-size:.78rem;color:${MARCA.textoSuave};line-height:1.5;margin:0 0 10px;}
-          .grafica-vertical-marco{padding:16px 16px 10px;border:1px solid ${MARCA.borde};border-radius:13px;
-                                  background:repeating-linear-gradient(to bottom,#FBFCF9 0,#FBFCF9 52px,rgba(15,81,50,.07) 53px);}
-          .grafica-vertical{height:220px;display:flex;align-items:flex-end;justify-content:center;gap:42px;padding:0;
-                            border-bottom:1px solid ${MARCA.borde};}
-          .barra-vertical-grupo{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:64px;}
-          .barra-vertical-valor{font-size:.82rem;font-weight:900;margin-bottom:7px;}
-          .barra-vertical{width:58px;min-height:24px;border-radius:9px 9px 2px 2px;box-shadow:inset 0 1px rgba(255,255,255,.3);}
-          .barra-vertical-etiqueta{font-size:.7rem;color:${MARCA.textoSuave};text-align:center;margin-top:8px;line-height:1.25;}
-          .grafica-resumen{display:flex;justify-content:center;gap:7px;flex-wrap:wrap;margin-top:11px;}
-          .grafica-resumen span{padding:6px 9px;border-radius:999px;background:${MARCA.crema};color:${MARCA.textoSuave};font-size:.66rem;font-weight:700;}
-          .grafica-resumen span b{color:${MARCA.texto};}
-          .horas-visual{width:92%;max-width:760px;margin:0 auto;padding:15px 18px 12px;box-sizing:border-box;
-                        border:1px solid ${MARCA.borde};border-radius:13px;background:linear-gradient(180deg,#FBFCF9 0%,#F5F8F3 100%);}
-          .horas-visual-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;
-                            font-size:.7rem;font-weight:700;color:${MARCA.textoSuave};}
-          .hora-pico-badge{padding:5px 9px;border-radius:999px;background:#FBF1D8;color:#7A5A00;font-weight:800;}
-          .boceto-fila-media .horas-chart{position:relative;width:100%;max-width:none;height:118px;margin:0;gap:4px;
-                                         border-bottom:1px solid ${MARCA.borde};
-                                         background:repeating-linear-gradient(to bottom,transparent 0,transparent 28px,rgba(15,81,50,.08) 29px);}
-          .boceto-fila-media .horas-chart>div{min-width:3px;border-radius:3px 3px 0 0!important;}
-          .boceto-fila-media .horas-labels{width:100%;max-width:none;margin:8px 0 0;font-size:.64rem;}
-          .tarjeta-bloqueada{position:relative;overflow:hidden;min-height:170px;border-color:#B8BDBA!important;background:#F4F5F3!important;}
-          .tarjeta-bloqueada>*{filter:none;opacity:1;pointer-events:none;user-select:none;}
-          .tarjeta-bloqueada .barra-vertical{background:linear-gradient(180deg,#B9BEBA,#747C77)!important;}
-          .tarjeta-bloqueada .barra-vertical-valor{color:#5F6762!important;}
-          .tarjeta-bloqueada .horas-chart>div{background:#858D88!important;}
-          .tarjeta-bloqueada .hora-pico-badge{background:#D9DCDA!important;color:#5F6762!important;}
-          .tarjeta-bloqueada .cal-dia.cal-vacio{background:#E0E2E0!important;color:#7A817D!important;}
-          .tarjeta-bloqueada .cal-dia.cal-nivel-1{background:#C8CCC9!important;color:#505753!important;}
-          .tarjeta-bloqueada .cal-dia.cal-nivel-2{background:#A9AFAB!important;color:#303632!important;}
-          .tarjeta-bloqueada .cal-dia.cal-nivel-3{background:#858D88!important;color:#fff!important;}
-          .tarjeta-bloqueada .cal-dia.cal-nivel-4{background:#626A65!important;color:#fff!important;}
-          .tarjeta-bloqueada svg path{stroke:#727A75!important;}
-          .tarjeta-bloqueada svg path[fill]:not([fill="none"]){fill:#AEB3B0!important;}
-          .tarjeta-bloqueada::after{content:"Vista previa · PRO";position:absolute;right:12px;top:12px;
-                                    z-index:2;width:max-content;max-width:80%;padding:6px 9px;border-radius:999px;
-                                    background:#737B76;color:#fff;font-size:.6rem;font-weight:900;
-                                    letter-spacing:.03em;box-shadow:0 5px 14px rgba(44,50,46,.14);}
-          .boton-mejorar{display:inline-block;margin-top:8px;padding:10px 14px;border-radius:10px;background:${MARCA.verde};
-                         color:#fff!important;text-decoration:none;font-size:.78rem;font-weight:800;}
-          .panel-gratis .boceto-contenidos{align-items:stretch;}
-          .panel-gratis .boceto-contenido{display:flex;flex-direction:column;height:100%;box-sizing:border-box;background:#fff;
-                                         border:1px solid ${MARCA.borde};border-radius:14px;padding:18px;
-                                         box-shadow:0 1px 2px rgba(11,61,44,.04);}
-          .panel-gratis .boceto-contenido-titulo{margin-bottom:14px;}
-          .panel-gratis .boceto-contenido .reco{line-height:1.5;}
-          .panel-gratis .boton-mejorar{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
-                                      box-sizing:border-box;margin-top:auto;padding:14px 16px;border-radius:12px;
-                                      background:linear-gradient(135deg,${MARCA.oro},#F7D77D);color:${MARCA.verdeOscuro}!important;
-                                      font-size:.84rem;box-shadow:0 8px 18px rgba(232,173,50,.24);transition:transform .15s,box-shadow .15s;}
-          .panel-gratis .boton-mejorar:hover{transform:translateY(-2px);box-shadow:0 11px 22px rgba(232,173,50,.34);}
-          .panel-gratis .boton-mejorar b{font-size:1.05rem;}
-          .panel-gratis .boceto-boton{position:relative;padding-right:42px;}
-          .panel-gratis .boceto-boton::after{content:"PRO";position:absolute;right:13px;top:50%;transform:translateY(-50%);
-                                             padding:3px 6px;border-radius:999px;background:#737B76;color:#fff;
-                                             font-size:.56rem;font-weight:900;letter-spacing:.04em;}
-          .panel-gratis .boceto-boton>span{display:none;}
-          .panel-gratis .boceto-boton{background:#E7E9E6;color:#626A65;border:1px solid #BFC4C1;box-shadow:none;}
-          .panel-gratis .boceto-contenido:nth-child(2) .reco{background:#EFF0EE;border-left-color:#969D99;color:#5F6762;}
-          .preview-pro-aviso{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 15px;
-                             border:1px solid #E8C66F;border-radius:13px;background:#FFF9E9;color:#6B520F;
-                             font-size:.76rem;line-height:1.45;}
-          .preview-pro-aviso a{flex-shrink:0;padding:8px 11px;border-radius:9px;background:${MARCA.verdeOscuro};
-                               color:#fff;text-decoration:none;font-weight:800;}
-          .pro-original{display:none!important;}
-          @media (max-width:1100px){
-            .boceto-fila-superior{grid-template-columns:repeat(2,minmax(0,1fr));}
-            .boceto-fila-superior .boceto-bloque:last-child{grid-column:1/-1;}
-            .boceto-botones,.boceto-contenidos{grid-template-columns:1fr 1fr;}
-          }
-          @media (max-width:760px){
-            .boceto-fila-superior,.boceto-fila-media,.boceto-botones,.boceto-contenidos{grid-template-columns:1fr;}
-            .boceto-contenidos{margin-top:0;}
-            .boceto-fila-superior .boceto-bloque:last-child{grid-column:auto;}
-            .boceto-fila-superior .chart-card{min-height:300px;}
-            .boceto-calendario{grid-template-columns:repeat(7,minmax(30px,1fr));gap:6px;max-width:360px;}
-            .grafica-vertical{height:230px;}
-            .preview-pro-aviso{align-items:flex-start;flex-direction:column;}
-          }
+          ${ESTILO_DASHBOARD}
         </style>
       </head>
       <body>
@@ -3629,6 +3546,10 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3.5a2 2 0 010-4h.09A1.65 1.65 0 005 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09c0 .68.39 1.29 1 1.51.63.28 1.36.15 1.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06c-.48.46-.61 1.19-.33 1.82.22.61.83 1 1.51 1H21a2 2 0 010 4h-.09c-.68 0-1.29.39-1.51 1z"/></svg>
                 Opciones
+              </a>
+              <a href="${esPro(negocio) ? `/mi-panel/${slug}/fidelizacion?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.24L3 3v6.59a2 2 0 00.59 1.41l9.58 9.58a2 2 0 002.83 0l6.59-6.59a2 2 0 000-2.83z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+                Promociones
               </a>
               <a href="${esPro(negocio) ? `/suscripcion/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
@@ -3658,7 +3579,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               ${negocio.pausado ? `<span class="dash-header-chip" style="background:#FBEFE9;color:#993C1D;border-color:#F0D5C8;">Pausado</span>` : ""}
               ${soloLectura ? `<span class="dash-header-chip">Solo lectura</span>` : ""}
-              <span class="dash-header-chip" style="${esPro(negocio) ? "" : `color:${MARCA.textoSuave};`}">${esPro(negocio) ? "Plan Pro" : "Plan Gratis"}</span>
+              <span class="dash-header-chip" style="${esPro(negocio) ? "" : `color:${MARCA.textoSuave};`}">${esPro(negocio) ? "Plan Pro" : "Plan Básico"}</span>
               <span class="dash-header-chip" style="font-weight:500;color:${MARCA.textoSuave};">Actualizado al ${new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) })}</span>
             </div>
           </div>
@@ -3733,23 +3654,15 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                   <div class="dash-panel-numlbl">interacciones</div>
                 </div>
               </div>
-              <div class="actividad-visual">
-                <div class="dash-actividad-bars">${barraSemana(r.dias7)}</div>
-                <div class="actividad-leyenda"><i></i><span>La barra dorada indica tu día con más actividad</span></div>
-              </div>
-              <div class="actividad-resumen">
-                <div class="actividad-metrica"><b>${r.semana}</b><span>Total semanal</span></div>
-                <div class="actividad-metrica"><b>${Math.round((r.semana / 7) * 10) / 10}</b><span>Promedio diario</span></div>
-                <div class="actividad-metrica"><b>${Math.max(0, ...r.dias7)}</b><span>Mejor día</span></div>
-              </div>
+              <div class="dash-actividad-bars sparkline">${barraSemana(r.dias7)}</div>
               <div class="ultimo-toque" style="margin-top:12px;">Total histórico: <b>${r.total}</b> · Último toque: <b>${ultimoTexto}</b></div>
             </div>
 
-            <div class="dash-panel proyeccion-panel ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
+            <div class="dash-panel">
               <div class="dash-panel-top">
                 <div>
                   <div class="dash-panel-titulo">Proyección</div>
-                  <div class="dash-panel-sub">Estimación para ${proyeccion.etiqueta}</div>
+                  <div class="dash-panel-sub">Proyectas ${proyeccion.etiqueta}</div>
                 </div>
                 <div>
                   <div class="dash-panel-num">${proyeccion.suficiente ? proyeccion.proyectado : "—"}</div>
@@ -3758,23 +3671,20 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                     : `<div class="dash-panel-numlbl">interacciones</div>`}
                 </div>
               </div>
-              <div class="proyeccion-grafica">
-                ${calendario.dias.some((v) => v > 0)
-                  ? graficaLinea(calendario.dias, { alto: 112, color: MARCA.verde })
-                  : `<div style="text-align:center;color:${MARCA.textoSuave};font-size:0.8rem;padding:35px 0;">Todavía no hay suficientes datos este mes.</div>`}
-                <div class="proyeccion-eje"><span>Inicio del mes</span><span>Hoy</span><span>Fin del mes</span></div>
-              </div>
-              <div class="proyeccion-periodos">
-                ${[["dia","1 día"],["semana","1 semana"],["mes","1 mes"],["semestre","6 meses"],["anio","1 año"]].map(([valor, texto]) => `<a class="proyeccion-periodo ${periodoProyeccion === valor ? "activo" : ""}" href="/mi-panel/${slug}?key=${encodeURIComponent(req.query.key)}&proyeccion=${valor}#actividad">${texto}</a>`).join("")}
+              ${calendario.dias.some((v) => v > 0)
+                ? graficaLinea(calendario.dias, { alto: 90, color: MARCA.verde })
+                : `<div style="text-align:center;color:${MARCA.textoSuave};font-size:0.8rem;padding:20px 0;">Todavía no hay suficientes datos este mes.</div>`}
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;">
+                ${[["dia","1 día"],["semana","1 semana"],["mes","1 mes"],["semestre","6 meses"],["anio","1 año"]].map(([valor, texto]) => `<a href="/mi-panel/${slug}?key=${encodeURIComponent(req.query.key)}&proyeccion=${valor}#actividad" style="text-decoration:none;font-size:0.68rem;font-weight:700;padding:6px 10px;border-radius:999px;border:1px solid ${periodoProyeccion === valor ? MARCA.verde : MARCA.borde};background:${periodoProyeccion === valor ? MARCA.verdeClaro : "#fff"};color:${MARCA.verdeOscuro};">${texto}</a>`).join("")}
               </div>
               ${proyeccion.suficiente
-                ? `<div class="proyeccion-metricas"><div class="proyeccion-metrica"><b>${proyeccion.minimo}–${proyeccion.maximo}</b><span>Rango</span></div><div class="proyeccion-metrica"><b>${proyeccion.promedio}/día</b><span>Promedio</span></div><div class="proyeccion-metrica"><b>${proyeccion.restantes}</b><span>Días restantes</span></div></div>`
-                : `<div class="ultimo-toque" style="margin-top:12px;">Estamos reuniendo datos — necesitas al menos 3 días y 3 toques para calcular la estimación.</div>`}
+                ? `<div class="ultimo-toque" style="margin-top:12px;">Rango orientativo: <b>${proyeccion.minimo}–${proyeccion.maximo}</b> toques · promedio actual <b>${proyeccion.promedio}/día</b> · ${proyeccion.restantes} días restantes</div>`
+                : `<div class="ultimo-toque" style="margin-top:12px;">Estamos reuniendo datos — cuando haya al menos 3 días y 3 toques registrados este período, aquí verás la estimación.</div>`}
             </div>
           </div>
 
+          ${meta && comparativoMes.disponible ? `
           <div class="seccion grid-2">
-            ${meta ? `
             <div>
               <div class="card-titulo">Meta del mes</div>
               <div class="chart-card" style="margin-top:0;">
@@ -3786,66 +3696,82 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 </div>
               </div>
             </div>
-            ` : ""}
-            ${comparativoMes.disponible ? `
             <div>
               <div class="card-titulo">Este mes vs. el anterior</div>
-              <div class="chart-card" style="margin-top:0;display:flex;gap:10px;align-items:center;">
+              <div class="chart-card" style="margin-top:0;display:flex;gap:14px;align-items:center;">
                 <div style="text-align:center;flex:1;">
-                  <div style="font-size:1.2rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
-                  <div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
+                  <div style="font-size:1.3rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
+                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
                 </div>
                 <div style="text-align:center;flex:1;">
-                  <div style="font-size:1.2rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
-                  <div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
+                  <div style="font-size:1.3rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
+                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
                 </div>
                 <div style="text-align:center;flex:1;">
-                  <div style="font-size:1rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
+                  <div style="font-size:1.05rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
                     ${comparativoMes.cambioPct >= 0 ? "+" : ""}${comparativoMes.cambioPct}%
                   </div>
-                  <div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
+                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
                 </div>
               </div>
-              ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:8px;font-size:0.72rem;">Vs. año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
+              ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:8px;">Vs. el mismo mes del año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
             </div>
-            ` : ""}
           </div>
+          ` : meta ? `
+          <div class="seccion">
+            <div class="card-titulo">Meta del mes</div>
+            <div class="chart-card" style="margin-top:0;">
+              <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:6px;">
+                <span>${meta.toquesMes} de ${meta.metaMensual} toques</span><b>${meta.pct}%</b>
+              </div>
+              <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                <div style="height:100%;border-radius:100px;background:${meta.pct >= 100 ? MARCA.oro : MARCA.verde};width:${meta.pct}%;"></div>
+              </div>
+            </div>
+          </div>
+          ` : comparativoMes.disponible ? `
+          <div class="seccion">
+            <div class="card-titulo">Este mes vs. el anterior</div>
+            <div class="chart-card" style="margin-top:0;display:flex;gap:20px;align-items:center;">
+              <div style="text-align:center;flex:1;">
+                <div style="font-size:1.4rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
+                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
+              </div>
+              <div style="text-align:center;flex:1;">
+                <div style="font-size:1.4rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
+                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
+              </div>
+              <div style="text-align:center;flex:1;">
+                <div style="font-size:1.1rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
+                  ${comparativoMes.cambioPct >= 0 ? "+" : ""}${comparativoMes.cambioPct}%
+                </div>
+                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
+              </div>
+            </div>
+            ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:10px;">Vs. el mismo mes del año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
+          </div>
+          ` : ""}
 
-          <div class="seccion pro-original">
+
+          ${!esPro(negocio) ? `
+          <div class="seccion">
             <div class="card-titulo">Calendario del mes</div>
             <div class="chart-card" style="margin-top:0;">
-              <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
-                <div style="flex-shrink:0;">
-                  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:260px;">
-                    ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
-                    ${calendario.dias.map((v, i) => {
-                      const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
-                      const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
-                      return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;
-                              background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
-                              display:flex;align-items:center;justify-content:center;font-size:0.66rem;font-weight:600;
-                              color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
-                    }).join("")}
-                  </div>
-                  <div class="cal-leyenda" style="text-align:left;font-size:0.7rem;color:${MARCA.textoSuave};margin-top:12px;">Más oscuro = más toques</div>
-                </div>
-                ${totalCalificado > 0 ? `
-                <div style="display:flex;gap:14px;align-items:flex-end;height:150px;flex-shrink:0;border-left:1px solid ${MARCA.borde};padding-left:24px;">
-                  <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">
-                    <div style="font-size:0.8rem;font-weight:800;color:${MARCA.verde};margin-bottom:6px;">${pctPositivas}%</div>
-                    <div style="width:38px;border-radius:7px 7px 3px 3px;background:${MARCA.verde};height:${Math.max(6, pctPositivas)}%;"></div>
-                    <div style="font-size:0.68rem;color:${MARCA.textoSuave};margin-top:8px;text-align:center;">Positivas<br><b style="color:${MARCA.texto};">${testimonios.length}</b></div>
-                  </div>
-                  <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">
-                    <div style="font-size:0.8rem;font-weight:800;color:${MARCA.rojo};margin-bottom:6px;">${pctNegativas}%</div>
-                    <div style="width:38px;border-radius:7px 7px 3px 3px;background:${MARCA.rojo};height:${Math.max(6, pctNegativas)}%;"></div>
-                    <div style="font-size:0.68rem;color:${MARCA.textoSuave};margin-top:8px;text-align:center;">Quejas<br><b style="color:${MARCA.texto};">${quejas.length}</b></div>
-                  </div>
-                </div>
-                ` : ""}
+              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:340px;margin:0 auto;">
+                ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
+                ${calendario.dias.map((v, i) => {
+                  const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
+                  const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
+                  return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;
+                          background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
+                          display:flex;align-items:center;justify-content:center;font-size:0.66rem;font-weight:600;
+                          color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
+                }).join("")}
               </div>
+              <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:14px;">Más oscuro = más toques</div>
             </div>
           </div>
+          ` : ""}
 
           ${r.total === 0 ? `
           <div class="seccion">
@@ -3864,83 +3790,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           </div>
           ` : ""}
 
-          ${true ? `
-          <section class="panel-boceto ${esPro(negocio) ? "panel-pro" : "panel-gratis"}" aria-label="Resumen detallado del negocio">
-            ${esPro(negocio) ? "" : `<div class="preview-pro-aviso"><span><b>Estás viendo una vista previa.</b> Puedes consultar las gráficas y la actividad; sus controles se activan al mejorar a Pro.</span><a href="/mejorar-a-pro/${slug}?key=${req.query.key}">Activar Pro</a></div>`}
-            <div class="boceto-fila-superior">
-              <div class="boceto-bloque">
-                <div class="card-titulo">Calendario del mes</div>
-                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
-                  <div class="boceto-calendario">
-                    ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
-                    ${calendario.dias.map((v, i) => {
-                      const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
-                      const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
-                      return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};display:flex;align-items:center;justify-content:center;font-size:.66rem;font-weight:600;color:${intensidad > .5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
-                    }).join("")}
-                  </div>
-                  <div class="cal-leyenda" style="text-align:center;font-size:.7rem;color:${MARCA.textoSuave};margin-top:12px;">Más oscuro = más toques</div>
-                </div>
-              </div>
-
-              <div class="boceto-bloque">
-                <div class="card-titulo">Cómo te calificaron</div>
-                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
-                  ${totalCalificado > 0 || !esPro(negocio)
-                    ? `<div class="grafica-vertical-marco"><div class="grafica-vertical">
-                         <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.verde};">${pctPositivas}%</div><div class="barra-vertical" style="height:${Math.max(6, pctPositivas)}%;background:linear-gradient(180deg,#2C9560,${MARCA.verde});"></div><div class="barra-vertical-etiqueta">Positivas<br><b>${testimonios.length}</b></div></div>
-                         <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.rojo};">${pctNegativas}%</div><div class="barra-vertical" style="height:${Math.max(6, pctNegativas)}%;background:linear-gradient(180deg,#E05243,${MARCA.rojo});"></div><div class="barra-vertical-etiqueta">Quejas<br><b>${quejas.length}</b></div></div>
-                       </div></div>
-                       <div class="grafica-resumen"><span><b>${totalCalificado}</b> respuestas</span>${tasaRecuperacion !== null ? `<span>Recuperación <b>${tasaRecuperacion}%</b></span>` : ""}<span>Balance <b>${pctPositivas - pctNegativas >= 0 ? "+" : ""}${pctPositivas - pctNegativas} pts</b></span></div>${totalCalificado === 0 ? `<div class="horas-nota">La gráfica empezará a crecer cuando recibas calificaciones.</div>` : ""}`
-                    : `<div class="sentimiento-vacio">Sin calificaciones todavía.</div>`}
-                </div>
-              </div>
-
-              <div class="boceto-bloque">
-                <div class="card-titulo">Tú vs. tu sector</div>
-                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
-                  ${promSector !== null ? `<div class="grafica-vertical-marco"><div class="grafica-vertical">
-                    <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.verde};">${r.semana}</div><div class="barra-vertical" style="height:${Math.max(6, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;background:linear-gradient(180deg,#2C9560,${MARCA.verde});"></div><div class="barra-vertical-etiqueta">Tu negocio<br><b>esta semana</b></div></div>
-                    <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:#A86E00;">${promSector}</div><div class="barra-vertical" style="height:${Math.max(6, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;background:linear-gradient(180deg,#F7D77D,${MARCA.oro});"></div><div class="barra-vertical-etiqueta">Tu sector<br><b>promedio</b></div></div>
-                  </div></div><div class="grafica-resumen"><span>Diferencia <b>${r.semana - promSector >= 0 ? "+" : ""}${r.semana - promSector}</b></span><span><b>${r.semana >= promSector ? "Por encima" : "Por debajo"}</b> del promedio</span></div>` : `<div class="sentimiento-vacio">Aún no hay negocios suficientes para comparar tu sector.</div>`}
-                </div>
-              </div>
-            </div>
-
-            <div class="boceto-fila-media" id="actividad">
-              <div class="boceto-bloque">
-                <div class="card-titulo">Tus horas pico <span class="suave">30 días</span></div>
-                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
-                  <div class="horas-visual">
-                    <div class="horas-visual-top"><span>Actividad por hora</span>${horas.totalMes > 0 ? `<span class="hora-pico-badge">Pico ${horas.picoHora}:00</span>` : `<span class="hora-pico-badge">Sin datos</span>`}</div>
-                    <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
-                    <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
-                  </div>
-                  ${horas.totalMes > 0 ? `<div class="horas-nota">La barra dorada marca tu hora con mayor actividad · <b>${horas.maxToques} toques</b></div>` : `<div class="horas-nota">Aún no hay suficientes datos para identificar tu hora pico.</div>`}
-                </div>
-              </div>
-              <div class="boceto-bloque">
-                <div class="card-titulo">Actividad reciente</div>
-                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}"><table class="tabla-actividad"><tr><th>Fecha</th><th>Dispositivo</th></tr>${actividadReciente || `<tr><td colspan="2" style="text-align:center;color:${MARCA.textoSuave};">Sin toques todavía</td></tr>`}</table></div>
-              </div>
-            </div>
-
-            <div class="boceto-botones" aria-label="Herramientas del plan Pro">
-              <a class="boceto-boton" href="${esPro(negocio) ? `/quejas/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">Retroalimentación privada <span>→</span></a>
-              <a class="boceto-boton" href="${esPro(negocio) ? `/contenido/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">Generador de contenido <span>→</span></a>
-              <a class="boceto-boton" href="${esPro(negocio) ? `/reportes-guardados/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">Reportes guardados <span>→</span></a>
-            </div>
-
-            <div class="boceto-contenidos">
-              <div class="boceto-contenido"><div class="boceto-contenido-titulo">Recomendaciones</div>${esPro(negocio) ? recomendacionesHtml : `<div class="reco">Sigue reuniendo toques para conocer el comportamiento general de tu negocio.</div><div class="reco">Con Pro recibirás recomendaciones automáticas basadas en tus resultados.</div>`}</div>
-              <div class="boceto-contenido"><div class="boceto-contenido-titulo">${esPro(negocio) ? "Más de tu plan Pro" : "Desbloquea con Pro"}</div>${esPro(negocio) ? `<div class="reco"><b>Alertas instantáneas activas</b> — recibirás un correo en <b>${negocio.email || "tu correo"}</b> cuando llegue una queja privada.</div><div class="reco"><b>Generador para redes</b> — convierte tus resultados en ideas de contenido listas para publicar.</div>` : `<div class="reco"><b>Todo el análisis:</b> calendario, proyecciones, horas pico, comparación con el sector, actividad detallada, alertas y contenido para redes.</div><div class="reco"><b>Reportes automáticos:</b> recibe cada mes un PDF con los resultados de tu negocio.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}"><span>Ver Plan Pro</span><b>→</b></a>`}</div>
-              <div class="boceto-contenido"><div class="boceto-contenido-titulo">${esPro(negocio) ? "Tu plan" : "Tu plan actual"}</div>${esPro(negocio) ? `<div class="reco"><b>Plan Pro activo</b> — tienes acceso a todas las estadísticas y herramientas avanzadas.</div><div class="reco"><b>Reporte PDF mensual</b> — al final de cada mes recibirás automáticamente el análisis completo de tu negocio.</div>` : `<div class="reco"><b>Plan Gratis activo</b> — conservas el resumen esencial de tus toques.</div><div class="reco"><b>Mejora cuando quieras:</b> el cambio se activa al instante y no pierdes tus datos actuales.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}"><span>Mejorar a Pro</span><b>→</b></a>`}</div>
-            </div>
-          </section>
-
-          <div class="pro-original" aria-hidden="true">
+          ${esPro(negocio) ? `
           ${resumenFrase || caida || diaFlojo || clientesRecurrentes > 0 || percentil !== null ? `
-          <div class="seccion">
+          <div class="seccion seccion-datos">
             <div class="card-titulo">Lo que dicen tus datos</div>
             <div class="grid-3">
               ${resumenFrase ? `<div class="reco" style="border-left-color:${MARCA.verde};"><b>Resumen (30 días):</b> ${resumenFrase}</div>` : ""}
@@ -3959,17 +3811,39 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
           </div>
           ` : ""}
-          <div class="seccion grid-3">
+          <div class="panel-analitica-grid">
+          <div class="seccion grid-2 analitica-principal">
             <div>
-              <div class="card-titulo">Tus horas pico <span class="suave">30 días</span></div>
+              <div class="card-titulo">Calendario del mes</div>
               <div class="chart-card" style="margin-top:0;">
-                <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
-                <div class="horas-labels"><span>12am</span><span>12pm</span><span>11pm</span></div>
-                ${horas.totalMes > 0
-                  ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques})</div>`
-                  : `<div class="horas-nota">Sin suficientes datos.</div>`}
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:290px;margin:0 auto;">
+                  ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
+                  ${calendario.dias.map((v, i) => {
+                    const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
+                    const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
+                    return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;
+                            background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
+                            display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:600;
+                            color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
+                  }).join("")}
+                </div>
+                <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:14px;">Más oscuro = más toques</div>
               </div>
             </div>
+            <div>
+              <div class="card-titulo">Tus horas pico <span class="suave">últimos 30 días</span></div>
+              <div class="chart-card" style="margin-top:0;">
+                <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
+                <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+                ${horas.totalMes > 0
+                  ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques} toques)</div>`
+                  : `<div class="horas-nota">Todavía no hay suficientes toques este mes.</div>`}
+              </div>
+            </div>
+          </div>
+
+          ${promSector !== null ? `
+          <div class="seccion grid-2">
             <div>
               <div class="card-titulo">Cómo te calificaron</div>
               <div class="chart-card" style="margin-top:0;">
@@ -3982,41 +3856,60 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                        <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
                        <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
                      </div>
-                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Recuperación: <b>${tasaRecuperacion}%</b></div>` : ""}`
-                  : `<div class="sentimiento-vacio">Sin calificaciones todavía.</div>`}
+                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
+                  : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
               </div>
             </div>
-            ${promSector !== null ? `
+
             <div>
               <div class="card-titulo">Tú vs. tu sector</div>
               <div class="chart-card" style="margin-top:0;">
-                <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;flex-direction:column;gap:12px;">
                   <div>
-                    <div style="display:flex;justify-content:space-between;font-size:0.76rem;margin-bottom:4px;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:4px;">
                       <span>Tú</span><b>${r.semana}</b>
                     </div>
-                    <div style="height:8px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                    <div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
                       <div style="height:100%;border-radius:100px;background:${MARCA.verde};
                                   width:${Math.min(100, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
                     </div>
                   </div>
                   <div>
-                    <div style="display:flex;justify-content:space-between;font-size:0.76rem;margin-bottom:4px;color:${MARCA.textoSuave};">
+                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:4px;color:${MARCA.textoSuave};">
                       <span>Sector</span><b>${promSector}</b>
                     </div>
-                    <div style="height:8px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                    <div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
                       <div style="height:100%;border-radius:100px;background:${MARCA.oro};
                                   width:${Math.min(100, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
                     </div>
                   </div>
                 </div>
-                <div class="horas-nota" style="margin-top:8px;">
-                  ${r.semana >= promSector ? `Por encima del promedio.` : `${promSector - r.semana} bajo el promedio.`}
+                <div class="horas-nota">
+                  ${r.semana >= promSector
+                    ? `Vas por encima del promedio de tu sector.`
+                    : `${promSector - r.semana} toques por debajo del promedio de tu sector.`}
                 </div>
               </div>
             </div>
-            ` : ""}
           </div>
+          ` : `
+          <div class="seccion analitica-reputacion">
+            <div class="card-titulo">Cómo te calificaron</div>
+            <div class="chart-card" style="margin-top:0;">
+              ${totalCalificado > 0
+                ? `<div class="sentimiento-barra">
+                     <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
+                     <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
+                   </div>
+                   <div class="sentimiento-leyenda">
+                     <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
+                     <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
+                   </div>
+                   ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
+                : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
+            </div>
+          </div>
+          `}
 
           <div class="seccion seccion-actividad">
             <div class="card-titulo">Actividad reciente</div>
@@ -4027,8 +3920,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               </table>
             </div>
           </div>
+          </div>
 
-          <div class="seccion grid-2">
+          <div class="seccion grid-2 analitica-reputacion">
             <div>
               <div class="card-titulo">Más de tu plan Pro</div>
               <div class="reco" style="border-left-color:${MARCA.verde};">
@@ -4047,7 +3941,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               <div class="card-titulo">Recomendaciones para ti</div>
               ${recomendacionesHtml}
             </div>
-          </div>
           </div>
           ` : `
           <div class="seccion">
@@ -4317,22 +4210,9 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
         <title>Configuración — ${negocio.nombre}</title>
         <style>
           ${ESTILO_BASE}
-          .content{max-width:1120px;}
-          .config-header{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:24px;}
-          .config-header .titulo-pagina{margin-bottom:0;}
-          .config-subtitulo{max-width:480px;color:${MARCA.textoSuave};font-size:.82rem;line-height:1.5;text-align:right;}
-          .config-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start;}
-          .config-grid.config-pro{grid-template-areas:"sus alert" "meta alert" "pause read" "audit audit";}
-          .config-grid.config-gratis{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:"meta read pause" "audit audit audit";align-items:stretch;}
-          .config-grid.config-gratis>.form-card:not(.config-auditoria){display:flex;flex-direction:column;height:100%;}
-          .config-grid.config-gratis>.form-card:not(.config-auditoria)>form{margin-top:auto;}
-          .config-suscripcion{grid-area:sus}.config-meta{grid-area:meta}.config-alertas{grid-area:alert}
-          .config-pausar{grid-area:pause}.config-lectura{grid-area:read}.config-auditoria{grid-area:audit}
-          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:22px;max-width:none;margin:0;
-                     box-shadow:0 1px 3px rgba(11,61,44,.05);box-sizing:border-box;min-width:0;}
-          .form-card h3{margin:0 0 5px;font-size:0.98rem;color:${MARCA.texto};}
-          .form-card p.nota{color:${MARCA.textoSuave};font-size:0.78rem;line-height:1.5;margin:0 0 16px;}
-          .form-card form{margin:0;}
+          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px;max-width:460px;margin-bottom:22px;}
+          .form-card h3{margin:0 0 4px;font-size:0.95rem;}
+          .form-card p.nota{color:${MARCA.textoSuave};font-size:0.78rem;margin:0 0 14px;}
           input[type=number], input[type=text]{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;
                 font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;}
           label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin-bottom:6px;}
@@ -4344,31 +4224,16 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           .codigo-caja{background:${MARCA.crema};border-radius:8px;padding:10px 12px;font-size:0.82rem;word-break:break-all;margin:10px 0;}
           .linea-audit{display:flex;justify-content:space-between;font-size:0.8rem;padding:8px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.textoSuave};}
           .linea-audit b{color:${MARCA.texto};font-weight:600;}
-          .config-auditoria .linea-audit:last-child{border-bottom:none;}
-          @media(max-width:980px){
-            .config-grid.config-gratis{grid-template-columns:1fr 1fr;grid-template-areas:"meta read" "pause pause" "audit audit";}
-          }
-          @media(max-width:760px){
-            .config-header{align-items:flex-start;flex-direction:column;}
-            .config-subtitulo{text-align:left;}
-            .config-grid,.config-grid.config-pro,.config-grid.config-gratis{grid-template-columns:1fr;grid-template-areas:none;}
-            .config-grid>*{grid-area:auto!important;}
-            .linea-audit{align-items:flex-start;flex-direction:column;gap:3px;}
-          }
         </style>
       </head>
       <body>
         <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/mi-panel/${slug}?key=${claveUsada}" style="color:#CFE3D8;">&larr; Volver al panel</a></div>
         <div class="content">
-          <div class="config-header">
-            <div><div class="eyebrow">Ajustes · ${negocio.nombre}</div><h1 class="titulo-pagina">Configuración</h1></div>
-            <div class="config-subtitulo">Administra tus metas, alertas, accesos y el estado del negocio desde un solo lugar.</div>
-          </div>
-
-          <div class="config-grid ${esPro(negocio) ? "config-pro" : "config-gratis"}">
+          <div class="eyebrow">Ajustes · ${negocio.nombre}</div>
+          <h1 class="titulo-pagina">Configuración</h1>
 
           ${esPro(negocio) ? `
-          <div class="form-card config-suscripcion">
+          <div class="form-card">
             <h3>Mi suscripción</h3>
             <p class="nota">Ver el estado de tu pago, cambiar de tarjeta, o cancelar el Plan Pro.</p>
             <a href="/suscripcion/${slug}?key=${claveUsada}" style="display:inline-block;background:${MARCA.verdeOscuro};color:#fff;
@@ -4378,7 +4243,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           </div>
           ` : ""}
 
-          <div class="form-card config-meta">
+          <div class="form-card">
             <h3>Meta mensual</h3>
             <p class="nota">Te ponemos una barra de progreso en el panel hacia esta meta.</p>
             <form method="POST" action="/mi-panel/${slug}/configuracion/meta?key=${claveUsada}">
@@ -4389,7 +4254,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           </div>
 
           ${esPro(negocio) ? `
-          <div class="form-card config-alertas">
+          <div class="form-card">
             <h3>Alertas por correo</h3>
             <p class="nota">Elige cuáles quieres recibir — todas están activadas por defecto.</p>
             <form method="POST" action="/mi-panel/${slug}/configuracion/alertas?key=${claveUsada}">
@@ -4409,7 +4274,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           </div>
           ` : ""}
 
-          <div class="form-card config-pausar">
+          <div class="form-card">
             <h3>Pausar negocio</h3>
             <p class="nota">${negocio.pausado
               ? "Tu negocio está pausado — no vamos a marcar caídas raras en tus estadísticas mientras tanto."
@@ -4420,7 +4285,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
             </form>
           </div>
 
-          <div class="form-card config-lectura">
+          <div class="form-card">
             <h3>Acceso de solo lectura</h3>
             <p class="nota">Comparte este link con un encargado — puede ver el panel, pero no cambiar nada (ni clave, ni configuración, ni negocio).</p>
             ${negocio.claveSoloLectura
@@ -4433,13 +4298,12 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
                  </form>`}
           </div>
 
-          <div class="form-card config-auditoria">
+          <div class="form-card">
             <h3>Historial de cambios de tu cuenta</h3>
             <p class="nota">Solo tuyo, para tener orden — no es visible para nadie más.</p>
             ${auditoria.length
               ? auditoria.map((a) => `<div class="linea-audit"><b>${a.texto}</b><span>${a.fechaLegible}</span></div>`).join("")
               : `<p class="nota" style="margin:0;">Todavía no hay cambios registrados.</p>`}
-          </div>
           </div>
         </div>
       </body>
