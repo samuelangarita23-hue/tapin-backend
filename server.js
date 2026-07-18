@@ -2802,66 +2802,7 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          /* ---------- Layout tipo dashboard (sidebar + contenido) ---------- */
-          html,body{height:100%;}
-          body{background:${MARCA.crema};}
-          .dashboard-layout{display:flex;min-height:100vh;align-items:stretch;}
-          .sidebar{width:236px;flex-shrink:0;background:linear-gradient(180deg,${MARCA.verdeOscuro} 0%,#082c1c 100%);
-                   color:#fff;display:flex;flex-direction:column;padding:26px 18px;box-sizing:border-box;position:sticky;top:0;height:100vh;}
-          .sidebar-logo{padding:0 8px;margin-bottom:34px;}
-          .sidebar-nav{display:flex;flex-direction:column;gap:3px;flex:1;}
-          .sidebar-nav a{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;
-                         color:#CFE3D8;text-decoration:none;font-size:0.86rem;font-weight:600;transition:background .15s,color .15s;}
-          .sidebar-nav a:hover{background:rgba(255,255,255,0.08);color:#fff;}
-          .sidebar-nav a.activo{background:#fff;color:${MARCA.verdeOscuro};}
-          .sidebar-nav a svg{flex-shrink:0;width:17px;height:17px;}
-          .sidebar-nav a.deshabilitado{opacity:0.45;pointer-events:none;}
-          .sidebar-pie{border-top:1px solid rgba(255,255,255,0.14);padding-top:14px;margin-top:14px;}
-          .sidebar-pie a{display:inline-flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;
-                         color:#CFE3D8;text-decoration:none;font-size:0.7rem;font-weight:600;}
-          .sidebar-pie a svg{flex-shrink:0;width:14px;height:14px;}
-          .sidebar-pie a:hover{background:rgba(255,255,255,0.08);color:#fff;}
-          .dashboard-main{flex:1;min-width:0;padding:34px 40px 60px;box-sizing:border-box;}
-          @media (max-width:900px){
-            .dashboard-layout{flex-direction:column;}
-            .sidebar{width:100%;height:auto;position:relative;flex-direction:row;align-items:center;
-                     overflow-x:auto;padding:14px 16px;gap:8px;}
-            .sidebar-logo{margin-bottom:0;}
-            .sidebar-nav{flex-direction:row;flex:none;}
-            .sidebar-nav a{padding:8px 12px;white-space:nowrap;}
-            .sidebar-pie{border-top:none;margin-top:0;padding-top:0;}
-            .sidebar-pie a{padding:8px 12px;white-space:nowrap;}
-            .dashboard-main{padding:22px 16px 50px;}
-          }
-
-          .dash-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
-          .dash-header h1{font-family:'Playfair Display',Georgia,serif;font-size:1.7rem;margin:0;color:${MARCA.texto};letter-spacing:-.02em;}
-          .dash-header-chip{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid ${MARCA.borde};
-                            border-radius:100px;padding:8px 16px;font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};
-                            box-shadow:0 1px 2px rgba(11,61,44,0.04);}
-
-          .dash-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px;}
-          @media (max-width:760px){.dash-cards{grid-template-columns:1fr;}}
-          .dash-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:20px 22px;
-                     box-shadow:0 1px 2px rgba(11,61,44,0.04);}
-          .dash-card-lbl{font-size:0.74rem;color:${MARCA.textoSuave};font-weight:600;margin-bottom:10px;}
-          .dash-card-num{font-size:1.9rem;font-weight:800;color:${MARCA.texto};line-height:1;}
-          .dash-card-sub{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:4px;}
-          .dash-card-delta{display:inline-flex;align-items:center;gap:3px;font-size:0.74rem;font-weight:700;margin-top:10px;}
-          .dash-card-delta.up{color:${MARCA.verde};}
-          .dash-card-delta.down{color:${MARCA.rojo};}
-          .dash-card-estrellas{color:${MARCA.oro};font-size:1rem;letter-spacing:2px;margin-top:6px;}
-
-          .dash-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-          @media (max-width:900px){.dash-charts{grid-template-columns:1fr;}}
-          .dash-panel{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:20px 22px;
-                      box-shadow:0 1px 2px rgba(11,61,44,0.04);}
-          .dash-panel-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:16px;}
-          .dash-panel-titulo{font-size:0.92rem;font-weight:700;color:${MARCA.texto};}
-          .dash-panel-sub{font-size:0.72rem;color:${MARCA.textoSuave};margin-top:2px;}
-          .dash-panel-num{font-size:1.5rem;font-weight:800;color:${MARCA.texto};text-align:right;}
-          .dash-panel-numlbl{font-size:0.7rem;color:${MARCA.textoSuave};text-align:right;}
-          .dash-actividad-bars{display:flex;align-items:flex-end;gap:8px;height:110px;}
+          ${ESTILO_DASHBOARD}
           .content{max-width:none;padding:0;}
           .seccion{margin-bottom:40px;}
           .seccion-header{text-align:left;margin-bottom:20px;}
@@ -3546,8 +3487,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .reco{background:${MARCA.verdeClaro};border-left:3px solid ${MARCA.verde};border-radius:8px;padding:12px 14px;
                 font-size:0.83rem;margin-bottom:8px;color:${MARCA.verdeOscuro};}
 
-          .horas-chart{display:flex;align-items:flex-end;gap:2px;height:60px;}
-          .horas-labels{display:flex;justify-content:space-between;font-size:0.6rem;color:${MARCA.textoSuave};margin-top:6px;}
+          .horas-chart{display:flex;align-items:flex-end;gap:2px;height:60px;max-width:440px;margin:0 auto;}
+          .horas-labels{display:flex;justify-content:space-between;font-size:0.6rem;color:${MARCA.textoSuave};margin:6px auto 0;max-width:440px;}
           .horas-nota{text-align:center;font-size:0.76rem;color:${MARCA.textoSuave};margin-top:10px;}
           .horas-nota b{color:${MARCA.texto};}
 
@@ -3638,13 +3579,13 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           ${!soloLectura ? `
           <div style="margin:0 0 22px;display:flex;gap:10px;flex-wrap:wrap;">
             <a href="/mi-panel/${slug}/editar?key=${req.query.key}"
-               style="font-size:0.76rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
-                      border:1.5px solid ${MARCA.borde};border-radius:100px;padding:8px 16px;text-decoration:none;">
+               style="font-size:0.76rem;font-weight:600;color:${MARCA.verdeOscuro};background:#fff;
+                      border:1px solid ${MARCA.borde};border-radius:8px;padding:8px 16px;text-decoration:none;">
               Editar mi negocio
             </a>
             <a href="/mi-panel/${slug}/clave?key=${req.query.key}"
-               style="font-size:0.76rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
-                      border:1.5px solid ${MARCA.borde};border-radius:100px;padding:8px 16px;text-decoration:none;">
+               style="font-size:0.76rem;font-weight:600;color:${MARCA.verdeOscuro};background:#fff;
+                      border:1px solid ${MARCA.borde};border-radius:8px;padding:8px 16px;text-decoration:none;">
               Cambiar mi clave
             </a>
           </div>
@@ -3726,7 +3667,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 ? graficaLinea(calendario.dias, { alto: 90, color: MARCA.verde })
                 : `<div style="text-align:center;color:${MARCA.textoSuave};font-size:0.8rem;padding:20px 0;">Todavía no hay suficientes datos este mes.</div>`}
               <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;">
-                ${[["dia","1 día"],["semana","1 semana"],["mes","1 mes"],["semestre","6 meses"],["anio","1 año"]].map(([valor, texto]) => `<a href="/mi-panel/${slug}?key=${encodeURIComponent(req.query.key)}&proyeccion=${valor}#actividad" style="text-decoration:none;font-size:0.68rem;font-weight:700;padding:6px 10px;border-radius:999px;border:1px solid ${periodoProyeccion === valor ? MARCA.verde : MARCA.borde};background:${periodoProyeccion === valor ? MARCA.verdeClaro : "#fff"};color:${MARCA.verdeOscuro};">${texto}</a>`).join("")}
+                ${[["dia","1 día"],["semana","1 semana"],["mes","1 mes"],["semestre","6 meses"],["anio","1 año"]].map(([valor, texto]) => `<a href="/mi-panel/${slug}?key=${encodeURIComponent(req.query.key)}&proyeccion=${valor}#actividad" style="text-decoration:none;font-size:0.68rem;font-weight:600;padding:6px 10px;border-radius:6px;border:1px solid ${periodoProyeccion === valor ? MARCA.verde : MARCA.borde};background:${periodoProyeccion === valor ? MARCA.verdeClaro : "#fff"};color:${MARCA.verdeOscuro};">${texto}</a>`).join("")}
               </div>
               ${proyeccion.suficiente
                 ? `<div class="ultimo-toque" style="margin-top:12px;">Rango orientativo: <b>${proyeccion.minimo}–${proyeccion.maximo}</b> toques · promedio actual <b>${proyeccion.promedio}/día</b> · ${proyeccion.restantes} días restantes</div>`
