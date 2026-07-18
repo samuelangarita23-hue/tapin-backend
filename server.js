@@ -3446,10 +3446,11 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
 
           .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch;}
           @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
-          .panel-analitica-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch;margin-top:6px;}
+          .panel-analitica-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch;margin-top:6px;margin-bottom:26px;}
           .panel-analitica-grid>div{min-width:0;}
           .panel-analitica-grid>.panel-analitica-full{grid-column:1 / -1;}
           .panel-analitica-grid .chart-card{height:calc(100% - 28px);}
+          .panel-analitica-grid .chart-card-centrado{display:flex;flex-direction:column;justify-content:center;}
           .seccion-datos .grid-3{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}.seccion-datos .grid-3 .reco{margin-bottom:0;min-height:64px;display:flex;align-items:center;line-height:1.4;}
           @media (max-width:700px){.panel-analitica-grid{grid-template-columns:1fr;}.panel-analitica-grid>div{grid-column:1;}.seccion-datos .grid-3{grid-template-columns:1fr;}}
           .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:stretch;}
@@ -3823,7 +3824,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
             <div>
               <div class="card-titulo">Tus horas pico <span class="suave">últimos 30 días</span></div>
-              <div class="chart-card" style="margin-top:0;">
+              <div class="chart-card chart-card-centrado" style="margin-top:0;">
                 <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
                 <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
                 ${horas.totalMes > 0
