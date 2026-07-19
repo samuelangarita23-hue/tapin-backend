@@ -4197,103 +4197,171 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Configuración — ${negocio.nombre}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px;max-width:460px;margin-bottom:22px;}
-          .form-card h3{margin:0 0 4px;font-size:0.95rem;}
-          .form-card p.nota{color:${MARCA.textoSuave};font-size:0.78rem;margin:0 0 14px;}
-          input[type=number], input[type=text]{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;
-                font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;}
+          ${ESTILO_DASHBOARD}
+          .content{max-width:640px;padding:0;}
+          .config-seccion{margin-bottom:30px;}
+          .config-seccion-titulo{font-size:0.72rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;
+                                 color:${MARCA.textoSuave};margin:0 0 12px;padding-left:2px;}
+          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:20px 22px;margin-bottom:14px;}
+          .form-card:last-child{margin-bottom:0;}
+          .form-card h3{margin:0 0 4px;font-size:0.92rem;font-weight:700;}
+          .form-card p.nota{color:${MARCA.textoSuave};font-size:0.78rem;margin:0 0 14px;line-height:1.5;}
+          input[type=number], input[type=text]{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:8px;
+                font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;font-family:inherit;}
           label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin-bottom:6px;}
           .fila-check{display:flex;align-items:center;gap:10px;margin-bottom:12px;cursor:pointer;}
           .fila-check input{width:auto;margin:0;}
-          button{background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:11px 18px;font-weight:700;cursor:pointer;font-size:0.88rem;}
+          button{background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:8px;padding:11px 18px;font-weight:700;cursor:pointer;font-size:0.88rem;font-family:inherit;}
           button.secundario{background:#fff;color:${MARCA.texto};border:1px solid ${MARCA.borde};}
           button.peligro{background:#fff;color:${MARCA.rojo};border:1px solid #F0D0C8;}
           .codigo-caja{background:${MARCA.crema};border-radius:8px;padding:10px 12px;font-size:0.82rem;word-break:break-all;margin:10px 0;}
-          .linea-audit{display:flex;justify-content:space-between;font-size:0.8rem;padding:8px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.textoSuave};}
+          .linea-audit{display:flex;justify-content:space-between;gap:10px;font-size:0.8rem;padding:9px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.textoSuave};}
+          .linea-audit:last-child{border-bottom:none;}
           .linea-audit b{color:${MARCA.texto};font-weight:600;}
         </style>
       </head>
       <body>
-        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/mi-panel/${slug}?key=${claveUsada}" style="color:#CFE3D8;">&larr; Volver al panel</a></div>
-        <div class="content">
-          <div class="eyebrow">Ajustes · ${negocio.nombre}</div>
-          <h1 class="titulo-pagina">Configuración</h1>
+        <div class="dashboard-layout">
+          <aside class="sidebar">
+            <div class="sidebar-logo">${logoSvg("#FFFFFF", 26)}</div>
+            <nav class="sidebar-nav">
+              <a href="/mi-panel/${slug}?key=${claveUsada}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+                Resumen
+              </a>
+              <a href="/mi-panel/${slug}?key=${claveUsada}#actividad">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+                Actividad
+              </a>
+              <a href="${esPro(negocio) ? `/suscripcion/${slug}?key=${claveUsada}` : `/mejorar-a-pro/${slug}?key=${claveUsada}`}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                ${esPro(negocio) ? "Mi suscripción" : "Plan de pago"}
+              </a>
+              <a href="/mi-panel/${slug}/configuracion?key=${claveUsada}" class="activo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+                Configuración
+              </a>
+            </nav>
+            <div class="sidebar-pie">
+              <a href="/">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Cerrar sesión
+              </a>
+            </div>
+          </aside>
+          <main class="dashboard-main">
+        <div class="content" style="padding:0;max-width:640px;">
+
+          <div class="dash-header">
+            <div>
+              <div class="eyebrow" style="margin-bottom:2px;">${escaparHtml(negocio.nombre)}</div>
+              <h1>Configuración</h1>
+            </div>
+            <a href="/mi-panel/${slug}?key=${claveUsada}" class="dash-header-chip" style="text-decoration:none;">← Volver al panel</a>
+          </div>
 
           ${esPro(negocio) ? `
-          <div class="form-card">
-            <h3>Mi suscripción</h3>
-            <p class="nota">Ver el estado de tu pago, cambiar de tarjeta, o cancelar el Plan Pro.</p>
-            <a href="/suscripcion/${slug}?key=${claveUsada}" style="display:inline-block;background:${MARCA.verdeOscuro};color:#fff;
-               border-radius:9px;padding:11px 18px;font-weight:700;font-size:0.88rem;text-decoration:none;">
-              Gestionar mi suscripción →
-            </a>
+          <div class="config-seccion">
+            <div class="config-seccion-titulo">Cuenta y suscripción</div>
+            <div class="form-card">
+              <h3>Mi suscripción</h3>
+              <p class="nota">Ver el estado de tu pago, cambiar de tarjeta, o cancelar el Plan Pro.</p>
+              <a href="/suscripcion/${slug}?key=${claveUsada}" style="display:inline-block;background:${MARCA.verdeOscuro};color:#fff;
+                 border-radius:8px;padding:11px 18px;font-weight:700;font-size:0.88rem;text-decoration:none;">
+                Gestionar mi suscripción →
+              </a>
+            </div>
           </div>
           ` : ""}
 
-          <div class="form-card">
-            <h3>Meta mensual</h3>
-            <p class="nota">Te ponemos una barra de progreso en el panel hacia esta meta.</p>
-            <form method="POST" action="/mi-panel/${slug}/configuracion/meta?key=${claveUsada}">
-              <label>¿Cuántos toques quieres este mes?</label>
-              <input type="number" name="metaMensual" min="1" value="${negocio.metaMensual || ""}" placeholder="Ej: 150">
-              <button type="submit">Guardar meta</button>
-            </form>
+          <div class="config-seccion">
+            <div class="config-seccion-titulo">Objetivos del negocio</div>
+            <div class="form-card">
+              <h3>Meta mensual</h3>
+              <p class="nota">Te ponemos una barra de progreso en el panel hacia esta meta.</p>
+              <form method="POST" action="/mi-panel/${slug}/configuracion/meta?key=${claveUsada}">
+                <label>¿Cuántos toques quieres este mes?</label>
+                <input type="number" name="metaMensual" min="1" value="${negocio.metaMensual || ""}" placeholder="Ej: 150">
+                <button type="submit">Guardar meta</button>
+              </form>
+            </div>
+            <div class="form-card">
+              <h3>Pausar negocio</h3>
+              <p class="nota">${negocio.pausado
+                ? "Tu negocio está pausado — no vamos a marcar caídas raras en tus estadísticas mientras tanto."
+                : "Útil para vacaciones o remodelación, sin desactivar la tarjeta ni perder tu historial."}</p>
+              <form method="POST" action="/mi-panel/${slug}/configuracion/pausar?key=${claveUsada}">
+                <input type="hidden" name="pausar" value="${negocio.pausado ? "no" : "si"}">
+                <button type="submit" class="${negocio.pausado ? "secundario" : "peligro"}">${negocio.pausado ? "Reanudar negocio" : "Pausar negocio"}</button>
+              </form>
+            </div>
           </div>
 
           ${esPro(negocio) ? `
-          <div class="form-card">
-            <h3>Alertas por correo</h3>
-            <p class="nota">Elige cuáles quieres recibir — todas están activadas por defecto.</p>
-            <form method="POST" action="/mi-panel/${slug}/configuracion/alertas?key=${claveUsada}">
-              <label class="fila-check"><input type="checkbox" name="quejas" ${alertas.quejas !== false ? "checked" : ""}> Avisarme cuando llega una queja</label>
-              <label>¿Con qué frecuencia?</label>
-              <select name="frecuenciaQuejas" style="width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;">
-                <option value="instantanea" ${(alertas.frecuenciaQuejas || "instantanea") === "instantanea" ? "selected" : ""}>Al instante — apenas llega cada una</option>
-                <option value="diario" ${alertas.frecuenciaQuejas === "diario" ? "selected" : ""}>Resumen diario — un correo con todas las del día</option>
-                <option value="semanal" ${alertas.frecuenciaQuejas === "semanal" ? "selected" : ""}>Resumen semanal — un correo con todas de la semana</option>
-              </select>
-              <label class="fila-check"><input type="checkbox" name="reporteMensual" ${alertas.reporteMensual !== false ? "checked" : ""}> Reporte mensual automático</label>
-              <label>WhatsApp para alertas (opcional)</label>
-              <input type="text" name="whatsapp" value="${negocio.whatsappAlertas || ""}" placeholder="Ej: 3001234567">
-              <p class="nota" style="margin:-6px 0 12px;">Por ahora solo guardamos el número — el envío automático por WhatsApp llega en una próxima actualización.</p>
-              <button type="submit">Guardar preferencias</button>
-            </form>
+          <div class="config-seccion">
+            <div class="config-seccion-titulo">Notificaciones</div>
+            <div class="form-card">
+              <h3>Alertas por correo</h3>
+              <p class="nota">Elige cuáles quieres recibir — todas están activadas por defecto.</p>
+              <form method="POST" action="/mi-panel/${slug}/configuracion/alertas?key=${claveUsada}">
+                <label class="fila-check"><input type="checkbox" name="quejas" ${alertas.quejas !== false ? "checked" : ""}> Avisarme cuando llega una queja</label>
+                <label>¿Con qué frecuencia?</label>
+                <select name="frecuenciaQuejas" style="width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:8px;font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;font-family:inherit;">
+                  <option value="instantanea" ${(alertas.frecuenciaQuejas || "instantanea") === "instantanea" ? "selected" : ""}>Al instante — apenas llega cada una</option>
+                  <option value="diario" ${alertas.frecuenciaQuejas === "diario" ? "selected" : ""}>Resumen diario — un correo con todas las del día</option>
+                  <option value="semanal" ${alertas.frecuenciaQuejas === "semanal" ? "selected" : ""}>Resumen semanal — un correo con todas de la semana</option>
+                </select>
+                <label class="fila-check"><input type="checkbox" name="reporteMensual" ${alertas.reporteMensual !== false ? "checked" : ""}> Reporte mensual automático</label>
+                <label>WhatsApp para alertas (opcional)</label>
+                <input type="text" name="whatsapp" value="${negocio.whatsappAlertas || ""}" placeholder="Ej: 3001234567">
+                <p class="nota" style="margin:-6px 0 12px;">Por ahora solo guardamos el número — el envío automático por WhatsApp llega en una próxima actualización.</p>
+                <button type="submit">Guardar preferencias</button>
+              </form>
+            </div>
           </div>
           ` : ""}
 
-          <div class="form-card">
-            <h3>Pausar negocio</h3>
-            <p class="nota">${negocio.pausado
-              ? "Tu negocio está pausado — no vamos a marcar caídas raras en tus estadísticas mientras tanto."
-              : "Útil para vacaciones o remodelación, sin desactivar la tarjeta ni perder tu historial."}</p>
-            <form method="POST" action="/mi-panel/${slug}/configuracion/pausar?key=${claveUsada}">
-              <input type="hidden" name="pausar" value="${negocio.pausado ? "no" : "si"}">
-              <button type="submit" class="${negocio.pausado ? "secundario" : "peligro"}">${negocio.pausado ? "Reanudar negocio" : "Pausar negocio"}</button>
-            </form>
+          <div class="config-seccion">
+            <div class="config-seccion-titulo">Seguridad y acceso</div>
+            <div class="form-card">
+              <h3>Cambiar mi clave</h3>
+              <p class="nota">Actualiza la clave con la que entras a este panel.</p>
+              <a href="/mi-panel/${slug}/clave?key=${claveUsada}" style="display:inline-block;background:#fff;color:${MARCA.verdeOscuro};
+                 border:1px solid ${MARCA.borde};border-radius:8px;padding:10px 16px;font-weight:700;font-size:0.85rem;text-decoration:none;">
+                Cambiar mi clave →
+              </a>
+            </div>
+            <div class="form-card">
+              <h3>Acceso de solo lectura</h3>
+              <p class="nota">Comparte este link con un encargado — puede ver el panel, pero no cambiar nada (ni clave, ni configuración, ni negocio).</p>
+              ${negocio.claveSoloLectura
+                ? `<div class="codigo-caja">${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${negocio.claveSoloLectura}</div>
+                   <form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
+                     <button type="submit" class="secundario">Generar uno nuevo (invalida el anterior)</button>
+                   </form>`
+                : `<form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
+                     <button type="submit">Generar acceso de solo lectura</button>
+                   </form>`}
+            </div>
           </div>
 
-          <div class="form-card">
-            <h3>Acceso de solo lectura</h3>
-            <p class="nota">Comparte este link con un encargado — puede ver el panel, pero no cambiar nada (ni clave, ni configuración, ni negocio).</p>
-            ${negocio.claveSoloLectura
-              ? `<div class="codigo-caja">${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${negocio.claveSoloLectura}</div>
-                 <form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
-                   <button type="submit" class="secundario">Generar uno nuevo (invalida el anterior)</button>
-                 </form>`
-              : `<form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
-                   <button type="submit">Generar acceso de solo lectura</button>
-                 </form>`}
+          <div class="config-seccion">
+            <div class="config-seccion-titulo">Actividad de la cuenta</div>
+            <div class="form-card">
+              <h3>Historial de cambios</h3>
+              <p class="nota">Solo tuyo, para tener orden — no es visible para nadie más.</p>
+              ${auditoria.length
+                ? auditoria.map((a) => `<div class="linea-audit"><b>${a.texto}</b><span>${a.fechaLegible}</span></div>`).join("")
+                : `<p class="nota" style="margin:0;">Todavía no hay cambios registrados.</p>`}
+            </div>
           </div>
 
-          <div class="form-card">
-            <h3>Historial de cambios de tu cuenta</h3>
-            <p class="nota">Solo tuyo, para tener orden — no es visible para nadie más.</p>
-            ${auditoria.length
-              ? auditoria.map((a) => `<div class="linea-audit"><b>${a.texto}</b><span>${a.fechaLegible}</span></div>`).join("")
-              : `<p class="nota" style="margin:0;">Todavía no hay cambios registrados.</p>`}
-          </div>
+        </div>
+          </main>
         </div>
       </body>
     </html>
