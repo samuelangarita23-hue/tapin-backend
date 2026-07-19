@@ -981,6 +981,22 @@ function detectarDispositivo(userAgent = "") {
 
 // Calcula métricas de resumen para el dashboard: hoy, esta semana, último toque,
 // y un mini-histograma de los últimos 7 días (para la barra tipo gráfica).
+// Convierte una fecha ISO en un texto relativo tipo "Hace 2 horas" — usado
+// en la lista de actividad reciente del panel para que se lea como un
+// dashboard de verdad, no como una tabla de auditoría.
+function tiempoRelativo(fechaISO) {
+  const diffMs = Math.max(0, Date.now() - new Date(fechaISO).getTime());
+  const minutos = Math.floor(diffMs / 60000);
+  if (minutos < 1) return "Hace un momento";
+  if (minutos < 60) return `Hace ${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `Hace ${horas} hora${horas === 1 ? "" : "s"}`;
+  const dias = Math.floor(horas / 24);
+  if (dias < 30) return `Hace ${dias} día${dias === 1 ? "" : "s"}`;
+  const meses = Math.floor(dias / 30);
+  return `Hace ${meses} mes${meses === 1 ? "" : "es"}`;
+}
+
 function calcularResumen(eventos) {
   const ahora = new Date();
   const inicioHoy = new Date(ahora);
@@ -1316,9 +1332,22 @@ function graficaLinea(valores, { alto = 90, color = MARCA.verde } = {}) {
   });
   const lineaPath = "M" + puntos.join(" L");
   const areaPath = `${lineaPath} L${ancho},${alto} L0,${alto} Z`;
+  // Puntos cada pocos días para no saturar la línea con un punto por dato —
+  // el mismo efecto visual "punteado" de un dashboard pulido, sin perder
+  // legibilidad cuando hay 30 o más valores.
+  const saltoPuntos = Math.max(1, Math.ceil(datos.length / 12));
+  const marcadores = puntos
+    .map((p, i) => (i % saltoPuntos === 0 || i === puntos.length - 1 ? p : null))
+    .filter(Boolean)
+    .map((p) => {
+      const [cx, cy] = p.split(",");
+      return `<circle cx="${cx}" cy="${cy}" r="1.6" fill="${color}" vector-effect="non-scaling-stroke"/>`;
+    })
+    .join("");
   return `<svg viewBox="0 0 ${ancho} ${alto}" preserveAspectRatio="none" style="width:100%;height:${alto}px;display:block;">
     <path d="${areaPath}" fill="${color}" opacity="0.12" stroke="none"/>
     <path d="${lineaPath}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    ${marcadores}
   </svg>`;
 }
 
@@ -3342,10 +3371,20 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
       )
     : [];
 
+  const iconoActividad = `<svg viewBox="0 0 24 24" fill="none" stroke="${MARCA.verde}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><line x1="11" y1="18" x2="13" y2="18"/></svg>`;
+  const flechaActividad = `<svg viewBox="0 0 24 24" fill="none" stroke="${MARCA.textoSuave}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
   const actividadReciente = eventos
-    .slice(-8)
+    .slice(-6)
     .reverse()
-    .map((e) => `<tr><td>${e.fechaLegible}</td><td>${e.dispositivo}</td></tr>`)
+    .map((e) => `
+      <div class="actividad-item">
+        <div class="actividad-icono">${iconoActividad}</div>
+        <div class="actividad-texto">
+          <div class="actividad-titulo">Toque registrado</div>
+          <div class="actividad-sub">${escaparHtml(e.dispositivo)} · ${tiempoRelativo(e.fechaISO)}</div>
+        </div>
+        <div class="actividad-flecha">${flechaActividad}</div>
+      </div>`)
     .join("");
 
   const recomendacionesHtml = recomendaciones
@@ -3449,6 +3488,20 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .sentimiento-leyenda span{display:flex;align-items:center;gap:6px;}
           .sentimiento-leyenda i{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
           .sentimiento-vacio{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};padding:6px 0;}
+
+          .card-titulo a.ver-mas{font-size:0.72rem;font-weight:700;color:${MARCA.verde};text-decoration:none;}
+          .card-titulo a.ver-mas:hover{text-decoration:underline;}
+          .actividad-lista{padding:4px 18px;}
+          .actividad-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid ${MARCA.borde};}
+          .actividad-item:last-child{border-bottom:none;}
+          .actividad-icono{flex-shrink:0;width:34px;height:34px;border-radius:50%;background:${MARCA.verdeClaro};
+                           display:flex;align-items:center;justify-content:center;}
+          .actividad-icono svg{width:16px;height:16px;}
+          .actividad-texto{flex:1;min-width:0;}
+          .actividad-titulo{font-size:0.84rem;font-weight:600;color:${MARCA.texto};}
+          .actividad-sub{font-size:0.74rem;color:${MARCA.textoSuave};margin-top:2px;}
+          .actividad-flecha{flex-shrink:0;width:16px;height:16px;opacity:0.5;}
+          .actividad-flecha svg{width:100%;height:100%;}
 
           .tabla-actividad{width:100%;border-collapse:collapse;font-size:0.78rem;table-layout:fixed;}
           .tabla-actividad th:first-child, .tabla-actividad td:first-child{width:58%;}
@@ -3848,12 +3901,12 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             `}
 
             <div class="panel-analitica-full">
-              <div class="card-titulo">Actividad reciente</div>
-              <div class="chart-card" style="margin-top:0;">
-                <table class="tabla-actividad">
-                  <tr><th>Fecha</th><th>Dispositivo</th></tr>
-                  ${actividadReciente || `<tr><td colspan="2" style="text-align:center;color:${MARCA.textoSuave};">Sin toques todavía</td></tr>`}
-                </table>
+              <div class="card-titulo">
+                <span>Actividad reciente</span>
+                ${esPro(negocio) ? `<a class="ver-mas" href="/export/${slug}.pdf?key=${req.query.key}" target="_blank">Ver reporte</a>` : ""}
+              </div>
+              <div class="chart-card actividad-lista" style="margin-top:0;">
+                ${actividadReciente || `<div style="text-align:center;color:${MARCA.textoSuave};padding:22px 0;">Sin toques todavía</div>`}
               </div>
             </div>
           </div>
