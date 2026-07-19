@@ -3491,10 +3491,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3.5a2 2 0 010-4h.09A1.65 1.65 0 005 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09c0 .68.39 1.29 1 1.51.63.28 1.36.15 1.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06c-.48.46-.61 1.19-.33 1.82.22.61.83 1 1.51 1H21a2 2 0 010 4h-.09c-.68 0-1.29.39-1.51 1z"/></svg>
                 Opciones
               </a>
-              <a href="${esPro(negocio) ? `/mi-panel/${slug}/fidelizacion?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.24L3 3v6.59a2 2 0 00.59 1.41l9.58 9.58a2 2 0 002.83 0l6.59-6.59a2 2 0 000-2.83z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
-                Promociones
-              </a>
               <a href="${esPro(negocio) ? `/suscripcion/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                 ${esPro(negocio) ? "Mi suscripción" : "Plan de pago"}
@@ -4699,205 +4695,567 @@ async function generarInformePDF(negocio, slug) {
 
   const datos = leerDatos();
   const eventos = (datos[slug] && datos[slug].eventos) || [];
+  const testimonios = (datos[slug] && datos[slug].testimonios) || [];
+  const quejas = (datos[slug] && datos[slug].quejas) || [];
   const r = calcularResumen(eventos);
   const recomendaciones = generarRecomendaciones(eventos, r, negocio);
   const promSector = promedioSector(negocio.categoria, slug, datos);
   const horas = analizarHoras(eventos, negocio);
+  const todosNegocios = todosLosNegocios();
+  const percentil = percentilCategoria(negocio, slug, todosNegocios, datos);
+  const diaFlojo = diaMasFlojo(eventos, negocio);
+  const caidaPropia = !negocio.pausado ? alertaCaidaPropia(eventos, r.semana) : null;
+  const clientesRecurrentes = contarClientesRecurrentes(slug);
+  const comparativoMes = compararMesAnterior(eventos, negocio);
+  const comparativoAnio = compararAnioAnterior(eventos, negocio);
+  const calendario = calendarioMes(eventos, negocio);
+  const proyeccion = proyeccionMes(eventos, negocio);
   const fechaGenerado = new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" });
+
+  // ---------- Metricas estadísticas adicionales (analista de datos) ----------
+  const totalCalificado = testimonios.length + quejas.length;
+  const promedioEstrellas = promedioEstrellasFiltradas(testimonios, quejas);
+  const pctPositivas = totalCalificado ? Math.round((testimonios.length / totalCalificado) * 100) : 0;
+  const pctNegativas = totalCalificado ? 100 - pctPositivas : 0;
+  const quejasResueltas = quejas.filter((q) => q.estado === "resuelto").length;
+  const tasaRecuperacion = quejas.length ? Math.round((quejasResueltas / quejas.length) * 100) : null;
+
+  const inicioHoyCmp = new Date();
+  inicioHoyCmp.setHours(0, 0, 0, 0);
+  const inicioSemanaAnteriorCmp = new Date(inicioHoyCmp);
+  inicioSemanaAnteriorCmp.setDate(inicioSemanaAnteriorCmp.getDate() - 13);
+  const finSemanaAnteriorCmp = new Date(inicioHoyCmp);
+  finSemanaAnteriorCmp.setDate(finSemanaAnteriorCmp.getDate() - 6);
+  const semanaAnteriorToques = eventos.filter((e) => {
+    const f = new Date(e.fechaISO);
+    return f >= inicioSemanaAnteriorCmp && f < finSemanaAnteriorCmp;
+  }).length;
+  const cambioSemanal = semanaAnteriorToques > 0 ? Math.round(((r.semana - semanaAnteriorToques) / semanaAnteriorToques) * 100) : null;
+
+  const primerEvento = eventos.length ? new Date(eventos[0].fechaISO) : null;
+  const diasActivo = primerEvento ? Math.max(1, Math.round((Date.now() - primerEvento.getTime()) / 86400000)) : 1;
+  const promedioDiarioHistorico = Math.round((r.total / diasActivo) * 10) / 10;
+
+  const nombresDiaCorto = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"];
+  const mapaDiaSemana = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const porDiaSemana = new Array(7).fill(0);
+  for (const e of eventos) {
+    const corto = new Date(e.fechaISO).toLocaleString("en-US", { timeZone: zonaDe(negocio), weekday: "short" });
+    porDiaSemana[mapaDiaSemana[corto]]++;
+  }
+  const totalDiaSemana = porDiaSemana.reduce((a, b) => a + b, 0);
+  const diaMasFuerte = totalDiaSemana > 0
+    ? nombresDiaCorto[porDiaSemana.indexOf(Math.max(...porDiaSemana))]
+    : null;
 
   const pdfDoc = await PDFDocument.create();
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
-  const verdeOscuro = rgb(0.043, 0.239, 0.173); // #0B3D2C
-  const verde = rgb(0.059, 0.318, 0.196);       // #0F5132
-  const verdeClaro = rgb(0.906, 0.941, 0.918);  // #E7F0EA
-  const oro = rgb(0.788, 0.635, 0.294);         // #C9A24B
-  const rojo = rgb(0.753, 0.224, 0.169);        // similar a MARCA.rojo
-  const crema = rgb(0.980, 0.980, 0.973);       // #FAFAF8
-  const oscuro = rgb(0.086, 0.125, 0.109);      // #16201C
+  const verdeOscuro = rgb(0.043, 0.239, 0.173);
+  const verde = rgb(0.059, 0.318, 0.196);
+  const verdeClaro = rgb(0.906, 0.941, 0.918);
+  const oro = rgb(0.788, 0.635, 0.294);
+  const oroClaro = rgb(0.984, 0.965, 0.910);
+  const rojo = rgb(0.753, 0.224, 0.169);
+  const rojoClaro = rgb(0.984, 0.937, 0.910);
+  const crema = rgb(0.980, 0.980, 0.973);
+  const oscuro = rgb(0.086, 0.125, 0.109);
   const gris = rgb(0.42, 0.46, 0.44);
+  const grisClaro = rgb(0.85, 0.86, 0.83);
   const blanco = rgb(1, 1, 1);
 
-  const ANCHO = 595, ALTO = 842; // A4
+  const ANCHO = 595, ALTO = 842;
+  const MARGEN = 50;
   let numeroPagina = 0;
 
   function piePagina(page) {
     numeroPagina++;
-    page.drawLine({ start: { x: 50, y: 56 }, end: { x: ANCHO - 50, y: 56 }, thickness: 0.5, color: verdeClaro });
-    page.drawText("Tapin", { x: 50, y: 38, size: 9, font: fontBold, color: verde });
-    page.drawText(`Informe de desempeño · ${negocio.nombre}`, { x: 90, y: 38, size: 8, font, color: gris });
-    page.drawText(`${numeroPagina}`, { x: ANCHO - 60, y: 38, size: 8, font, color: gris });
+    page.drawLine({ start: { x: MARGEN, y: 56 }, end: { x: ANCHO - MARGEN, y: 56 }, thickness: 0.5, color: verdeClaro });
+    page.drawText("Tapin", { x: MARGEN, y: 38, size: 9, font: fontBold, color: verde });
+    page.drawText("Informe analítico de desempeño - " + negocio.nombre, { x: 90, y: 38, size: 8, font, color: gris });
+    page.drawText(String(numeroPagina), { x: ANCHO - 60, y: 38, size: 8, font, color: gris });
   }
 
-  function encabezadoSeccion(page, titulo) {
+  function encabezadoSeccion(page, titulo, subtitulo) {
     page.drawRectangle({ x: 0, y: ALTO - 70, width: ANCHO, height: 70, color: verdeOscuro });
-    page.drawText(titulo, { x: 50, y: ALTO - 44, size: 16, font: fontBold, color: blanco });
-    page.drawText(negocio.nombre, { x: 50, y: ALTO - 60, size: 9, font, color: rgb(0.81, 0.89, 0.85) });
+    page.drawText(titulo, { x: MARGEN, y: ALTO - 44, size: 16, font: fontBold, color: blanco });
+    page.drawText(subtitulo || negocio.nombre, { x: MARGEN, y: ALTO - 60, size: 9, font, color: rgb(0.81, 0.89, 0.85) });
   }
 
-  // ---------- Página 1: Portada ----------
+  function envolverTexto(fontObj, texto, size, maxWidth) {
+    const palabras = String(texto).split(/\s+/).filter(Boolean);
+    const lineas = [];
+    let actual = "";
+    for (const palabra of palabras) {
+      const prueba = actual ? actual + " " + palabra : palabra;
+      if (fontObj.widthOfTextAtSize(prueba, size) > maxWidth && actual) {
+        lineas.push(actual);
+        actual = palabra;
+      } else {
+        actual = prueba;
+      }
+    }
+    if (actual) lineas.push(actual);
+    return lineas;
+  }
+
+  function dibujarCaja(page, x, y, width, texto, opts) {
+    opts = opts || {};
+    const color = opts.color || verde;
+    const fondo = opts.fondo || crema;
+    const size = opts.size || 8.5;
+    const fontObj = opts.fontObj || font;
+    const lineHeight = opts.lineHeight || 11.5;
+    const paddingV = opts.paddingV || 10;
+    const paddingH = opts.paddingH || 13;
+    const etiqueta = opts.etiqueta || null;
+    const maxWidth = width - paddingH * 2;
+    const lineas = envolverTexto(fontObj, texto, size, maxWidth);
+    let alto = lineas.length * lineHeight + paddingV * 2;
+    let offsetEtiqueta = 0;
+    if (etiqueta) offsetEtiqueta = 12;
+    alto += offsetEtiqueta;
+    page.drawRectangle({ x, y: y - alto, width, height: alto, color: fondo });
+    page.drawRectangle({ x, y: y - alto, width: 3, height: alto, color });
+    let ly = y - paddingV - 7;
+    if (etiqueta) {
+      page.drawText(etiqueta.toUpperCase(), { x: x + paddingH, y: ly, size: 6.8, font: fontBold, color });
+      ly -= offsetEtiqueta;
+    }
+    lineas.forEach((linea) => {
+      page.drawText(linea, { x: x + paddingH, y: ly, size, font: fontObj, color: oscuro });
+      ly -= lineHeight;
+    });
+    return alto;
+  }
+
+  function dibujarKpi(page, x, y, width, height, label, valor, opts) {
+    opts = opts || {};
+    const sub = opts.sub || null;
+    const delta = opts.delta === undefined ? null : opts.delta;
+    const color = opts.color || verde;
+    page.drawRectangle({ x, y: y - height, width, height, color: crema });
+    page.drawRectangle({ x, y: y - height, width: 4, height, color });
+    page.drawText(String(valor), { x: x + 16, y: y - 30, size: 21, font: fontBold, color });
+    page.drawText(label, { x: x + 16, y: y - 46, size: 8, font, color: gris });
+    if (sub) page.drawText(sub, { x: x + 16, y: y - 58, size: 7.5, font, color: gris });
+    if (delta !== null) {
+      const positivo = delta >= 0;
+      const texto = (positivo ? "+" : "") + delta + "%";
+      page.drawText((positivo ? "▲ " : "▼ ") + texto, { x: x + 16, y: y - 58, size: 8, font: fontBold, color: positivo ? verde : rojo });
+    }
+  }
+
+  function dibujarBarras(page, x, yTop, width, alturaGrafico, valores, etiquetas, opts) {
+    opts = opts || {};
+    const colorBase = opts.colorBase || verde;
+    const colorPico = opts.colorPico || oro;
+    const indicePico = opts.indicePico === undefined ? null : opts.indicePico;
+    const mostrarValor = opts.mostrarValor === undefined ? true : opts.mostrarValor;
+    const tamEtiqueta = opts.tamEtiqueta || 8;
+    const max = Math.max(1, ...valores);
+    const anchoBarra = width / valores.length;
+    valores.forEach((v, i) => {
+      const alturaBarra = (v / max) * alturaGrafico;
+      const bx = x + i * anchoBarra;
+      const color = i === indicePico ? colorPico : colorBase;
+      page.drawRectangle({ x: bx + anchoBarra * 0.15, y: yTop - alturaGrafico, width: anchoBarra * 0.7, height: alturaBarra || 1, color });
+      if (mostrarValor) {
+        page.drawText(String(v), { x: bx + anchoBarra * 0.5 - 5, y: yTop - alturaGrafico + (alturaBarra || 1) + 4, size: 7.5, font, color: gris });
+      }
+      if (etiquetas && etiquetas[i] !== undefined) {
+        page.drawText(String(etiquetas[i]), { x: bx + anchoBarra * 0.5 - (String(etiquetas[i]).length * 2.6), y: yTop - alturaGrafico - 13, size: tamEtiqueta, font, color: oscuro });
+      }
+    });
+    page.drawLine({ start: { x, y: yTop - alturaGrafico }, end: { x: x + width, y: yTop - alturaGrafico }, thickness: 0.5, color: grisClaro });
+  }
+
+  function dibujarGauge(page, x, y, width, pct, opts) {
+    opts = opts || {};
+    const alto = opts.alto || 10;
+    const color = opts.color || verde;
+    page.drawRectangle({ x, y, width, height: alto, color: grisClaro });
+    page.drawRectangle({ x, y, width: (Math.max(0, Math.min(100, pct)) / 100) * width, height: alto, color });
+  }
+
+  function tituloSeccionInterna(page, texto, x, y) {
+    page.drawText(texto, { x, y, size: 11, font: fontBold, color: oscuro });
+  }
+
   const portada = pdfDoc.addPage([ANCHO, ALTO]);
   portada.drawRectangle({ x: 0, y: 0, width: ANCHO, height: ALTO, color: verdeOscuro });
   portada.drawRectangle({ x: 0, y: ALTO - 8, width: ANCHO, height: 8, color: oro });
   portada.drawText("TAPIN", { x: 50, y: ALTO - 120, size: 34, font: fontBold, color: blanco });
-  portada.drawText("Informe de desempeño", { x: 50, y: ALTO - 150, size: 14, font, color: rgb(0.81, 0.89, 0.85) });
+  portada.drawText("Informe analítico de desempeño", { x: 50, y: ALTO - 150, size: 14, font, color: rgb(0.81, 0.89, 0.85) });
 
   portada.drawLine({ start: { x: 50, y: ALTO - 200 }, end: { x: 250, y: ALTO - 200 }, thickness: 1.5, color: oro });
   portada.drawText(negocio.nombre, { x: 50, y: ALTO - 240, size: 26, font: fontBold, color: blanco });
-  portada.drawText(`Categoría: ${negocio.categoria || "—"}`, { x: 50, y: ALTO - 264, size: 11, font, color: rgb(0.81, 0.89, 0.85) });
-  portada.drawText(`Generado el ${fechaGenerado}`, { x: 50, y: ALTO - 282, size: 11, font, color: rgb(0.81, 0.89, 0.85) });
+  portada.drawText("Categoría: " + (negocio.categoria || "-"), { x: 50, y: ALTO - 264, size: 11, font, color: rgb(0.81, 0.89, 0.85) });
+  portada.drawText("Generado el " + fechaGenerado, { x: 50, y: ALTO - 282, size: 11, font, color: rgb(0.81, 0.89, 0.85) });
+
+  const fichaTecnica = [
+    ["Interacciones analizadas", String(r.total)],
+    ["Días con historial", String(diasActivo)],
+    ["Calificaciones recibidas", String(totalCalificado)],
+    ["Cobertura horaria (30 días)", horas.horasConDatos + "/24 horas"],
+  ];
+  let fy = ALTO - 340;
+  portada.drawText("Ficha técnica del informe", { x: 50, y: fy, size: 9.5, font: fontBold, color: oro });
+  fy -= 18;
+  fichaTecnica.forEach((par) => {
+    portada.drawText(par[0], { x: 50, y: fy, size: 9, font, color: rgb(0.81, 0.89, 0.85) });
+    portada.drawText(par[1], { x: 300, y: fy, size: 9, font: fontBold, color: blanco });
+    fy -= 16;
+  });
 
   portada.drawRectangle({ x: 50, y: 120, width: ANCHO - 100, height: 1, color: rgb(0.3, 0.45, 0.38) });
-  portada.drawText("Preparado automáticamente a partir de la actividad real registrada en la tarjeta Tapin de este negocio.", {
-    x: 50, y: 95, size: 9, font, color: rgb(0.7, 0.8, 0.75), maxWidth: ANCHO - 100, lineHeight: 13,
-  });
+  portada.drawText(
+    "Preparado automáticamente a partir de la actividad real registrada en la tarjeta Tapin de este negocio. " +
+    "Incluye análisis de tendencia, estacionalidad horaria y semanal, reputación y comparación sectorial.",
+    { x: 50, y: 95, size: 9, font, color: rgb(0.7, 0.8, 0.75), maxWidth: ANCHO - 100, lineHeight: 13 }
+  );
   portada.drawText("Tapin", { x: 50, y: 50, size: 9, font: fontBold, color: oro });
 
-  // ---------- Página 2: Resumen ejecutivo ----------
   const resumen = pdfDoc.addPage([ANCHO, ALTO]);
   encabezadoSeccion(resumen, "Resumen ejecutivo");
 
-  let y = ALTO - 110;
-  resumen.drawText("Métricas clave", { x: 50, y, size: 11, font: fontBold, color: oscuro });
-  y -= 16;
+  let y = ALTO - 106;
+  tituloSeccionInterna(resumen, "Métricas clave", MARGEN, y);
+  y -= 18;
 
-  const metrics = [
-    ["Toques totales", r.total],
-    ["Toques hoy", r.hoy],
-    ["Últimos 7 días", r.semana],
+  const kpiW = (ANCHO - 100 - 3 * 12) / 4;
+  const kpis = [
+    ["Total histórico", r.total, null, null],
+    ["Hoy", r.hoy, null, null],
+    ["Últimos 7 días", r.semana, null, cambioSemanal],
+    ["Promedio diario", promedioDiarioHistorico, "toques/día histórico", null],
   ];
-  let x = 50;
-  metrics.forEach(([label, val]) => {
-    resumen.drawRectangle({ x, y: y - 58, width: 158, height: 58, color: crema });
-    resumen.drawRectangle({ x, y: y - 58, width: 4, height: 58, color: verde });
-    resumen.drawText(String(val), { x: x + 16, y: y - 24, size: 22, font: fontBold, color: verde });
-    resumen.drawText(label, { x: x + 16, y: y - 42, size: 8.5, font, color: gris });
-    x += 168;
+  let kx = MARGEN;
+  kpis.forEach((k) => {
+    dibujarKpi(resumen, kx, y, kpiW, 64, k[0], k[1], { sub: k[2], delta: k[3], color: verde });
+    kx += kpiW + 12;
   });
-  y -= 90;
+  y -= 84;
 
-  if (esPro(negocio) && promSector !== null) {
-    const diferencia = r.semana - promSector;
-    const texto = diferencia >= 0
-      ? `Por encima del promedio de tu categoría (+${diferencia} toques/semana vs. ${promSector})`
-      : `Por debajo del promedio de tu categoría (${diferencia} toques/semana vs. ${promSector})`;
-    resumen.drawRectangle({ x: 50, y: y - 26, width: ANCHO - 100, height: 26, color: verdeClaro });
-    resumen.drawText(texto, { x: 60, y: y - 17, size: 9, font: fontBold, color: verdeOscuro });
-    y -= 46;
+  const piezasResumen = [];
+  if (cambioSemanal !== null) {
+    piezasResumen.push(
+      cambioSemanal >= 0
+        ? "la actividad subio " + cambioSemanal + "% esta semana frente a la anterior"
+        : "la actividad bajo " + Math.abs(cambioSemanal) + "% esta semana frente a la anterior"
+    );
   }
+  if (percentil !== null) piezasResumen.push("el negocio se ubica en el percentil " + percentil + " de su categoría");
+  if (promedioEstrellas !== null) piezasResumen.push("el promedio de calificación filtrada es " + promedioEstrellas + "/5");
+  const fraseResumen = piezasResumen.length
+    ? "En síntesis: " + piezasResumen.join("; ") + "."
+    : "Todavía no hay suficiente historial para generar una síntesis estadística confiable - vuelve a revisar este informe cuando haya más actividad acumulada.";
 
-  resumen.drawText("Toques por día (últimos 7 días)", { x: 50, y, size: 11, font: fontBold, color: oscuro });
-  y -= 16;
+  y -= dibujarCaja(resumen, MARGEN, y, ANCHO - 100, fraseResumen, {
+    color: verde, fondo: verdeClaro, size: 9, etiqueta: "Lectura del periodo",
+  });
+  y -= 18;
 
-  const max = Math.max(1, ...r.dias7);
-  const nombresDias = [];
+  tituloSeccionInterna(resumen, "Toques por día - últimos 7 días", MARGEN, y);
+  y -= 14;
+  const nombresDias7 = [];
   const ahoraD = new Date();
   for (let i = 6; i >= 0; i--) {
     const d = new Date(ahoraD);
     d.setDate(d.getDate() - i);
-    nombresDias.push(d.toLocaleDateString("es-CO", { weekday: "short" }));
+    nombresDias7.push(d.toLocaleDateString("es-CO", { weekday: "short", timeZone: zonaDe(negocio) }));
   }
-  const barAreaTop = y;
-  const barAreaHeight = 90;
-  r.dias7.forEach((v, i) => {
-    const barHeight = (v / max) * barAreaHeight;
-    const bx = 50 + i * 70;
-    resumen.drawRectangle({ x: bx, y: barAreaTop - barAreaHeight, width: 36, height: barHeight || 1, color: verde });
-    resumen.drawText(String(v), { x: bx + 12, y: barAreaTop - barAreaHeight - 14, size: 9, font, color: gris });
-    resumen.drawText(nombresDias[i], { x: bx, y: barAreaTop - barAreaHeight - 28, size: 9, font, color: oscuro });
-  });
+  dibujarBarras(resumen, MARGEN, y, ANCHO - 100, 92, r.dias7, nombresDias7, { indicePico: r.dias7.indexOf(Math.max(...r.dias7)) });
+  y -= 92 + 34;
 
-  y = barAreaTop - barAreaHeight - 60;
-  resumen.drawText("Recomendaciones", { x: 50, y, size: 11, font: fontBold, color: oscuro });
-  y -= 18;
-  recomendaciones.forEach((texto) => {
-    if (y < 90) return;
-    resumen.drawRectangle({ x: 50, y: y - 28, width: ANCHO - 100, height: 28, color: crema });
-    resumen.drawRectangle({ x: 50, y: y - 28, width: 3, height: 28, color: oro });
-    resumen.drawText(texto, { x: 62, y: y - 18, size: 8.5, font, color: oscuro, maxWidth: ANCHO - 130, lineHeight: 11 });
-    y -= 36;
-  });
+  if (comparativoMes.disponible) {
+    tituloSeccionInterna(resumen, "Este mes vs. el anterior", MARGEN, y);
+    y -= 16;
+    const compW = (ANCHO - 100 - 2 * 12) / 3;
+    let cx = MARGEN;
+    dibujarKpi(resumen, cx, y, compW, 54, "Este mes", comparativoMes.mesActual, { color: verde });
+    cx += compW + 12;
+    dibujarKpi(resumen, cx, y, compW, 54, "Mes anterior", comparativoMes.mesAnterior, { color: gris });
+    cx += compW + 12;
+    dibujarKpi(resumen, cx, y, compW, 54, "Cambio", (comparativoMes.cambioPct >= 0 ? "+" : "") + comparativoMes.cambioPct + "%", {
+      color: comparativoMes.cambioPct >= 0 ? verde : rojo,
+    });
+    y -= 70;
+  }
   piePagina(resumen);
 
-  // ---------- Página 3: Análisis por horas — picos y caídas ----------
-  const paginaHoras = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(paginaHoras, "Picos y caídas por hora");
+  const pTendencia = pdfDoc.addPage([ANCHO, ALTO]);
+  encabezadoSeccion(pTendencia, "Tendencia y proyección", negocio.nombre + " - basado en el ritmo real de actividad");
 
   y = ALTO - 108;
-  paginaHoras.drawText("Basado en los últimos 30 días de actividad", { x: 50, y, size: 9, font, color: gris });
+  tituloSeccionInterna(pTendencia, "Mapa de calor del mes en curso", MARGEN, y);
+  y -= 16;
+  {
+    const cols = 7;
+    const cellGap = 4;
+    const cellSize = (ANCHO - 100 - cellGap * (cols - 1)) / cols;
+    const diasSemanaLbl = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"];
+    diasSemanaLbl.forEach((lbl, i) => {
+      pTendencia.drawText(lbl, { x: MARGEN + i * (cellSize + cellGap) + cellSize / 2 - 8, y, size: 7, font, color: gris });
+    });
+    y -= 14;
+    let col = calendario.primerDiaSemana;
+    let fila = 0;
+    let cy = y;
+    calendario.dias.forEach((v, i) => {
+      const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
+      const cx2 = MARGEN + col * (cellSize + cellGap);
+      const cyPos = cy - fila * (cellSize + cellGap);
+      pTendencia.drawRectangle({
+        x: cx2, y: cyPos - cellSize, width: cellSize, height: cellSize,
+        color: v === 0 ? grisClaro : rgb(0.059 + (1 - intensidad) * 0.3, 0.318 + (1 - intensidad) * 0.3, 0.196 + (1 - intensidad) * 0.3),
+      });
+      pTendencia.drawText(String(i + 1), {
+        x: cx2 + 4, y: cyPos - cellSize + 5, size: 6.5, font,
+        color: intensidad > 0.5 ? blanco : oscuro,
+      });
+      col++;
+      if (col >= cols) { col = 0; fila++; }
+    });
+    const filasTotales = Math.ceil((calendario.primerDiaSemana + calendario.dias.length) / cols);
+    y = cy - filasTotales * (cellSize + cellGap) - 10;
+    pTendencia.drawText("Mas oscuro = más interacciones ese día.", { x: MARGEN, y, size: 7.5, font: fontItalic, color: gris });
+    y -= 26;
+  }
+
+  tituloSeccionInterna(pTendencia, "Proyección de cierre de mes", MARGEN, y);
+  y -= 16;
+  if (proyeccion.suficiente) {
+    const projW = (ANCHO - 100 - 2 * 12) / 3;
+    let px = MARGEN;
+    dibujarKpi(pTendencia, px, y, projW, 58, "Acumulado del mes", proyeccion.toquesMes, { color: verde });
+    px += projW + 12;
+    dibujarKpi(pTendencia, px, y, projW, 58, "Proyección al cierre", proyeccion.proyectado, { sub: "rango " + proyeccion.minimo + "-" + proyeccion.maximo, color: oro });
+    px += projW + 12;
+    dibujarKpi(pTendencia, px, y, projW, 58, "Ritmo diario", proyeccion.promedio, { sub: proyeccion.restantes + " días restantes", color: verde });
+    y -= 78;
+  } else {
+    y -= dibujarCaja(pTendencia, MARGEN, y, ANCHO - 100,
+      "Todavía no hay suficientes días acumulados este mes para calcular una proyección confiable (se necesitan al menos 3 días con actividad).",
+      { color: gris, fondo: crema, size: 8.5 });
+    y -= 14;
+  }
+
+  if (comparativoAnio) {
+    y -= dibujarCaja(pTendencia, MARGEN, y, ANCHO - 100,
+      "Comparado con el mismo mes del año pasado (" + comparativoAnio.mesAnioPasado + " toques), este mes registra " + comparativoAnio.mesActual + " - un cambio de " + (comparativoAnio.cambioPct >= 0 ? "+" : "") + comparativoAnio.cambioPct + "% interanual.",
+      { color: verde, fondo: verdeClaro, size: 8.5, etiqueta: "Comparación interanual" });
+    y -= 14;
+  }
+
+  if (caidaPropia) {
+    y -= dibujarCaja(pTendencia, MARGEN, y, ANCHO - 100,
+      "La semana actual está " + caidaPropia.pctCaida + "% por debajo del promedio histórico del propio negocio (~" + caidaPropia.promedioSemanal + " toques/semana). Vale la pena revisar si algo cambio (ubicacion de la tarjeta, horario, personal).",
+      { color: rojo, fondo: rojoClaro, size: 8.5, etiqueta: "Anomalía detectada" });
+  }
+  piePagina(pTendencia);
+
+  const paginaHoras = pdfDoc.addPage([ANCHO, ALTO]);
+  encabezadoSeccion(paginaHoras, "Patrones horarios", negocio.nombre + " - últimos 30 días");
+
+  y = ALTO - 108;
+  paginaHoras.drawText("Distribución de la actividad a lo largo del día", { x: MARGEN, y, size: 9, font, color: gris });
   y -= 24;
 
-  // Tarjetas de pico y caída
-  const horaTexto = (h) => `${h}:00 - ${(h + 1) % 24}:00`;
-  const tarjetasHora = [
-    ["Hora pico", horaTexto(horas.picoHora), `${horas.maxToques} toques`, verde],
-    ["Hora más floja", horas.horaCaida != null ? horaTexto(horas.horaCaida) : "—", `${horas.minToques} toques`, rojo],
-  ];
-  x = 50;
-  tarjetasHora.forEach(([label, hora, sub, color]) => {
-    paginaHoras.drawRectangle({ x, y: y - 66, width: 246, height: 66, color: crema });
-    paginaHoras.drawRectangle({ x, y: y - 66, width: 4, height: 66, color });
-    paginaHoras.drawText(label, { x: x + 16, y: y - 20, size: 8.5, font, color: gris });
-    paginaHoras.drawText(hora, { x: x + 16, y: y - 42, size: 18, font: fontBold, color: oscuro });
-    paginaHoras.drawText(sub, { x: x + 16, y: y - 56, size: 8.5, font, color: gris });
-    x += 256;
-  });
-  y -= 90;
+  const horaTexto = function (h) { return h + ":00-" + ((h + 1) % 24) + ":00"; };
+  const pctPico = horas.totalMes > 0 ? Math.round((horas.maxToques / horas.totalMes) * 100) : 0;
+  const kpiHorasW = (ANCHO - 100 - 2 * 12) / 3;
+  let hx = MARGEN;
+  dibujarKpi(paginaHoras, hx, y, kpiHorasW, 62, "Hora pico", horaTexto(horas.picoHora), { sub: horas.maxToques + " toques (" + pctPico + "% del total)", color: oro });
+  hx += kpiHorasW + 12;
+  dibujarKpi(paginaHoras, hx, y, kpiHorasW, 62, "Hora más floja", horas.horaCaida != null ? horaTexto(horas.horaCaida) : "-", { sub: horas.minToques + " toques", color: rojo });
+  hx += kpiHorasW + 12;
+  dibujarKpi(paginaHoras, hx, y, kpiHorasW, 62, "Cobertura horaria", horas.horasConDatos + "/24", { sub: "horas del día con al menos 1 toque", color: verde });
+  y -= 86;
 
   if (horas.totalMes > 0) {
     let textoTendencia;
     if (horas.tendenciaPico > 0) {
-      textoTendencia = `La hora pico (${horaTexto(horas.picoHora)}) tuvo ${horas.tendenciaPico} toques más esta semana que la anterior — la actividad está subiendo.`;
+      textoTendencia = "La hora pico (" + horaTexto(horas.picoHora) + ") tuvo " + horas.tendenciaPico + " toques más esta semana que la anterior - la concentración de actividad en ese horario está subiendo.";
     } else if (horas.tendenciaPico < 0) {
-      textoTendencia = `La hora pico (${horaTexto(horas.picoHora)}) tuvo ${Math.abs(horas.tendenciaPico)} toques menos esta semana que la anterior — vale la pena revisar qué cambió.`;
+      textoTendencia = "La hora pico (" + horaTexto(horas.picoHora) + ") tuvo " + Math.abs(horas.tendenciaPico) + " toques menos esta semana que la anterior - vale la pena revisar qué cambió en ese horario.";
     } else {
-      textoTendencia = `La hora pico (${horaTexto(horas.picoHora)}) se mantuvo estable esta semana comparada con la anterior.`;
+      textoTendencia = "La hora pico (" + horaTexto(horas.picoHora) + ") se mantuvo estable esta semana comparada con la anterior.";
     }
-    paginaHoras.drawRectangle({ x: 50, y: y - 30, width: ANCHO - 100, height: 30, color: verdeClaro });
-    paginaHoras.drawText(textoTendencia, { x: 60, y: y - 20, size: 8.5, font: fontBold, color: verdeOscuro, maxWidth: ANCHO - 120, lineHeight: 11 });
-    y -= 50;
+    y -= dibujarCaja(paginaHoras, MARGEN, y, ANCHO - 100, textoTendencia, { color: verde, fondo: verdeClaro, size: 8.5, etiqueta: "Lectura de la tendencia horaria" });
+    y -= 14;
   }
 
-  paginaHoras.drawText("Distribución de toques por hora del día", { x: 50, y, size: 11, font: fontBold, color: oscuro });
+  tituloSeccionInterna(paginaHoras, "Toques por hora del día (0-23h)", MARGEN, y);
   y -= 14;
 
   if (horas.totalMes === 0) {
-    paginaHoras.drawText("Todavía no hay suficientes datos este mes para este análisis.", { x: 50, y: y - 20, size: 9, font, color: gris });
+    paginaHoras.drawText("Todavía no hay suficientes datos este mes para este análisis.", { x: MARGEN, y: y - 20, size: 9, font, color: gris });
   } else {
-    const graficoTop = y - 10;
-    const graficoAltura = 180;
-    const maxHora = Math.max(1, horas.maxToques);
+    const graficoAltura = 160;
     const anchoBarra = (ANCHO - 100) / 24;
     horas.porHora.forEach((v, h) => {
-      const alturaBarra = (v / maxHora) * graficoAltura;
-      const bx = 50 + h * anchoBarra;
+      const alturaBarra = (v / Math.max(1, horas.maxToques)) * graficoAltura;
+      const bx = MARGEN + h * anchoBarra;
       const esPico = h === horas.picoHora && v > 0;
       paginaHoras.drawRectangle({
-        x: bx + 1, y: graficoTop - graficoAltura, width: anchoBarra - 2, height: alturaBarra || 0.5,
+        x: bx + 1, y: y - graficoAltura, width: anchoBarra - 2, height: alturaBarra || 0.5,
         color: esPico ? oro : verde,
       });
-      // Etiqueta de hora cada 3 horas para no saturar
       if (h % 3 === 0) {
-        paginaHoras.drawText(String(h), { x: bx + 1, y: graficoTop - graficoAltura - 12, size: 6.5, font, color: gris });
+        paginaHoras.drawText(String(h), { x: bx + 1, y: y - graficoAltura - 12, size: 6.5, font, color: gris });
       }
     });
-    paginaHoras.drawLine({
-      start: { x: 50, y: graficoTop - graficoAltura }, end: { x: ANCHO - 50, y: graficoTop - graficoAltura },
-      thickness: 0.5, color: gris,
-    });
+    paginaHoras.drawLine({ start: { x: MARGEN, y: y - graficoAltura }, end: { x: ANCHO - MARGEN, y: y - graficoAltura }, thickness: 0.5, color: grisClaro });
   }
   piePagina(paginaHoras);
 
-  // ---------- Página 4: Detalle de interacciones ----------
+  const pSemana = pdfDoc.addPage([ANCHO, ALTO]);
+  encabezadoSeccion(pSemana, "Patrones semanales", negocio.nombre + " - historial completo");
+
+  y = ALTO - 108;
+  pSemana.drawText("Distribución histórica de la actividad por día de la semana", { x: MARGEN, y, size: 9, font, color: gris });
+  y -= 26;
+
+  if (totalDiaSemana > 0) {
+    dibujarBarras(pSemana, MARGEN, y, ANCHO - 100, 140, porDiaSemana, nombresDiaCorto, {
+      indicePico: porDiaSemana.indexOf(Math.max(...porDiaSemana)),
+    });
+    y -= 140 + 34;
+
+    if (diaFlojo) {
+      y -= dibujarCaja(pSemana, MARGEN, y, ANCHO - 100,
+        "El " + diaFlojo.dia + " es historicamente el día con menos actividad (" + diaFlojo.toques + " toques acumulados). " + (diaMasFuerte ? "El día con mejor desempeño es " + diaMasFuerte + "." : "") + " Considera una promoción o recordatorio a clientes frecuentes ese día.",
+        { color: oro, fondo: oroClaro, size: 8.5, etiqueta: "Estacionalidad semanal" });
+      y -= 14;
+    }
+  } else {
+    pSemana.drawText("Todavía no hay suficiente historial para identificar un patrón por día de la semana.", { x: MARGEN, y: y - 10, size: 9, font, color: gris });
+    y -= 40;
+  }
+
+  tituloSeccionInterna(pSemana, "Clientes recurrentes", MARGEN, y);
+  y -= 16;
+  dibujarKpi(pSemana, MARGEN, y, (ANCHO - 100 - 12) / 2, 60, "Clientes con 3+ calificaciones", clientesRecurrentes, { sub: "señal de fidelización real, no solo tráfico nuevo", color: verde });
+  y -= 80;
+  piePagina(pSemana);
+
+  const pReputacion = pdfDoc.addPage([ANCHO, ALTO]);
+  encabezadoSeccion(pReputacion, "Reputación y satisfacción", negocio.nombre + " - calificaciones filtradas por Tapin");
+
+  y = ALTO - 108;
+  const repW = (ANCHO - 100 - 2 * 12) / 3;
+  let rx = MARGEN;
+  dibujarKpi(pReputacion, rx, y, repW, 62, "Calificación promedio", promedioEstrellas !== null ? promedioEstrellas + "/5" : "-", { sub: totalCalificado + " evaluaciones", color: oro });
+  rx += repW + 12;
+  dibujarKpi(pReputacion, rx, y, repW, 62, "Reseñas positivas", pctPositivas + "%", { sub: testimonios.length + " enviadas a Google", color: verde });
+  rx += repW + 12;
+  dibujarKpi(pReputacion, rx, y, repW, 62, "Quejas privadas", pctNegativas + "%", { sub: tasaRecuperacion !== null ? tasaRecuperacion + "% resueltas" : quejas.length + " recibidas", color: rojo });
+  y -= 86;
+
+  tituloSeccionInterna(pReputacion, "Distribución de calificaciones filtradas", MARGEN, y);
+  y -= 16;
+  if (totalCalificado > 0) {
+    const barraAncho = ANCHO - 100;
+    const wPos = (pctPositivas / 100) * barraAncho;
+    pReputacion.drawRectangle({ x: MARGEN, y: y - 16, width: barraAncho, height: 16, color: rojoClaro });
+    pReputacion.drawRectangle({ x: MARGEN, y: y - 16, width: wPos, height: 16, color: verde });
+    y -= 30;
+    pReputacion.drawRectangle({ x: MARGEN, y: y - 10, width: 9, height: 9, color: verde });
+    pReputacion.drawText("Positivas - enviadas a Google (" + testimonios.length + ", " + pctPositivas + "%)", { x: MARGEN + 15, y: y - 9, size: 8.5, font, color: oscuro });
+    y -= 16;
+    pReputacion.drawRectangle({ x: MARGEN, y: y - 10, width: 9, height: 9, color: rojo });
+    pReputacion.drawText("Quejas - privadas, nunca públicas (" + quejas.length + ", " + pctNegativas + "%)", { x: MARGEN + 15, y: y - 9, size: 8.5, font, color: oscuro });
+    y -= 26;
+
+    if (tasaRecuperacion !== null) {
+      y -= dibujarCaja(pReputacion, MARGEN, y, ANCHO - 100,
+        "De las " + quejas.length + " quejas privadas recibidas, " + quejasResueltas + " ya fueron marcadas como resueltas - una tasa de recuperación del " + tasaRecuperacion + "%. Cada queja resuelta es una reseña negativa pública que se evitó.",
+        { color: verde, fondo: verdeClaro, size: 8.5, etiqueta: "Gestión de reputación" });
+    }
+  } else {
+    pReputacion.drawText("Todavía no hay calificaciones registradas en este periodo.", { x: MARGEN, y: y - 10, size: 9, font, color: gris });
+  }
+  piePagina(pReputacion);
+
+  const pSector = pdfDoc.addPage([ANCHO, ALTO]);
+  encabezadoSeccion(pSector, "Comparación sectorial", negocio.nombre + " - categoría: " + (negocio.categoria || "-"));
+
+  y = ALTO - 108;
+  if (promSector !== null) {
+    tituloSeccionInterna(pSector, "Toques de la última semana vs. el promedio del sector", MARGEN, y);
+    y -= 20;
+    const base = Math.max(1, r.semana, promSector);
+    pSector.drawText("Tu", { x: MARGEN, y, size: 9, font: fontBold, color: oscuro });
+    pSector.drawText(String(r.semana), { x: ANCHO - MARGEN - 24, y, size: 9, font: fontBold, color: verde });
+    y -= 12;
+    dibujarGauge(pSector, MARGEN, y - 10, ANCHO - 100, (r.semana / base) * 100, { color: verde });
+    y -= 30;
+    pSector.drawText("Promedio del sector", { x: MARGEN, y, size: 9, font: fontBold, color: oscuro });
+    pSector.drawText(String(promSector), { x: ANCHO - MARGEN - 24, y, size: 9, font: fontBold, color: oro });
+    y -= 12;
+    dibujarGauge(pSector, MARGEN, y - 10, ANCHO - 100, (promSector / base) * 100, { color: oro });
+    y -= 40;
+
+    const diferenciaSector = r.semana - promSector;
+    y -= dibujarCaja(pSector, MARGEN, y, ANCHO - 100,
+      diferenciaSector >= 0
+        ? "El negocio está " + diferenciaSector + " toques por encima del promedio de su categoría esta semana."
+        : "El negocio está " + Math.abs(diferenciaSector) + " toques por debajo del promedio de su categoría esta semana - es la principal palanca de mejora a corto plazo.",
+      { color: diferenciaSector >= 0 ? verde : rojo, fondo: diferenciaSector >= 0 ? verdeClaro : rojoClaro, size: 8.5, etiqueta: "Brecha vs. sector" });
+    y -= 18;
+  } else {
+    y -= dibujarCaja(pSector, MARGEN, y, ANCHO - 100,
+      "Todavía no hay suficientes negocios de la misma categoría y país en Tapin para calcular un promedio sectorial confiable.",
+      { color: gris, fondo: crema, size: 8.5 });
+    y -= 18;
+  }
+
+  if (percentil !== null) {
+    tituloSeccionInterna(pSector, "Posición relativa dentro de la categoría", MARGEN, y);
+    y -= 20;
+    dibujarGauge(pSector, MARGEN, y - 10, ANCHO - 100, percentil, { color: verde, alto: 14 });
+    pSector.drawText("Percentil " + percentil, { x: MARGEN, y: y - 30, size: 10, font: fontBold, color: verde });
+    pSector.drawText(
+      percentil >= 50
+        ? "El negocio está en el " + (100 - percentil + 1) + "% superior de su categoría en toques de la última semana."
+        : "El negocio está por debajo de la mediana de su categoría en toques de la última semana.",
+      { x: MARGEN, y: y - 46, size: 8.5, font, color: gris, maxWidth: ANCHO - 100, lineHeight: 11 }
+    );
+    y -= 70;
+  }
+  piePagina(pSector);
+
+  const pReco = pdfDoc.addPage([ANCHO, ALTO]);
+  encabezadoSeccion(pReco, "Recomendaciones basadas en datos", negocio.nombre);
+
+  y = ALTO - 108;
+  pReco.drawText("Generadas automáticamente a partir de los patrones detectados en este informe.", { x: MARGEN, y, size: 9, font: fontItalic, color: gris });
+  y -= 24;
+
+  const todasLasRecos = recomendaciones.slice();
+  if (diaFlojo) todasLasRecos.push("Refuerza la promoción o el personal el " + diaFlojo.dia + ", tu día historicamente más flojo.");
+  if (caidaPropia) todasLasRecos.push("La semana actual está " + caidaPropia.pctCaida + "% por debajo de tu propio promedio - revisa si algo cambio operativamente.");
+  if (percentil !== null && percentil < 50) todasLasRecos.push("Estas por debajo de la mediana de tu categoría - revisa la ubicacion de la tarjeta y la frecuencia con que el personal la ofrece.");
+  if (tasaRecuperacion !== null && tasaRecuperacion < 50) todasLasRecos.push("Solo el " + tasaRecuperacion + "% de las quejas privadas están resueltas - cerrar ese ciclo mejora la retención de clientes insatisfechos.");
+
+  todasLasRecos.forEach((texto) => {
+    if (y < 100) return;
+    y -= dibujarCaja(pReco, MARGEN, y, ANCHO - 100, texto, { color: oro, fondo: oroClaro, size: 8.8 });
+    y -= 10;
+  });
+  piePagina(pReco);
+
   const detalle = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(detalle, "Detalle de interacciones");
+  encabezadoSeccion(detalle, "Anexo - detalle de interacciones", negocio.nombre);
 
   y = ALTO - 110;
-  detalle.drawText("Últimas interacciones registradas", { x: 50, y, size: 11, font: fontBold, color: oscuro });
+  detalle.drawText("Últimas interacciones registradas (max. 30)", { x: MARGEN, y, size: 11, font: fontBold, color: oscuro });
   y -= 22;
 
-  detalle.drawRectangle({ x: 50, y: y - 18, width: ANCHO - 100, height: 18, color: verdeOscuro });
+  detalle.drawRectangle({ x: MARGEN, y: y - 18, width: ANCHO - 100, height: 18, color: verdeOscuro });
   detalle.drawText("Fecha y hora", { x: 58, y: y - 13, size: 8.5, font: fontBold, color: blanco });
   detalle.drawText("Dispositivo", { x: 320, y: y - 13, size: 8.5, font: fontBold, color: blanco });
   y -= 18;
@@ -4905,13 +5263,26 @@ async function generarInformePDF(negocio, slug) {
   const recientes = eventos.slice(-30).reverse();
   recientes.forEach((e, i) => {
     if (y < 90) return;
-    if (i % 2 === 0) detalle.drawRectangle({ x: 50, y: y - 16, width: ANCHO - 100, height: 16, color: crema });
+    if (i % 2 === 0) detalle.drawRectangle({ x: MARGEN, y: y - 16, width: ANCHO - 100, height: 16, color: crema });
     detalle.drawText(e.fechaLegible, { x: 58, y: y - 12, size: 8.5, font, color: oscuro });
     detalle.drawText(e.dispositivo, { x: 320, y: y - 12, size: 8.5, font, color: oscuro });
     y -= 16;
   });
   if (recientes.length === 0) {
     detalle.drawText("Sin interacciones registradas todavía.", { x: 58, y: y - 12, size: 9, font, color: gris });
+    y -= 20;
+  }
+
+  y -= 24;
+  if (y > 130) {
+    detalle.drawText("Metodología", { x: MARGEN, y, size: 10, font: fontBold, color: oscuro });
+    y -= 16;
+    const notaMetodologica =
+      "Todas las cifras de este informe provienen exclusivamente de los toques NFC/QR y calificaciones registrados en la tarjeta Tapin de este negocio. " +
+      "Las proyecciones se calculan a partir del ritmo diario observado en el periodo, con un rango de +-15% para reflejar la incertidumbre natural. " +
+      "Los promedios y percentiles sectoriales solo se muestran cuando hay al menos 3 negocios comparables de la misma categoría y país. " +
+      "Las calificaciones negativas nunca se publican en Google; se gestionan como retroalimentación privada.";
+    detalle.drawText(notaMetodologica, { x: MARGEN, y, size: 7.8, font: fontItalic, color: gris, maxWidth: ANCHO - 100, lineHeight: 11 });
   }
   piePagina(detalle);
 
