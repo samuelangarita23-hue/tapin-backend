@@ -1551,10 +1551,10 @@ function promedioSector(categoria, slugActual, datos) {
   const pares = Object.entries(todos).filter(
     ([slug, n]) => n.categoria === categoria && slug !== slugActual
   );
-  // Con menos de 3 negocios parecidos, "el promedio del sector" sería en
-  // realidad el dato de uno o dos competidores puntuales — no lo mostramos
-  // para no exponer a nadie sin querer.
-  if (pares.length < 3) return null;
+  // Con menos de 2 negocios parecidos, "el promedio del sector" sería en
+  // realidad el dato de un solo competidor puntual — no lo mostramos para
+  // no exponer a nadie sin querer.
+  if (pares.length < 2) return null;
   const total = pares.reduce((acc, [slug]) => {
     const eventos = (datos[slug] && datos[slug].eventos) || [];
     return acc + calcularResumen(eventos).semana;
@@ -1565,14 +1565,14 @@ function promedioSector(categoria, slugActual, datos) {
 // Radar de sector: además del tráfico (lo que ya hacía promedioSector),
 // compara calificación promedio, tasa de conversión (toques -> reseñas) y
 // tasa de resolución de quejas contra el promedio de negocios de la misma
-// categoría. Mismo piso de privacidad: si hay menos de 3 negocios parecidos,
-// no se muestra nada — un "promedio" de 1 o 2 negocios identifica a la
-// competencia sin querer.
+// categoría. Mismo piso de privacidad: con menos de 2 negocios parecidos,
+// no se muestra nada — un "promedio" de un solo negocio lo identifica
+// directamente.
 function radarSector(negocio, slug, todosNegocios, datos) {
   const pares = Object.entries(todosNegocios).filter(
     ([s, n]) => n.categoria === negocio.categoria && s !== slug
   );
-  if (pares.length < 3) return null;
+  if (pares.length < 2) return null;
 
   const metricasDe = (s) => {
     const eventos = (datos[s] && datos[s].eventos) || [];
@@ -3969,6 +3969,14 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                   : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
               </div>
             </div>
+            ${esPro(negocio) ? `
+            <div class="panel-analitica-full">
+              <div class="card-titulo">Tú vs. tu sector</div>
+              <div class="chart-card" style="margin-top:0;">
+                <div class="sentimiento-vacio">Vas a poder comparar tu negocio con los de tu categoría en cuanto haya al menos 2 negocios más como el tuyo en Tapin. Por ahora no hay suficientes para hacerlo sin señalar a nadie en particular.</div>
+              </div>
+            </div>
+            ` : ""}
             `}
 
             <div class="panel-analitica-full">
