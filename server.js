@@ -775,7 +775,7 @@ function leerTokensAccesoNegocio() {
 function guardarTokensAccesoNegocio(tokens) {
   fs.writeFileSync(TOKENS_ACCESO_NEGOCIO_FILE, JSON.stringify(tokens, null, 2));
 }
-function generarLinkAccesoNegocio(slug, diasValidez = 7) {
+function generarLinkAccesoNegocio(slug, diasValidez = 7, esAdmin = false) {
   const tokens = leerTokensAccesoNegocio();
   // limpieza de tokens vencidos, para que el archivo no crezca sin control
   const ahora = Date.now();
@@ -783,9 +783,20 @@ function generarLinkAccesoNegocio(slug, diasValidez = 7) {
     if (new Date(tokens[t].expiraEl).getTime() < ahora) delete tokens[t];
   }
   const token = "tok_" + generarToken();
-  tokens[token] = { slug, expiraEl: new Date(ahora + diasValidez * 24 * 60 * 60 * 1000).toISOString() };
+  // Los tokens generados para el administrador (al entrar desde /stats) llevan
+  // esAdmin:true — así el panel no le exige plan Pro al negocio para dejarlo
+  // ver secciones Pro mientras navega en modo administrador.
+  tokens[token] = { slug, expiraEl: new Date(ahora + diasValidez * 24 * 60 * 60 * 1000).toISOString(), esAdmin };
   guardarTokensAccesoNegocio(tokens);
   return token;
+}
+// Indica si una clave/intento es un token temporal emitido específicamente
+// para el administrador (y no uno normal de dueño de negocio).
+function claveEsTokenAdmin(intento) {
+  if (typeof intento !== "string" || !intento.startsWith("tok_")) return false;
+  const tokens = leerTokensAccesoNegocio();
+  const entrada = tokens[intento];
+  return !!(entrada && entrada.esAdmin && new Date(entrada.expiraEl) > new Date());
 }
 
 // Lee cookies manualmente del header (sin depender de cookie-parser).
@@ -966,7 +977,11 @@ function autorizadoProNegocio(req, negocio, slug) {
   const key = slug ? claveEfectiva(req, slug) : req.query.key;
   if (key === ADMIN_KEY) return true;
   if (!tieneClaveConfigurada(negocio)) return false;
-  return claveNegocioValida(negocio, slug, key) && esPro(negocio);
+  if (!claveNegocioValida(negocio, slug, key)) return false;
+  // Si el administrador está navegando el panel (token emitido para él),
+  // puede ver las secciones Pro aunque el negocio esté en plan Básico.
+  if (claveEsTokenAdmin(key)) return true;
+  return esPro(negocio);
 }
 
 // Detecta tipo de dispositivo de forma simple a partir del user-agent
@@ -1536,12 +1551,59 @@ function promedioSector(categoria, slugActual, datos) {
   const pares = Object.entries(todos).filter(
     ([slug, n]) => n.categoria === categoria && slug !== slugActual
   );
-  if (pares.length === 0) return null;
+  // Con menos de 3 negocios parecidos, "el promedio del sector" sería en
+  // realidad el dato de uno o dos competidores puntuales — no lo mostramos
+  // para no exponer a nadie sin querer.
+  if (pares.length < 3) return null;
   const total = pares.reduce((acc, [slug]) => {
     const eventos = (datos[slug] && datos[slug].eventos) || [];
     return acc + calcularResumen(eventos).semana;
   }, 0);
   return Math.round(total / pares.length);
+}
+
+// Radar de sector: además del tráfico (lo que ya hacía promedioSector),
+// compara calificación promedio, tasa de conversión (toques -> reseñas) y
+// tasa de resolución de quejas contra el promedio de negocios de la misma
+// categoría. Mismo piso de privacidad: si hay menos de 3 negocios parecidos,
+// no se muestra nada — un "promedio" de 1 o 2 negocios identifica a la
+// competencia sin querer.
+function radarSector(negocio, slug, todosNegocios, datos) {
+  const pares = Object.entries(todosNegocios).filter(
+    ([s, n]) => n.categoria === negocio.categoria && s !== slug
+  );
+  if (pares.length < 3) return null;
+
+  const metricasDe = (s) => {
+    const eventos = (datos[s] && datos[s].eventos) || [];
+    const testimonios = (datos[s] && datos[s].testimonios) || [];
+    const quejas = (datos[s] && datos[s].quejas) || [];
+    const r = calcularResumen(eventos);
+    const totalResenas = testimonios.length + quejas.length;
+    return {
+      trafico: r.semana,
+      calificacion: promedioEstrellasFiltradas(testimonios, quejas),
+      conversion: r.total > 0 ? totalResenas / r.total : null,
+      resolucion: quejas.length > 0 ? quejas.filter((q) => q.estado === "resuelto").length / quejas.length : null,
+    };
+  };
+
+  const promedioDe = (valores) => {
+    const validos = valores.filter((v) => v !== null && Number.isFinite(v));
+    if (!validos.length) return null;
+    return validos.reduce((a, b) => a + b, 0) / validos.length;
+  };
+
+  const propio = metricasDe(slug);
+  const delSector = pares.map(([s]) => metricasDe(s));
+
+  return {
+    negociosComparados: pares.length,
+    trafico: { propio: propio.trafico, sector: promedioDe(delSector.map((m) => m.trafico)) },
+    calificacion: { propio: propio.calificacion, sector: promedioDe(delSector.map((m) => m.calificacion)) },
+    conversion: { propio: propio.conversion, sector: promedioDe(delSector.map((m) => m.conversion)) },
+    resolucion: { propio: propio.resolucion, sector: promedioDe(delSector.map((m) => m.resolucion)) },
+  };
 }
 
 // Lista blanca de frases válidas de testimonio — se usa tanto para mostrar
@@ -2697,7 +2759,7 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
     // Se crea un token temporal limitado exclusivamente a este negocio para
     // abrir su panel sin pedir otra clave ni exponer la clave real.
     const tokenPanelAdmin = tieneClaveConfigurada(NEGOCIOS_TOTAL[slug])
-      ? generarLinkAccesoNegocio(slug, 1)
+      ? generarLinkAccesoNegocio(slug, 1, true)
       : null;
 
     return `
@@ -2999,7 +3061,7 @@ app.get("/quejas/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio)) {
+  if (!autorizadoProNegocio(req, negocio, slug)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
 
@@ -3098,7 +3160,7 @@ app.post("/quejas/:slug/estado", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio)) {
+  if (!autorizadoProNegocio(req, negocio, slug)) {
     return res.status(401).send("No autorizado.");
   }
   const i = parseInt(req.body.i, 10);
@@ -3119,7 +3181,7 @@ app.post("/quejas/:slug/nota", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio)) {
+  if (!autorizadoProNegocio(req, negocio, slug)) {
     return res.status(401).send("No autorizado.");
   }
   const i = parseInt(req.body.i, 10);
@@ -3153,11 +3215,13 @@ app.get("/contenido/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio)) {
+  if (!autorizadoProNegocio(req, negocio, slug)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
 
-  if (!esPro(negocio)) {
+  // El administrador puede previsualizar esta sección con su token aunque el
+  // negocio esté en Plan Básico; para el dueño real, sigue exclusiva de Pro.
+  if (!esPro(negocio) && !claveEsTokenAdmin(claveEfectiva(req, slug))) {
     return res.status(402).send(
       `Esta función (generador de contenido para redes) es exclusiva del Plan Pro. ` +
       `Súbele el plan a "${negocio.nombre}" desde /editar/${slug}?key=${req.query.key} para activarla.`
@@ -3250,7 +3314,7 @@ app.get("/contenido/:slug/caption", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).json({ caption: null });
-  if (!autorizadoProNegocio(req, negocio) || !esPro(negocio)) {
+  if (!autorizadoProNegocio(req, negocio, slug) || !esPro(negocio)) {
     return res.status(401).json({ caption: null });
   }
   const datos = leerDatos();
@@ -3275,7 +3339,7 @@ app.get("/contenido/:slug/tarjeta.svg", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio)) {
+  if (!autorizadoProNegocio(req, negocio, slug)) {
     return res.status(401).send("No autorizado.");
   }
   if (!esPro(negocio)) {
@@ -3313,7 +3377,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   // cookie de sesión y no exponen esa clave.
   const adminAutorizado = adminSesionValida(req) || req.query.key === ADMIN_KEY;
   const claveUsada = adminAutorizado
-    ? generarLinkAccesoNegocio(slug, 1)
+    ? generarLinkAccesoNegocio(slug, 1, true)
     : claveEfectiva(req, slug);
   const autorizado = adminAutorizado || claveNegocioValida(negocio, slug, claveUsada) ||
     (negocio.claveSoloLectura && claveUsada === negocio.claveSoloLectura);
@@ -3322,9 +3386,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   }
   // Los botones del panel necesitan conservar una autorización; para el
   // administrador usamos un token temporal por negocio, nunca su clave.
-  if (adminAutorizado) req.query.key = claveUsada;
-  if (req.query.key && autorizado && claveUsada !== negocio.claveSoloLectura && !String(claveUsada).startsWith("tok_")) ponerCookieSesion(res, slug, req.query.key);
-  req.query.key = claveUsada;
+  if (claveUsada && autorizado && claveUsada !== negocio.claveSoloLectura && !String(claveUsada).startsWith("tok_")) ponerCookieSesion(res, slug, claveUsada);
 
   const datos = leerDatos();
   const eventos = (datos[slug] && datos[slug].eventos) || [];
@@ -3392,6 +3454,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
     .join("");
 
   const promSector = esPro(negocio) ? promedioSector(negocio.categoria, slug, datos) : null;
+  const radar = esPro(negocio) ? radarSector(negocio, slug, todosNegocios, datos) : null;
 
   // Ideas 5-9: solo tienen sentido para negocios Pro (van en esa sección del panel).
   const diaFlojo = esPro(negocio) ? diaMasFlojo(eventos, negocio) : null;
@@ -3417,7 +3480,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   const opcionesProyeccion = ["dia", "semana", "mes", "semestre", "anio"];
   const periodoProyeccion = opcionesProyeccion.includes(req.query.proyeccion) ? req.query.proyeccion : "mes";
   const proyeccion = proyeccionPeriodo(eventos, negocio, periodoProyeccion);
-  const soloLectura = req.query.key === negocio.claveSoloLectura && negocio.claveSoloLectura;
+  const soloLectura = claveUsada === negocio.claveSoloLectura && negocio.claveSoloLectura;
 
   res.send(`
     <html>
@@ -3489,6 +3552,15 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .sentimiento-leyenda i{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
           .sentimiento-vacio{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};padding:6px 0;}
 
+          .radar-sector{display:flex;flex-direction:column;}
+          .radar-fila{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid ${MARCA.borde};flex-wrap:wrap;}
+          .radar-fila:last-child{border-bottom:none;}
+          .radar-etiqueta{font-size:0.8rem;font-weight:600;color:${MARCA.texto};min-width:150px;}
+          .radar-valores{display:flex;align-items:center;gap:10px;font-size:0.78rem;color:${MARCA.textoSuave};}
+          .radar-valores b{color:${MARCA.texto};}
+          .radar-vs{font-size:0.9rem;font-weight:700;}
+          .radar-sin-dato{font-size:0.76rem;color:${MARCA.textoSuave};font-style:italic;}
+
           .card-titulo a.ver-mas{font-size:0.72rem;font-weight:700;color:${MARCA.verde};text-decoration:none;}
           .card-titulo a.ver-mas:hover{text-decoration:underline;}
           .actividad-lista{padding:4px 18px;}
@@ -3531,24 +3603,24 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           <aside class="sidebar">
             <div class="sidebar-logo">${logoSvg("#FFFFFF", 26)}</div>
             <nav class="sidebar-nav">
-              <a href="/mi-panel/${slug}?key=${req.query.key}" class="activo">
+              <a href="/mi-panel/${slug}?key=${claveUsada}" class="activo">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
                 Resumen
               </a>
-              <a href="/mi-panel/${slug}?key=${req.query.key}#actividad">
+              <a href="/mi-panel/${slug}?key=${claveUsada}#actividad">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
                 Actividad
               </a>
               ${!soloLectura ? `
-              <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}">
+              <a href="/mi-panel/${slug}/configuracion?key=${claveUsada}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3.5a2 2 0 010-4h.09A1.65 1.65 0 005 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09c0 .68.39 1.29 1 1.51.63.28 1.36.15 1.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06c-.48.46-.61 1.19-.33 1.82.22.61.83 1 1.51 1H21a2 2 0 010 4h-.09c-.68 0-1.29.39-1.51 1z"/></svg>
                 Opciones
               </a>
-              <a href="${esPro(negocio) ? `/suscripcion/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">
+              <a href="${esPro(negocio) ? `/suscripcion/${slug}?key=${claveUsada}` : `/mejorar-a-pro/${slug}?key=${claveUsada}`}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                 ${esPro(negocio) ? "Mi suscripción" : "Plan de pago"}
               </a>
-              <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}">
+              <a href="/mi-panel/${slug}/configuracion?key=${claveUsada}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
                 Configuración
               </a>
@@ -3579,12 +3651,12 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
 
           ${!soloLectura ? `
           <div style="margin:0 0 22px;display:flex;gap:10px;flex-wrap:wrap;">
-            <a href="/mi-panel/${slug}/editar?key=${req.query.key}"
+            <a href="/mi-panel/${slug}/editar?key=${claveUsada}"
                style="font-size:0.76rem;font-weight:600;color:${MARCA.verdeOscuro};background:#fff;
                       border:1px solid ${MARCA.borde};border-radius:8px;padding:8px 16px;text-decoration:none;">
               Editar mi negocio
             </a>
-            <a href="/mi-panel/${slug}/clave?key=${req.query.key}"
+            <a href="/mi-panel/${slug}/clave?key=${claveUsada}"
                style="font-size:0.76rem;font-weight:600;color:${MARCA.verdeOscuro};background:#fff;
                       border:1px solid ${MARCA.borde};border-radius:8px;padding:8px 16px;text-decoration:none;">
               Cambiar mi clave
@@ -3668,7 +3740,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 ? graficaLinea(calendario.dias, { alto: 90, color: MARCA.verde })
                 : `<div style="text-align:center;color:${MARCA.textoSuave};font-size:0.8rem;padding:20px 0;">Todavía no hay suficientes datos este mes.</div>`}
               <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;">
-                ${[["dia","1 día"],["semana","1 semana"],["mes","1 mes"],["semestre","6 meses"],["anio","1 año"]].map(([valor, texto]) => `<a href="/mi-panel/${slug}?key=${encodeURIComponent(req.query.key)}&proyeccion=${valor}#actividad" style="text-decoration:none;font-size:0.68rem;font-weight:600;padding:6px 10px;border-radius:6px;border:1px solid ${periodoProyeccion === valor ? MARCA.verde : MARCA.borde};background:${periodoProyeccion === valor ? MARCA.verdeClaro : "#fff"};color:${MARCA.verdeOscuro};">${texto}</a>`).join("")}
+                ${[["dia","1 día"],["semana","1 semana"],["mes","1 mes"],["semestre","6 meses"],["anio","1 año"]].map(([valor, texto]) => `<a href="/mi-panel/${slug}?key=${encodeURIComponent(claveUsada)}&proyeccion=${valor}#actividad" style="text-decoration:none;font-size:0.68rem;font-weight:600;padding:6px 10px;border-radius:6px;border:1px solid ${periodoProyeccion === valor ? MARCA.verde : MARCA.borde};background:${periodoProyeccion === valor ? MARCA.verdeClaro : "#fff"};color:${MARCA.verdeOscuro};">${texto}</a>`).join("")}
               </div>
               ${proyeccion.suficiente
                 ? `<div class="ultimo-toque" style="margin-top:12px;">Rango orientativo: <b>${proyeccion.minimo}–${proyeccion.maximo}</b> toques · promedio actual <b>${proyeccion.promedio}/día</b> · ${proyeccion.restantes} días restantes</div>`
@@ -3774,7 +3846,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 Comparte el link de tu tarjeta con tus primeros clientes: <b>${req.protocol}://${req.get("host")}/r/${slug}</b>
               </div>
               <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
-                Verifica que tu <a href="/mi-panel/${slug}/editar?key=${req.query.key}" style="color:#7A5A00;">enlace de reseñas de Google</a> sea el correcto antes del primer toque.
+                Verifica que tu <a href="/mi-panel/${slug}/editar?key=${claveUsada}" style="color:#7A5A00;">enlace de reseñas de Google</a> sea el correcto antes del primer toque.
               </div>
               <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
                 Invita a un cliente frecuente a dejar tu primera reseña — así pruebas que todo el flujo funciona.
@@ -3851,34 +3923,33 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               </div>
             </div>
 
-            <div>
-              <div class="card-titulo">Tú vs. tu sector</div>
+            <div class="panel-analitica-full">
+              <div class="card-titulo">Tú vs. tu sector <span class="suave">${radar ? `· ${radar.negociosComparados} negocios parecidos` : ""}</span></div>
               <div class="chart-card" style="margin-top:0;">
-                <div style="display:flex;flex-direction:column;gap:12px;">
-                  <div>
-                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:4px;">
-                      <span>Tú</span><b>${r.semana}</b>
-                    </div>
-                    <div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
-                      <div style="height:100%;border-radius:100px;background:${MARCA.verde};
-                                  width:${Math.min(100, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
-                    </div>
-                  </div>
-                  <div>
-                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:4px;color:${MARCA.textoSuave};">
-                      <span>Sector</span><b>${promSector}</b>
-                    </div>
-                    <div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
-                      <div style="height:100%;border-radius:100px;background:${MARCA.oro};
-                                  width:${Math.min(100, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
-                    </div>
-                  </div>
-                </div>
-                <div class="horas-nota">
-                  ${r.semana >= promSector
-                    ? `Vas por encima del promedio de tu sector.`
-                    : `${promSector - r.semana} toques por debajo del promedio de tu sector.`}
-                </div>
+                ${radar ? `<div class="radar-sector">
+                  ${[
+                    { etiqueta: "Tráfico semanal", propio: radar.trafico.propio, sector: radar.trafico.sector, fmt: (v) => `${Math.round(v)} toques` },
+                    { etiqueta: "Calificación", propio: radar.calificacion.propio, sector: radar.calificacion.sector, fmt: (v) => `${v.toFixed(1)}★` },
+                    { etiqueta: "Toque → reseña", propio: radar.conversion.propio, sector: radar.conversion.sector, fmt: (v) => `${Math.round(v * 100)}%` },
+                    { etiqueta: "Quejas resueltas", propio: radar.resolucion.propio, sector: radar.resolucion.sector, fmt: (v) => `${Math.round(v * 100)}%` },
+                  ].map((fila) => {
+                    if (fila.propio === null || fila.sector === null) {
+                      return `<div class="radar-fila">
+                        <div class="radar-etiqueta">${fila.etiqueta}</div>
+                        <div class="radar-sin-dato">Todavía no hay suficientes datos tuyos para este cruce.</div>
+                      </div>`;
+                    }
+                    const mejor = fila.propio >= fila.sector;
+                    return `<div class="radar-fila">
+                      <div class="radar-etiqueta">${fila.etiqueta}</div>
+                      <div class="radar-valores">
+                        <span class="radar-propio">Tú: <b>${fila.fmt(fila.propio)}</b></span>
+                        <span class="radar-vs" style="color:${mejor ? MARCA.verde : MARCA.rojo};">${mejor ? "▲" : "▼"}</span>
+                        <span class="radar-sectorval">Sector: <b>${fila.fmt(fila.sector)}</b></span>
+                      </div>
+                    </div>`;
+                  }).join("")}
+                </div>` : `<div class="sentimiento-vacio">Todavía no hay suficientes negocios parecidos en tu categoría para comparar.</div>`}
               </div>
             </div>
             ` : `
@@ -3903,7 +3974,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             <div class="panel-analitica-full">
               <div class="card-titulo">
                 <span>Actividad reciente</span>
-                ${esPro(negocio) ? `<a class="ver-mas" href="/export/${slug}.pdf?key=${req.query.key}" target="_blank">Ver reporte</a>` : ""}
+                ${esPro(negocio) ? `<a class="ver-mas" href="/export/${slug}.pdf?key=${claveUsada}" target="_blank">Ver reporte</a>` : ""}
               </div>
               <div class="chart-card actividad-lista" style="margin-top:0;">
                 ${actividadReciente || `<div style="text-align:center;color:${MARCA.textoSuave};padding:22px 0;">Sin toques todavía</div>`}
@@ -3921,9 +3992,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 <b>Reporte PDF mensual</b> — a fin de mes te llega por correo el análisis completo de tu negocio, automáticamente.
               </div>
               <div class="fila-herramientas">
-                <a href="/quejas/${slug}?key=${req.query.key}" class="btn-herramienta">Retroalimentación privada</a>
-                <a href="/contenido/${slug}?key=${req.query.key}" class="btn-herramienta">Generador de contenido</a>
-                <a href="/reportes-guardados/${slug}?key=${req.query.key}" class="btn-herramienta">Reportes guardados</a>
+                <a href="/quejas/${slug}?key=${claveUsada}" class="btn-herramienta">Retroalimentación privada</a>
+                <a href="/contenido/${slug}?key=${claveUsada}" class="btn-herramienta">Generador de contenido</a>
+                <a href="/reportes-guardados/${slug}?key=${claveUsada}" class="btn-herramienta">Reportes guardados</a>
               </div>
             </div>
             <div>
@@ -3970,7 +4041,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               </ul>
             </div>
             <div style="text-align:center;margin-top:18px;">
-              <a href="/mejorar-a-pro/${slug}?key=${req.query.key}"
+              <a href="/mejorar-a-pro/${slug}?key=${claveUsada}"
                  style="display:inline-block;background:${MARCA.verde};color:#fff;text-decoration:none;
                         padding:13px 26px;border-radius:10px;font-weight:700;font-size:0.9rem;">
                 Pagar y activar Plan Pro
@@ -4003,7 +4074,6 @@ app.get("/mi-panel/:slug/editar", (req, res) => {
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
-  req.query.key = claveUsada;
 
   res.send(`
     <html>
@@ -4029,7 +4099,7 @@ app.get("/mi-panel/:slug/editar", (req, res) => {
           <div class="eyebrow">Tu negocio</div>
           <h1 class="titulo-pagina">Editar información</h1>
           <div class="form-card">
-            <form method="POST" action="/mi-panel/${slug}/editar?key=${req.query.key}">
+            <form method="POST" action="/mi-panel/${slug}/editar?key=${claveUsada}">
               <label>Nombre del negocio</label>
               <input type="text" name="nombre" required value="${negocio.nombre || ""}">
 
@@ -4055,7 +4125,7 @@ app.get("/mi-panel/:slug/editar", (req, res) => {
               <button type="submit">Guardar cambios</button>
             </form>
           </div>
-          <a class="volver" href="/mi-panel/${slug}?key=${req.query.key}">&larr; Volver a mi panel</a>
+          <a class="volver" href="/mi-panel/${slug}?key=${claveUsada}">&larr; Volver a mi panel</a>
         </div>
       </body>
     </html>
@@ -4093,7 +4163,6 @@ app.get("/mi-panel/:slug/clave", (req, res) => {
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
-  req.query.key = claveUsada;
 
   res.send(`
     <html>
@@ -4119,7 +4188,7 @@ app.get("/mi-panel/:slug/clave", (req, res) => {
           <div class="eyebrow">Seguridad</div>
           <h1 class="titulo-pagina">Cambiar mi clave de acceso</h1>
           <div class="form-card">
-            <form method="POST" action="/mi-panel/${slug}/clave?key=${req.query.key}">
+            <form method="POST" action="/mi-panel/${slug}/clave?key=${claveUsada}">
               <label>Nueva clave (mínimo 6 caracteres)</label>
               <input type="text" name="claveNueva" required minlength="6">
               <button type="submit">Guardar nueva clave</button>
@@ -4129,7 +4198,7 @@ app.get("/mi-panel/:slug/clave", (req, res) => {
             Ojo: en cuanto la cambies, el link que tenías guardado con la clave vieja deja de funcionar —
             guarda el nuevo link que te va a salir aquí mismo.
           </p>
-          <a class="volver" href="/mi-panel/${slug}?key=${req.query.key}">&larr; Volver a mi panel</a>
+          <a class="volver" href="/mi-panel/${slug}?key=${claveUsada}">&larr; Volver a mi panel</a>
         </div>
       </body>
     </html>
@@ -4185,7 +4254,6 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado. La configuración solo la puede tocar la clave completa, no la de solo lectura.");
   }
-  req.query.key = claveUsada;
 
   const alertas = negocio.alertas || { quejas: true, reporteMensual: true };
   const datos = leerDatos();
@@ -4455,7 +4523,6 @@ app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
       `Súbele el plan a "${negocio.nombre}" desde /mejorar-a-pro/${slug}?key=${claveUsada} para activarla.`
     );
   }
-  req.query.key = claveUsada;
 
   const fid = negocio.fidelizacion || { metaSellos: 10, premio: "" };
   const datos = leerDatos();
@@ -4790,7 +4857,7 @@ app.get("/export/:slug.pdf", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio)) {
+  if (!autorizadoProNegocio(req, negocio, slug)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   // La exportación de reportes (CSV/PDF/Word) es exclusiva de Plan Pro.
@@ -5417,7 +5484,7 @@ app.get("/export/:slug.docx", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio)) {
+  if (!autorizadoProNegocio(req, negocio, slug)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   if (!esPro(negocio)) {
@@ -5643,7 +5710,7 @@ app.get("/export/:slug.csv", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio)) {
+  if (!autorizadoProNegocio(req, negocio, slug)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   if (!esPro(negocio)) {
