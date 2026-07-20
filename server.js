@@ -3565,6 +3565,11 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .radar-vs{font-size:0.9rem;font-weight:700;}
           .radar-sin-dato{font-size:0.76rem;color:${MARCA.textoSuave};font-style:italic;}
 
+          .par-simetrico{display:flex;gap:16px;flex-wrap:wrap;align-items:stretch;}
+          .par-simetrico-item{flex:1;min-width:280px;display:flex;flex-direction:column;}
+          .par-simetrico-item .chart-card{flex:1;}
+          @media (max-width:700px){.par-simetrico{flex-direction:column;}}
+
           .card-titulo a.ver-mas{font-size:0.72rem;font-weight:700;color:${MARCA.verde};text-decoration:none;}
           .card-titulo a.ver-mas:hover{text-decoration:underline;}
           .actividad-lista{padding:4px 18px;}
@@ -3863,36 +3868,42 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 ${diaFlojo ? `<div class="dia-flojo-nota">
                   <span>Tu día más flojo es el <b>${diaFlojo.dia}</b></span>
                   <span class="suave">${diaFlojo.toques} toques acumulados</span>
+                </div>` : esPro(negocio) ? `<div class="dia-flojo-nota">
+                  <span class="suave">Verás tu día más flojo en cuanto tengas actividad en al menos 3 días distintos.</span>
                 </div>` : ""}
               </div>
             </div>
 
             ${promSector !== null ? `
             ${meta ? `
-            <div>
-              <div class="card-titulo">Cómo te calificaron</div>
-              <div class="chart-card" style="margin-top:0;">
-                ${totalCalificado > 0
-                  ? `<div class="sentimiento-barra">
-                       <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
-                       <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
-                     </div>
-                     <div class="sentimiento-leyenda">
-                       <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                       <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-                     </div>
-                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
-                  : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
-              </div>
-            </div>
-            <div>
-              <div class="card-titulo">Meta del mes</div>
-              <div class="chart-card" style="margin-top:0;">
-                <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:6px;">
-                  <span>${meta.toquesMes} de ${meta.metaMensual} toques</span><b>${meta.pct}%</b>
+            <div class="panel-analitica-full">
+              <div class="par-simetrico">
+                <div class="par-simetrico-item">
+                  <div class="card-titulo">Cómo te calificaron</div>
+                  <div class="chart-card" style="margin-top:0;">
+                    ${totalCalificado > 0
+                      ? `<div class="sentimiento-barra">
+                           <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
+                           <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
+                         </div>
+                         <div class="sentimiento-leyenda">
+                           <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
+                           <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
+                         </div>
+                         ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
+                      : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
+                  </div>
                 </div>
-                <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
-                  <div style="height:100%;border-radius:100px;background:${meta.pct >= 100 ? MARCA.oro : MARCA.verde};width:${meta.pct}%;"></div>
+                <div class="par-simetrico-item">
+                  <div class="card-titulo">Meta del mes</div>
+                  <div class="chart-card" style="margin-top:0;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:6px;">
+                      <span>${meta.toquesMes} de ${meta.metaMensual} toques</span><b>${meta.pct}%</b>
+                    </div>
+                    <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                      <div style="height:100%;border-radius:100px;background:${meta.pct >= 100 ? MARCA.oro : MARCA.verde};width:${meta.pct}%;"></div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
