@@ -3546,6 +3546,10 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .horas-nota{text-align:center;font-size:0.76rem;color:${MARCA.textoSuave};margin-top:10px;}
           .horas-nota b{color:${MARCA.texto};}
 
+          .dia-flojo-nota{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid ${MARCA.borde};font-size:0.78rem;color:${MARCA.texto};}
+          .dia-flojo-nota b{color:${MARCA.oro};}
+          .dia-flojo-nota .suave{color:${MARCA.textoSuave};font-size:0.74rem;}
+
           .sentimiento-barra{display:flex;height:14px;border-radius:100px;overflow:hidden;background:${MARCA.borde};}
           .sentimiento-leyenda{display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:0.78rem;color:${MARCA.textoSuave};}
           .sentimiento-leyenda span{display:flex;align-items:center;gap:6px;}
@@ -3748,53 +3752,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
           </div>
 
-          ${meta && comparativoMes.disponible ? `
-          <div class="seccion grid-2">
-            <div>
-              <div class="card-titulo">Meta del mes</div>
-              <div class="chart-card" style="margin-top:0;">
-                <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:6px;">
-                  <span>${meta.toquesMes} de ${meta.metaMensual} toques</span><b>${meta.pct}%</b>
-                </div>
-                <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
-                  <div style="height:100%;border-radius:100px;background:${meta.pct >= 100 ? MARCA.oro : MARCA.verde};width:${meta.pct}%;"></div>
-                </div>
-              </div>
-            </div>
-            <div>
-              <div class="card-titulo">Este mes vs. el anterior</div>
-              <div class="chart-card" style="margin-top:0;display:flex;gap:14px;align-items:center;">
-                <div style="text-align:center;flex:1;">
-                  <div style="font-size:1.3rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
-                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
-                </div>
-                <div style="text-align:center;flex:1;">
-                  <div style="font-size:1.3rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
-                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
-                </div>
-                <div style="text-align:center;flex:1;">
-                  <div style="font-size:1.05rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
-                    ${comparativoMes.cambioPct >= 0 ? "+" : ""}${comparativoMes.cambioPct}%
-                  </div>
-                  <div style="font-size:0.68rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
-                </div>
-              </div>
-              ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:8px;">Vs. el mismo mes del año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
-            </div>
-          </div>
-          ` : meta ? `
-          <div class="seccion">
-            <div class="card-titulo">Meta del mes</div>
-            <div class="chart-card" style="margin-top:0;">
-              <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:6px;">
-                <span>${meta.toquesMes} de ${meta.metaMensual} toques</span><b>${meta.pct}%</b>
-              </div>
-              <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
-                <div style="height:100%;border-radius:100px;background:${meta.pct >= 100 ? MARCA.oro : MARCA.verde};width:${meta.pct}%;"></div>
-              </div>
-            </div>
-          </div>
-          ` : comparativoMes.disponible ? `
+          ${comparativoMes.disponible ? `
           <div class="seccion">
             <div class="card-titulo">Este mes vs. el anterior</div>
             <div class="chart-card" style="margin-top:0;display:flex;gap:20px;align-items:center;">
@@ -3902,10 +3860,43 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 ${horas.totalMes > 0
                   ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques} toques)</div>`
                   : `<div class="horas-nota">Todavía no hay suficientes toques este mes.</div>`}
+                ${diaFlojo ? `<div class="dia-flojo-nota">
+                  <span>Tu día más flojo es el <b>${diaFlojo.dia}</b></span>
+                  <span class="suave">${diaFlojo.toques} toques acumulados</span>
+                </div>` : ""}
               </div>
             </div>
 
             ${promSector !== null ? `
+            ${meta ? `
+            <div>
+              <div class="card-titulo">Cómo te calificaron</div>
+              <div class="chart-card" style="margin-top:0;">
+                ${totalCalificado > 0
+                  ? `<div class="sentimiento-barra">
+                       <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
+                       <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
+                     </div>
+                     <div class="sentimiento-leyenda">
+                       <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
+                       <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
+                     </div>
+                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
+                  : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
+              </div>
+            </div>
+            <div>
+              <div class="card-titulo">Meta del mes</div>
+              <div class="chart-card" style="margin-top:0;">
+                <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:6px;">
+                  <span>${meta.toquesMes} de ${meta.metaMensual} toques</span><b>${meta.pct}%</b>
+                </div>
+                <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                  <div style="height:100%;border-radius:100px;background:${meta.pct >= 100 ? MARCA.oro : MARCA.verde};width:${meta.pct}%;"></div>
+                </div>
+              </div>
+            </div>
+            ` : `
             <div class="panel-analitica-full">
               <div class="card-titulo">Cómo te calificaron</div>
               <div class="chart-card" style="margin-top:0;">
@@ -3922,6 +3913,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                   : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
               </div>
             </div>
+            `}
 
             <div class="panel-analitica-full">
               <div class="card-titulo">Tú vs. tu sector <span class="suave">${radar ? `· ${radar.negociosComparados} negocios parecidos` : ""}</span></div>
