@@ -494,8 +494,35 @@ const ESTILO_BASE = `
   .eyebrow{font-size:0.72rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
   .titulo-pagina{font-family:'Playfair Display',Georgia,serif;font-size:clamp(1.9rem,3vw,2.7rem);font-weight:700;margin:0 0 8px;letter-spacing:-.03em;color:var(--ink);}
   .subtitulo{color:${MARCA.textoSuave};font-size:0.92rem;margin-bottom:30px;}
-  button,.btn{transition:transform .2s ease,box-shadow .2s ease;font-family:'DM Sans','Segoe UI',sans-serif;}
+  /* ---------- Sistema de botones reutilizable ---------- */
+  button,.btn{font-family:'DM Sans','Segoe UI',sans-serif;cursor:pointer;
+              transition:transform .15s ease,box-shadow .15s ease,background-color .15s ease,border-color .15s ease,opacity .15s ease;}
   button:hover,.btn:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(5,58,36,.14);}
+  button:active,.btn:active{transform:translateY(0);box-shadow:0 3px 8px rgba(5,58,36,.12);}
+  button:disabled,.btn:disabled,.btn[aria-disabled="true"]{opacity:.55;cursor:not-allowed;pointer-events:none;
+                                                            transform:none!important;box-shadow:none!important;}
+
+  .btn-primario{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:${MARCA.verdeOscuro};
+                color:#fff;border:none;border-radius:9px;padding:12px 22px;font-weight:700;font-size:0.88rem;
+                text-decoration:none;line-height:1.2;}
+  .btn-primario:hover{background:${MARCA.verde};}
+  .btn-secundario{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#fff;
+                  color:${MARCA.texto};border:1.5px solid ${MARCA.borde};border-radius:9px;padding:12px 22px;
+                  font-weight:700;font-size:0.88rem;text-decoration:none;line-height:1.2;}
+  .btn-secundario:hover{background:${MARCA.verdeClaro};border-color:${MARCA.verde};}
+  .btn-peligro{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#fff;
+               color:#a83a2b;border:1.5px solid #f0d0c8;border-radius:9px;padding:12px 22px;
+               font-weight:700;font-size:0.88rem;text-decoration:none;line-height:1.2;}
+  .btn-peligro:hover{background:#FDF2F1;border-color:#a83a2b;}
+  .btn-ghost{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:transparent;
+             color:${MARCA.verdeOscuro};border:none;padding:8px 10px;font-weight:600;font-size:0.85rem;
+             text-decoration:none;border-radius:7px;}
+  .btn-ghost:hover{background:rgba(13,67,43,.07);}
+
+  /* ---------- Foco visible (navegación con teclado) ---------- */
+  a:focus-visible,button:focus-visible,.btn:focus-visible,[tabindex]:focus-visible{
+    outline:3px solid ${MARCA.oro};outline-offset:2px;border-radius:4px;
+  }
   input:focus,select:focus,textarea:focus{outline:none;border-color:${MARCA.verde}!important;box-shadow:0 0 0 3px rgba(15,81,50,.12);}
   h1,h2,h3{font-family:'Playfair Display',Georgia,serif;}
 `;
@@ -566,6 +593,59 @@ const ESTILO_DASHBOARD = `
   .dash-panel-num{font-size:1.45rem;font-weight:700;color:${MARCA.texto};text-align:right;}
   .dash-panel-numlbl{font-size:0.7rem;color:${MARCA.textoSuave};text-align:right;}
   .dash-actividad-bars{display:flex;align-items:flex-end;gap:8px;height:110px;}
+`;
+
+// Página de error con la marca de Tapin — reemplaza las respuestas de texto
+// plano (que se ven como una falla técnica) por algo que un cliente que paga
+// por esto puede ver sin pensar "esto está a medio hacer". Se usa en los
+// puntos de mayor tráfico: escaneo de tarjeta, calificar, panel de negocio,
+// login de administrador.
+function paginaError({ codigo = 404, titulo = "No encontramos esta página", mensaje = "Puede que el enlace esté vencido o mal escrito.", enlaceTexto = null, enlaceHref = null } = {}) {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escaparHtml(titulo)} — Tapin</title>
+  <style>${ESTILO_BASE}
+    body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+    .caja-error{background:#fff;border-radius:20px;padding:44px 38px;max-width:440px;width:100%;text-align:center;
+                box-shadow:0 20px 50px rgba(9,49,30,.1);border:1px solid ${MARCA.borde};box-sizing:border-box;}
+    .caja-error .codigo{font-size:0.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${MARCA.textoSuave};margin:18px 0 6px;}
+    .caja-error h1{font-size:1.35rem;margin:0 0 10px;letter-spacing:-.02em;}
+    .caja-error p{color:${MARCA.textoSuave};font-size:0.92rem;line-height:1.6;margin:0 0 24px;}
+  </style>
+</head>
+<body>
+  <div class="caja-error">
+    ${logoSvg(MARCA.verdeOscuro, 28)}
+    <div class="codigo">Error ${codigo}</div>
+    <h1>${escaparHtml(titulo)}</h1>
+    <p>${escaparHtml(mensaje)}</p>
+    ${enlaceHref ? `<a class="btn-primario" href="${enlaceHref}">${escaparHtml(enlaceTexto || "Volver al inicio")}</a>` : ""}
+  </div>
+</body>
+</html>`;
+}
+function enviarError(res, codigo, titulo, mensaje, enlace) {
+  return res.status(codigo).send(paginaError({ codigo, titulo, mensaje, enlaceTexto: enlace && enlace.texto, enlaceHref: enlace && enlace.href }));
+}
+
+// Script compartido: deshabilita el botón de "guardar" apenas se envía un
+// formulario y le cambia el texto, para que quede claro que la acción se
+// está procesando y para que no se pueda hacer doble clic y mandar el mismo
+// formulario dos veces. Se ignoran los formularios GET (búsquedas, login por
+// URL) porque esos navegan de inmediato, no "guardan" nada.
+const SCRIPT_ENVIO_FORMULARIO = `
+document.addEventListener("submit", function (e) {
+  var form = e.target;
+  if (!form || (form.method && form.method.toLowerCase() === "get")) return;
+  var boton = form.querySelector('button[type="submit"]');
+  if (!boton || boton.disabled) return;
+  boton.dataset.textoOriginal = boton.textContent;
+  boton.disabled = true;
+  boton.textContent = "Guardando…";
+});
 `;
 
 // ---------- Configuración de negocios ----------
@@ -1637,7 +1717,7 @@ app.get("/r/:slug", (req, res) => {
     if (codigos[slug] && !codigos[slug].activado) {
       return res.redirect(302, `/mis-negocios?codigo=${slug}`);
     }
-    return res.status(404).send("Negocio no encontrado. Revisa el enlace de la tarjeta NFC.");
+    return enviarError(res, 404, "No encontramos este negocio", "El enlace de esta tarjeta no corresponde a ningún negocio activo. Si acabas de recibir la tarjeta, puede que todavía no esté activada.");
   }
 
   registrarToque(slug, req, negocio);
@@ -1693,7 +1773,7 @@ app.get("/r/:slug", (req, res) => {
 app.get("/calificar/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "El enlace que usaste no corresponde a ningún negocio activo en Tapin.");
 
   const valor = parseInt(req.query.valor, 10);
   let selloSumado = null; // se usa más abajo para avisarle al cliente si aplica
@@ -2679,7 +2759,40 @@ app.post("/activar/:codigo", (req, res) => {
 
 app.get("/stats", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
-    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+    if (req.query.key) {
+      return enviarError(res, 401, "Clave incorrecta", "La clave que ingresaste no es válida. Verifícala e inténtalo de nuevo.", { texto: "Volver a intentar", href: "/stats" });
+    }
+    return res.status(401).send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acceso administrador — Tapin</title>
+  <style>${ESTILO_BASE}
+    body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+    .caja-login{background:#fff;border-radius:20px;padding:40px 38px;max-width:380px;width:100%;text-align:center;
+                box-shadow:0 20px 50px rgba(9,49,30,.1);border:1px solid ${MARCA.borde};box-sizing:border-box;}
+    .caja-login h1{font-size:1.25rem;margin:16px 0 6px;letter-spacing:-.02em;}
+    .caja-login p{color:${MARCA.textoSuave};font-size:0.86rem;line-height:1.5;margin:0 0 24px;}
+    .caja-login label{display:block;text-align:left;font-size:0.78rem;font-weight:600;color:${MARCA.texto};margin-bottom:6px;}
+    .caja-login input{width:100%;box-sizing:border-box;padding:12px 14px;border:1.5px solid ${MARCA.borde};border-radius:9px;
+                       font-size:0.92rem;font-family:inherit;margin-bottom:16px;}
+    .caja-login button{width:100%;}
+  </style>
+</head>
+<body>
+  <div class="caja-login">
+    ${logoSvg(MARCA.verdeOscuro, 28)}
+    <h1>Acceso de administrador</h1>
+    <p>Ingresa tu clave para entrar al panel de administración de Tapin.</p>
+    <form method="GET" action="/stats">
+      <label for="key">Clave de administrador</label>
+      <input type="password" id="key" name="key" autofocus required autocomplete="current-password">
+      <button type="submit" class="btn-primario">Entrar</button>
+    </form>
+  </div>
+</body>
+</html>`);
   }
   iniciarSesionAdmin(res);
 
@@ -3365,7 +3478,7 @@ app.get("/contenido/:slug/tarjeta.svg", (req, res) => {
 app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "Revisa que el enlace a tu panel esté completo y bien escrito.");
 
   // Acepta la clave completa, la clave de solo lectura (idea 5), o la cookie
   // de sesión que se guarda la primera vez. Usa el mismo verificador cifrado
@@ -3382,7 +3495,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   const autorizado = adminAutorizado || claveNegocioValida(negocio, slug, claveUsada) ||
     (negocio.claveSoloLectura && claveUsada === negocio.claveSoloLectura);
   if (!tieneClaveConfigurada(negocio) || !autorizado) {
-    return res.status(401).send("No autorizado. Verifica el enlace que te dio Tapin, debe incluir tu clave personal (?key=...).");
+    return enviarError(res, 401, "No pudimos verificar tu acceso", "El enlace a tu panel debe incluir tu clave personal. Revisa el correo o mensaje donde Tapin te la envió, o pídesela de nuevo a tu proveedor.");
   }
   // Los botones del panel necesitan conservar una autorización; para el
   // administrador usamos un token temporal por negocio, nunca su clave.
@@ -4169,10 +4282,10 @@ app.post("/mi-panel/:slug/editar", (req, res) => {
 app.get("/mi-panel/:slug/clave", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "Revisa que el enlace esté completo y bien escrito.");
   const claveUsada = claveEfectiva(req, slug);
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
-    return res.status(401).send("No autorizado.");
+    return enviarError(res, 401, "No pudimos verificar tu acceso", "El enlace debe incluir tu clave personal (?key=...).");
   }
 
   res.send(`
@@ -4211,6 +4324,7 @@ app.get("/mi-panel/:slug/clave", (req, res) => {
           </p>
           <a class="volver" href="/mi-panel/${slug}?key=${claveUsada}">&larr; Volver a mi panel</a>
         </div>
+        <script>${SCRIPT_ENVIO_FORMULARIO}</script>
       </body>
     </html>
   `);
@@ -4260,10 +4374,10 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
 app.get("/mi-panel/:slug/configuracion", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "Revisa que el enlace esté completo y bien escrito.");
   const claveUsada = claveEfectiva(req, slug);
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
-    return res.status(401).send("No autorizado. La configuración solo la puede tocar la clave completa, no la de solo lectura.");
+    return enviarError(res, 401, "No pudimos verificar tu acceso", "La configuración solo la puede abrir la clave completa del negocio, no un link de solo lectura.");
   }
 
   const alertas = negocio.alertas || { quejas: true, reporteMensual: true };
@@ -4373,7 +4487,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
               <p class="nota">${negocio.pausado
                 ? "Tu negocio está pausado — no vamos a marcar caídas raras en tus estadísticas mientras tanto."
                 : "Útil para vacaciones o remodelación, sin desactivar la tarjeta ni perder tu historial."}</p>
-              <form method="POST" action="/mi-panel/${slug}/configuracion/pausar?key=${claveUsada}">
+              <form method="POST" action="/mi-panel/${slug}/configuracion/pausar?key=${claveUsada}" ${negocio.pausado ? "" : `onsubmit="return confirm('¿Pausar ${escaparHtml(negocio.nombre)}? Mientras esté pausado, las calificaciones no se marcarán como caídas raras en tus estadísticas. Puedes reanudarlo cuando quieras.');"`}>
                 <input type="hidden" name="pausar" value="${negocio.pausado ? "no" : "si"}">
                 <button type="submit" class="${negocio.pausado ? "secundario" : "peligro"}">${negocio.pausado ? "Reanudar negocio" : "Pausar negocio"}</button>
               </form>
@@ -4419,7 +4533,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
               <p class="nota">Comparte este link con un encargado — puede ver el panel, pero no cambiar nada (ni clave, ni configuración, ni negocio).</p>
               ${negocio.claveSoloLectura
                 ? `<div class="codigo-caja">${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${negocio.claveSoloLectura}</div>
-                   <form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
+                   <form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}" onsubmit="return confirm('¿Generar un nuevo link de solo lectura? El link anterior deja de funcionar de inmediato — si alguien lo tenía guardado, tendrás que compartirle el nuevo.');">
                      <button type="submit" class="secundario">Generar uno nuevo (invalida el anterior)</button>
                    </form>`
                 : `<form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
@@ -4442,6 +4556,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
         </div>
           </main>
         </div>
+        <script>${SCRIPT_ENVIO_FORMULARIO}</script>
       </body>
     </html>
   `);
@@ -9066,12 +9181,12 @@ function registrarAuditoriaGlobal(accion, detalle, req) {
 app.get("/suscripcion/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "Revisa que el enlace esté completo y bien escrito.");
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
-    return res.status(401).send("No autorizado.");
+    return enviarError(res, 401, "No pudimos verificar tu acceso", "El enlace debe incluir tu clave personal (?key=...).");
   }
   if (!esPro(negocio)) {
-    return res.status(402).send("Esta página es solo para negocios en Plan Pro.");
+    return enviarError(res, 402, "Esto es exclusivo del Plan Pro", "Esta página de suscripción solo aplica para negocios en Plan Pro.", { texto: "Ver planes", href: `/mejorar-a-pro/${slug}?key=${req.query.key}` });
   }
 
   const sus = negocio.suscripcion;
