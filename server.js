@@ -3906,7 +3906,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
 
             ${promSector !== null ? `
-            <div>
+            <div class="panel-analitica-full">
               <div class="card-titulo">Cómo te calificaron</div>
               <div class="chart-card" style="margin-top:0;">
                 ${totalCalificado > 0
