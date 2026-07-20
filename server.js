@@ -714,6 +714,40 @@ function guardarCodigos(codigos) {
   fs.writeFileSync(CODIGOS_FILE, JSON.stringify(codigos, null, 2));
 }
 
+// ---------- Varias tarjetas físicas, un mismo negocio ----------
+// Un local puede tener más de una tarjeta Tapin (una por mesa, una en la
+// caja, una en la entrada, etc.) sin que eso deba crear negocios distintos
+// ni dividir sus estadísticas. Cuando se activa una tarjeta y se vincula a
+// un negocio que YA existe (en vez de darle datos de un negocio nuevo), esa
+// tarjeta se guarda con "vinculadoA: <slug del negocio principal>" y no
+// tiene su propio objeto "negocio" — todo lo que pase en ella (toques,
+// calificaciones, quejas, sellos de fidelización) se resuelve y se guarda
+// bajo el slug del negocio principal.
+//
+// resolverSlug() sigue esa cadena hasta llegar al slug real que tiene los
+// datos — así, cualquier parte del código que reciba un slug de la URL (que
+// puede ser el de una tarjeta vinculada) puede resolverlo UNA vez y de ahí
+// en adelante trabajar como si siempre hubiera sido el negocio principal.
+function resolverSlug(slugOriginal, codigosCache) {
+  const codigos = codigosCache || leerCodigos();
+  let slug = slugOriginal;
+  const visitados = new Set();
+  while (codigos[slug] && codigos[slug].vinculadoA && !visitados.has(slug)) {
+    visitados.add(slug);
+    slug = codigos[slug].vinculadoA;
+  }
+  return slug;
+}
+
+// Todas las tarjetas (códigos) que hoy apuntan a un negocio principal dado —
+// para mostrarlas en su panel/edición ("este negocio tiene 3 tarjetas").
+function tarjetasVinculadasA(slugPrincipal, codigosCache) {
+  const codigos = codigosCache || leerCodigos();
+  return Object.keys(codigos).filter(
+    (c) => codigos[c].vinculadoA === slugPrincipal && !codigos[c].desactivado
+  );
+}
+
 // ---------- Login mágico de dueños (sin contraseña) ----------
 // Un dueño puede tener varios locales (varios slugs). En vez de manejar
 // usuarios y contraseñas, mandamos un link temporal por correo que, al
@@ -958,8 +992,13 @@ function generarCodigo() {
 // Busca un negocio primero en NEGOCIOS (configurado a mano en el código)
 // y si no lo encuentra, en los códigos de activación ya activados.
 // Esto permite que /r/:slug funcione igual para ambos casos.
-function obtenerNegocio(slug) {
+function obtenerNegocio(slugOriginal) {
   const codigos = leerCodigos();
+  // Si "slugOriginal" es una tarjeta vinculada a otro negocio (varias
+  // tarjetas físicas de un mismo local), esto la resuelve al negocio
+  // principal — así da igual con cuál de las tarjetas del local se entre,
+  // siempre se ve la misma información.
+  const slug = resolverSlug(slugOriginal, codigos);
   const entrada = codigos[slug];
   if (entrada && entrada.desactivado) return null; // tarjeta quitada explícitamente
   if (entrada && entrada.activado && entrada.negocio) {
@@ -1709,7 +1748,7 @@ const TODAS_LAS_FRASES_VALIDAS = new Set(Object.values(FRASES_POR_CATEGORIA).fla
 // si es negativa, lo manda a un formulario privado en vez de exponerlo en público.
 // Ejemplo: https://tu-dominio.com/r/mi-negocio
 app.get("/r/:slug", (req, res) => {
-  const { slug } = req.params;
+  const slug = resolverSlug(req.params.slug);
   const negocio = obtenerNegocio(slug);
 
   if (!negocio) {
@@ -1771,7 +1810,7 @@ app.get("/r/:slug", (req, res) => {
 // Si es negativa (1-3), se guarda como queja privada y se le pide el detalle al cliente
 // en vez de exponer la insatisfacción en una reseña pública.
 app.get("/calificar/:slug", (req, res) => {
-  const { slug } = req.params;
+  const slug = resolverSlug(req.params.slug);
   const negocio = obtenerNegocio(slug);
   if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "El enlace que usaste no corresponde a ningún negocio activo en Tapin.");
 
@@ -1873,7 +1912,7 @@ app.get("/calificar/:slug", (req, res) => {
 // solo toque en un motivo corto guarda la queja de una vez, sin tener que
 // escribir nada. Mucho más rápido, así no se pierden clientes por pereza de teclear.
 app.get("/calificar/:slug/rapido", (req, res) => {
-  const { slug } = req.params;
+  const slug = resolverSlug(req.params.slug);
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
@@ -1903,7 +1942,7 @@ app.get("/calificar/:slug/rapido", (req, res) => {
 });
 
 app.post("/calificar/:slug", async (req, res) => {
-  const { slug } = req.params;
+  const slug = resolverSlug(req.params.slug);
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
@@ -1955,7 +1994,7 @@ app.post("/calificar/:slug", async (req, res) => {
 // Guarda el micro-testimonio elegido con un solo toque y manda al cliente a Google.
 // Esto alimenta el generador de contenido para redes (/contenido/:slug).
 app.get("/testimonio/:slug", (req, res) => {
-  const { slug } = req.params;
+  const slug = resolverSlug(req.params.slug);
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
@@ -1984,13 +2023,16 @@ app.get("/editar", limitarIntentosAdmin, (req, res) => {
   }
   const key = req.query.key;
   const todos = todosLosNegocios();
+  const codigosTodos = leerCodigos();
 
   const filas = Object.entries(todos)
     .map(([slug, n]) => {
+      const vinculadas = tarjetasVinculadasA(slug, codigosTodos);
       return `<tr>
         <td><b>${n.nombre}</b></td>
         <td><code class="codigo">/r/${slug}</code></td>
         <td>${n.categoria || "—"}</td>
+        <td>${vinculadas.length ? `${1 + vinculadas.length} tarjetas` : "1 tarjeta"}</td>
         <td><a href="/editar/${slug}?key=${key}">Editar</a> &nbsp;·&nbsp; <a href="/editar/${slug}/quitar?key=${key}" style="color:${MARCA.rojo};">Quitar</a></td>
       </tr>`;
     })
@@ -2034,8 +2076,8 @@ app.get("/editar", limitarIntentosAdmin, (req, res) => {
           ` : ""}
 
           <table>
-            <tr><th>Nombre</th><th>Enlace de toque</th><th>Categoría</th><th></th></tr>
-            ${filas || "<tr><td colspan='4'>Todavía no hay negocios.</td></tr>"}
+            <tr><th>Nombre</th><th>Enlace de toque</th><th>Categoría</th><th>Tarjetas</th><th></th></tr>
+            ${filas || "<tr><td colspan='5'>Todavía no hay negocios.</td></tr>"}
           </table>
         </div>
       </body>
@@ -2098,18 +2140,27 @@ app.get("/editar/:slug", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
-  const { slug } = req.params;
+  const codigosGetEditar = leerCodigos();
+  const slug = resolverSlug(req.params.slug, codigosGetEditar);
+  // Si alguien entra con el código de una tarjeta vinculada, lo mandamos al
+  // negocio principal — así nunca se edita/guarda por accidente sobre una
+  // tarjeta que no tiene su propio objeto "negocio".
+  if (slug !== req.params.slug) {
+    return res.redirect(`/editar/${slug}?key=${req.query.key}`);
+  }
   const negocio = obtenerNegocio(slug);
   if (!negocio) {
     return res.status(404).send("Negocio no encontrado.");
   }
   const key = req.query.key;
+  const vinculadas = tarjetasVinculadasA(slug, codigosGetEditar);
   res.send(formularioNegocio({
     titulo: `Editar — ${negocio.nombre}`,
     accion: `/editar/${slug}?key=${key}`,
     key,
     valores: negocio,
     slug,
+    tarjetasVinculadas: vinculadas,
   }));
 });
 
@@ -2117,7 +2168,10 @@ app.post("/editar/:slug", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
-  const { slug } = req.params;
+  const slug = resolverSlug(req.params.slug);
+  if (slug !== req.params.slug) {
+    return res.status(400).send("Esta es una tarjeta vinculada, no un negocio propio — edita el negocio principal.");
+  }
   const negocioActual = obtenerNegocio(slug);
   if (!negocioActual) {
     return res.status(404).send("Negocio no encontrado.");
@@ -2241,8 +2295,32 @@ app.post("/editar/:slug/quitar", limitarIntentosAdmin, (req, res) => {
   res.redirect(`/editar?key=${req.query.key}`);
 });
 
+// Desvincula una tarjeta adicional de su negocio principal — la tarjeta deja
+// de sumar datos a ese negocio y vuelve a quedar "sin activar", lista para
+// activarse de nuevo (como negocio nuevo, o vinculada a otro distinto).
+app.post("/editar/:slugPrincipal/desvincular/:codigo", limitarIntentosAdmin, (req, res) => {
+  if (req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado.");
+  }
+  const { slugPrincipal, codigo } = req.params;
+  const codigos = leerCodigos();
+  const entrada = codigos[codigo];
+  if (!entrada || entrada.vinculadoA !== slugPrincipal) {
+    return res.status(404).send("Esa tarjeta no está vinculada a este negocio.");
+  }
+  const negocioPrincipal = obtenerNegocio(slugPrincipal);
+  codigos[codigo] = { creado: entrada.creado || new Date().toISOString() };
+  guardarCodigos(codigos);
+  registrarAuditoriaGlobal(
+    "desvincular_tarjeta",
+    `Tarjeta ${codigo} desvinculada de "${negocioPrincipal ? negocioPrincipal.nombre : slugPrincipal}" (${slugPrincipal}) — queda sin activar`,
+    req
+  );
+  res.redirect(`/editar/${slugPrincipal}?key=${req.query.key}`);
+});
+
 // Plantilla reutilizable del formulario de crear/editar negocio.
-function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
+function formularioNegocio({ titulo, accion, key, valores = {}, slug = null, tarjetasVinculadas = [] }) {
   const categorias = ["restaurante", "peluqueria", "tienda", "clinica", "otro"];
   const opciones = categorias
     .map((c) => `<option value="${c}" ${valores.categoria === c ? "selected" : ""}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`)
@@ -2323,6 +2401,26 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
             </form>
             ${slug ? `<a class="quitar-link" href="/editar/${slug}/quitar?key=${key}">Quitar esta tarjeta</a>` : ""}
           </div>
+
+          ${slug ? `
+          <div class="form-card" style="margin-top:16px;">
+            <h3 style="margin:0 0 4px;font-size:0.92rem;">Tarjetas vinculadas a este negocio</h3>
+            <p style="color:${MARCA.textoSuave};font-size:0.8rem;margin:0 0 14px;line-height:1.5;">
+              Un mismo local puede tener varias tarjetas físicas (una por mesa, una en la caja, etc.) — todas
+              suman al mismo negocio. Identificador de este negocio para vincular tarjetas nuevas: <code style="background:${MARCA.verdeClaro};padding:2px 8px;border-radius:6px;">${slug}</code>
+            </p>
+            ${tarjetasVinculadas.length
+              ? tarjetasVinculadas.map((c) => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid ${MARCA.borde};font-size:0.85rem;">
+                  <code>${c}</code>
+                  <form method="POST" action="/editar/${slug}/desvincular/${c}?key=${key}" style="margin:0;" onsubmit="return confirm('¿Desvincular la tarjeta ${c}? Deja de sumar datos a ${escaparHtml(valores.nombre || "este negocio")} y vuelve a quedar sin activar — se puede activar de nuevo después, como negocio nuevo o vinculada a otro.');">
+                    <button type="submit" style="margin:0;background:#fff;color:${MARCA.rojo};border:1px solid #F0D0C8;padding:6px 12px;font-size:0.78rem;border-radius:7px;">Desvincular</button>
+                  </form>
+                </div>
+              `).join("")
+              : `<p style="color:${MARCA.textoSuave};font-size:0.82rem;margin:0;">Todavía no tiene tarjetas adicionales vinculadas.</p>`}
+          </div>
+          ` : ""}
         </div>
       </body>
     </html>
@@ -2496,10 +2594,12 @@ app.get("/activar/:codigo", (req, res) => {
     return res.status(404).send("Código no válido. Verifica que lo escribiste bien.");
   }
   if (entrada.activado) {
+    const negocioDeEstaTarjeta = obtenerNegocio(codigo);
     return res.send(`
       <html><body style="font-family:sans-serif;padding:40px;text-align:center;">
         <h2>Esta tarjeta ya está activada</h2>
-        <p>Pertenece a: <b>${entrada.negocio.nombre}</b></p>
+        <p>Pertenece a: <b>${negocioDeEstaTarjeta ? negocioDeEstaTarjeta.nombre : "(negocio no encontrado)"}</b></p>
+        ${entrada.vinculadoA ? `<p style="color:#888;font-size:0.85rem;">Es una tarjeta adicional vinculada a ese negocio.</p>` : ""}
       </body></html>
     `);
   }
@@ -2536,6 +2636,11 @@ app.get("/activar/:codigo", (req, res) => {
           .cat-chip{border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 16px;font-size:0.84rem;
                     font-weight:600;color:${MARCA.textoSuave};cursor:pointer;background:#fff;transition:all 0.12s;}
           .cat-chip.activo{background:${MARCA.verde};border-color:${MARCA.verde};color:#fff;}
+
+          .modo-toggle{display:flex;gap:8px;margin-bottom:20px;background:${MARCA.crema};border-radius:11px;padding:4px;}
+          .modo-btn{flex:1;text-align:center;padding:10px 10px;border-radius:8px;font-size:0.82rem;font-weight:700;
+                    color:${MARCA.textoSuave};cursor:pointer;transition:all 0.12s;}
+          .modo-btn.activo{background:#fff;color:${MARCA.verdeOscuro};box-shadow:0 2px 6px rgba(11,61,44,0.1);}
         </style>
       </head>
       <body>
@@ -2547,6 +2652,28 @@ app.get("/activar/:codigo", (req, res) => {
 
           <div class="form-card">
             <form method="POST" action="/activar/${codigo}" id="form-activar">
+              <div class="modo-toggle">
+                <div class="modo-btn activo" data-modo="nuevo">Es un negocio nuevo</div>
+                <div class="modo-btn" data-modo="vincular">Ya tengo un negocio en Tapin</div>
+              </div>
+              <input type="hidden" name="modo" id="input-modo" value="nuevo">
+
+              <div id="bloque-vincular" style="display:none;">
+                <p class="nota" style="margin:0 0 16px;font-size:0.82rem;color:${MARCA.textoSuave};line-height:1.5;">
+                  Úsalo si este local ya tiene otra tarjeta Tapin activa — por ejemplo, una tarjeta por mesa, o una
+                  en la caja y otra en la entrada. Esta tarjeta se suma a las estadísticas del mismo negocio, no
+                  crea uno aparte.
+                </p>
+                <label>Identificador del negocio ya activo</label>
+                <input type="text" name="slugExistente" id="input-slug-existente"
+                       placeholder="Lo encuentras en tu panel → Configuración → Tarjetas vinculadas">
+
+                <label>Clave de acceso de ese negocio</label>
+                <input type="text" name="claveExistente" id="input-clave-existente"
+                       placeholder="La misma clave con la que entras a su panel">
+              </div>
+
+              <div id="bloque-nuevo">
               ${process.env.GOOGLE_PLACES_API_KEY ? `
               <label>Busca tu negocio en Google (opcional — te llena los datos solo)</label>
               <input type="text" id="buscador-places" placeholder="Escribe el nombre de tu negocio..."
@@ -2609,9 +2736,10 @@ app.get("/activar/:codigo", (req, res) => {
                 <option value="miami" data-codigo="us">Estados Unidos (Miami)</option>
               </select>
 
+              </div>
+
               <button type="submit">Activar tarjeta</button>
-            </form>
-          </div>
+            </form>          </div>
         </div>
 
         <script>
@@ -2654,6 +2782,27 @@ app.get("/activar/:codigo", (req, res) => {
               inputCiudadActivar.placeholder = 'Primero elige el departamento';
             }
           });
+
+          // ---------- Selector "negocio nuevo" vs. "vincular a uno existente" ----------
+          const bloqueNuevo = document.getElementById('bloque-nuevo');
+          const bloqueVincular = document.getElementById('bloque-vincular');
+          const inputModo = document.getElementById('input-modo');
+          const camposSoloNuevo = bloqueNuevo.querySelectorAll('[required]');
+          const camposSoloVincular = bloqueVincular.querySelectorAll('input');
+
+          document.querySelectorAll('.modo-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              document.querySelectorAll('.modo-btn').forEach((b) => b.classList.remove('activo'));
+              btn.classList.add('activo');
+              const modo = btn.dataset.modo;
+              inputModo.value = modo;
+              const esVincular = modo === 'vincular';
+              bloqueNuevo.style.display = esVincular ? 'none' : '';
+              bloqueVincular.style.display = esVincular ? '' : 'none';
+              camposSoloNuevo.forEach((c) => { c.required = !esVincular; });
+              camposSoloVincular.forEach((c) => { c.required = esVincular; });
+            });
+          });
         </script>
         ${process.env.GOOGLE_PLACES_API_KEY ? `
         <script>
@@ -2688,6 +2837,65 @@ app.post("/activar/:codigo", (req, res) => {
 
   if (!entrada) return res.status(404).send("Código no válido.");
   if (entrada.activado) return res.status(400).send("Esta tarjeta ya fue activada antes.");
+
+  const modo = req.body.modo === "vincular" ? "vincular" : "nuevo";
+
+  // Modo "vincular": esta tarjeta NO crea un negocio nuevo — se conecta a uno
+  // que ya existe (varias tarjetas físicas para un mismo local). Se exige la
+  // clave de acceso del negocio destino para comprobar que quien activa esta
+  // tarjeta de verdad es dueño de ese negocio, y no solo adivinó su identificador.
+  if (modo === "vincular") {
+    const slugInput = (req.body.slugExistente || "").trim();
+    const claveInput = (req.body.claveExistente || "").trim();
+    if (!slugInput || !claveInput) {
+      return res.status(400).send("Falta el identificador del negocio existente o su clave de acceso.");
+    }
+    const slugPrincipal = resolverSlug(slugInput, codigos);
+    if (slugPrincipal === codigo) {
+      return res.status(400).send("No puedes vincular una tarjeta consigo misma.");
+    }
+    const negocioExistente = obtenerNegocio(slugPrincipal);
+    if (!negocioExistente) {
+      return res.status(404).send("No encontramos ningún negocio activo con ese identificador. Verifica que lo hayas copiado bien.");
+    }
+    if (!tieneClaveConfigurada(negocioExistente) || !claveNegocioValida(negocioExistente, slugPrincipal, claveInput)) {
+      return res.status(401).send("La clave no coincide con la de ese negocio. Verifícala e inténtalo de nuevo.");
+    }
+    entrada.activado = true;
+    entrada.activadoEl = new Date().toISOString();
+    entrada.vinculadoA = slugPrincipal;
+    delete entrada.negocio;
+    guardarCodigos(codigos);
+    registrarAuditoriaGlobal(
+      "vincular_tarjeta",
+      `Tarjeta ${codigo} vinculada al negocio "${negocioExistente.nombre}" (${slugPrincipal}) — tarjeta adicional del mismo local`,
+      req
+    );
+
+    return res.send(`
+      <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>${ESTILO_BASE}
+          .ok-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;}
+          .ok-card code{background:${MARCA.verdeClaro};padding:3px 8px;border-radius:6px;font-size:0.82rem;}
+        </style></head>
+        <body>
+          <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
+          <div class="content">
+            <div class="eyebrow">Listo</div>
+            <h1 class="titulo-pagina">¡Tarjeta vinculada!</h1>
+            <div class="ok-card">
+              <p>Esta tarjeta ya está conectada a <b>${escaparHtml(negocioExistente.nombre)}</b> — todo lo que pase en ella
+                 (toques, calificaciones, quejas, sellos de fidelización) se suma a las estadísticas de ese mismo negocio,
+                 no crea uno aparte.</p>
+              <p>Panel de este negocio:<br><code>${req.protocol}://${req.get("host")}/mi-panel/${slugPrincipal}?key=${encodeURIComponent(claveInput)}</code></p>
+              <p>La tarjeta ya está lista — el cliente puede empezar a usarla de inmediato.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+  }
 
   const { nombre, googleUrl, categoria, pais, email, plan, direccion, departamento, ciudad, claveAcceso } = req.body;
   if (!nombre || !googleUrl) {
@@ -2733,6 +2941,37 @@ app.post("/activar/:codigo", (req, res) => {
   }
 
   guardarCodigos(codigos);
+
+  // Si el pedido incluía Plan Pro mensual y quedó marcado "renovar
+  // automáticamente", el paso que sigue de inmediato es registrar la
+  // tarjeta — sin eso, el Pro no se renueva después del primer mes y nadie
+  // se entera hasta que deje de funcionar. Se lo mostramos ANTES que el
+  // acceso al panel, como el siguiente paso obvio, no como algo opcional
+  // escondido en configuración.
+  if (planReal === "pro" && entrada.planProTipo === "mensual" && entrada.renovarAutomatico) {
+    return res.send(`
+      <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>${ESTILO_BASE}
+          .ok-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;}
+          .ok-card code{background:${MARCA.verdeClaro};padding:3px 8px;border-radius:6px;font-size:0.82rem;}
+        </style></head>
+        <body>
+          <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
+          <div class="content">
+            <div class="eyebrow">Un paso más</div>
+            <h1 class="titulo-pagina">¡Tarjeta activada! Ahora registra tu tarjeta</h1>
+            <div class="ok-card">
+              <p><b>${nombre}</b> ya está conectado a esta tarjeta Tapin, con Plan Pro activo desde ya.</p>
+              <p>Para que el Plan Pro se siga renovando solo cada mes, falta registrar una tarjeta de cobro — es lo único que queda pendiente.</p>
+              <a class="btn-primario" href="/suscripcion/${codigo}?key=${encodeURIComponent(claveLimpia)}" style="display:inline-block;margin-top:6px;">Registrar tarjeta para el cobro mensual</a>
+              <p style="margin-top:16px;font-size:0.78rem;">También puedes hacerlo después desde tu panel:<br><code>${req.protocol}://${req.get("host")}/mi-panel/${codigo}?key=${encodeURIComponent(claveLimpia)}</code></p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+  }
 
   res.send(`
     <html>
@@ -4098,7 +4337,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             <div class="panel-analitica-full">
               <div class="card-titulo">
                 <span>Actividad reciente</span>
-                ${esPro(negocio) ? `<a class="ver-mas" href="/export/${slug}.pdf?key=${claveUsada}" target="_blank">Ver reporte</a>` : ""}
               </div>
               <div class="chart-card actividad-lista" style="margin-top:0;">
                 ${actividadReciente || `<div style="text-align:center;color:${MARCA.textoSuave};padding:22px 0;">Sin toques todavía</div>`}
@@ -4372,7 +4610,7 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
 // Un solo lugar para todos los ajustes, para no llenar el panel principal
 // de botones — mantiene lo del día a día simple, y lo de configurar aparte.
 app.get("/mi-panel/:slug/configuracion", (req, res) => {
-  const { slug } = req.params;
+  const slug = resolverSlug(req.params.slug);
   const negocio = obtenerNegocio(slug);
   if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "Revisa que el enlace esté completo y bien escrito.");
   const claveUsada = claveEfectiva(req, slug);
@@ -4383,6 +4621,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
   const alertas = negocio.alertas || { quejas: true, reporteMensual: true };
   const datos = leerDatos();
   const auditoria = ((datos[slug] && datos[slug].auditoria) || []).slice().reverse().slice(0, 15);
+  const tarjetasDelNegocio = tarjetasVinculadasA(slug);
 
   res.send(`
     <html>
@@ -4539,6 +4778,24 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
                 : `<form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
                      <button type="submit">Generar acceso de solo lectura</button>
                    </form>`}
+            </div>
+          </div>
+
+          <div class="config-seccion">
+            <div class="config-seccion-titulo">Tarjetas físicas</div>
+            <div class="form-card">
+              <h3>Tarjetas vinculadas a este negocio</h3>
+              <p class="nota">
+                ¿Tienes más de una mesa, caja o entrada? Puedes pedir tarjetas Tapin adicionales y vincularlas
+                a este mismo negocio — no crean uno nuevo, todo lo que pase en ellas (toques, calificaciones,
+                quejas, sellos) se suma aquí mismo.
+              </p>
+              <p class="nota" style="margin-bottom:6px;"><b>Identificador de este negocio</b> (pídelo al activar la tarjeta nueva, junto con tu clave de acceso):</p>
+              <div class="codigo-caja">${slug}</div>
+              ${tarjetasDelNegocio.length
+                ? `<p class="nota" style="margin:14px 0 6px;"><b>${tarjetasDelNegocio.length} tarjeta${tarjetasDelNegocio.length > 1 ? "s" : ""} adicional${tarjetasDelNegocio.length > 1 ? "es" : ""} vinculada${tarjetasDelNegocio.length > 1 ? "s" : ""}:</b></p>
+                   ${tarjetasDelNegocio.map((c) => `<div class="linea-audit"><b>${c}</b><span>Activa</span></div>`).join("")}`
+                : `<p class="nota" style="margin:14px 0 0;">Todavía no tienes tarjetas adicionales — solo esta.</p>`}
             </div>
           </div>
 
@@ -8657,6 +8914,10 @@ app.post("/pedido", (req, res) => {
     descuentoAplicado: escalon.descuento,
     proIncluido,
     planProTipo: proIncluido ? tipoProElegido : null,
+    // Solo aplica al Plan Pro MENSUAL (el anual es pago único, no necesita
+    // tarjeta guardada). Marcado por defecto — el cliente lo puede
+    // destildar en la pantalla de pago si no quiere que se renueve solo.
+    renovarAutomatico: proIncluido && tipoProElegido === "mensual",
     monto,
     estado: "pendiente", // pendiente | aprobado | rechazado
     creado: new Date().toISOString(),
@@ -8668,6 +8929,20 @@ app.post("/pedido", (req, res) => {
 
 // Página de pago — embebe el widget oficial de Wompi con la firma de integridad
 // calculada en el servidor (nunca se expone el secreto al navegador).
+// Actualiza en caliente si el cliente quiere que su Plan Pro mensual se
+// renueve solo — se llama desde la casilla en /pagar/:id, ANTES de que le
+// dé clic al botón de Wompi (que lo saca de nuestro sitio).
+app.post("/pedido/:id/renovar-automatico", (req, res) => {
+  const pedidos = leerPedidos();
+  const pedido = pedidos[req.params.id];
+  if (!pedido) return res.status(404).json({ ok: false });
+  if (!pedido.proIncluido || pedido.planProTipo !== "mensual") return res.status(400).json({ ok: false });
+  pedido.renovarAutomatico = !!(req.body && req.body.renovar);
+  pedidos[req.params.id] = pedido;
+  guardarPedidos(pedidos);
+  res.json({ ok: true });
+});
+
 app.get("/pagar/:id", (req, res) => {
   const pedidos = leerPedidos();
   const pedido = pedidos[req.params.id];
@@ -8721,6 +8996,23 @@ app.get("/pagar/:id", (req, res) => {
             ${pedido.proIncluido ? `<div><b>Plan Pro ${pedido.planProTipo === "anual" ? "anual" : "primer mes"}:</b> $${(pedido.planProTipo === "anual" ? PRECIO_PRO_ANUAL_COP : PRECIO_PRO_COP).toLocaleString("es-CO")} COP</div>` : ""}
           </div>
           <div class="monto">$${pedido.monto.toLocaleString("es-CO")} COP</div>
+
+          ${pedido.proIncluido && pedido.planProTipo === "mensual" ? `
+          <label style="display:flex;align-items:flex-start;gap:9px;text-align:left;font-size:0.82rem;color:${MARCA.textoSuave};
+                        background:${MARCA.crema};border-radius:10px;padding:12px 14px;margin:14px 0;cursor:pointer;">
+            <input type="checkbox" id="check-renovar" checked style="margin-top:2px;flex-shrink:0;">
+            <span>Renovar mi Plan Pro automáticamente cada mes. Al activar la tarjeta te vamos a pedir registrar una tarjeta para el cobro — puedes cancelar cuando quieras desde tu panel.</span>
+          </label>
+          <script>
+            document.getElementById("check-renovar").addEventListener("change", function () {
+              fetch("/pedido/${req.params.id}/renovar-automatico", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ renovar: this.checked }),
+              }).catch(function () {});
+            });
+          </script>
+          ` : ""}
 
           <form action="https://checkout.wompi.co/p/" method="GET">
             <input type="hidden" name="public-key" value="${process.env.WOMPI_PUBLIC_KEY}" />
@@ -8854,6 +9146,7 @@ app.get("/pago-confirmado", async (req, res) => {
             creado: new Date().toISOString(),
             proIncluido: pedido.proIncluido || false,
             planProTipo: pedido.planProTipo || null,
+            renovarAutomatico: pedido.proIncluido && pedido.planProTipo === "mensual" && pedido.renovarAutomatico !== false,
           };
           nuevosCodigos.push(nuevo);
         }
