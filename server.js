@@ -223,7 +223,12 @@ app.use((req, res, next) => {
       else if (/^\/(mi-panel|mis-negocios)(\/|$)/.test(req.path) || /^\/editar\/[^/]+/.test(req.path)) pagina = "negocio";
       else if (/^\/(admin|stats|editar|codigos|auditoria|respaldo)(\/|$)/.test(req.path)) pagina = "admin";
       contenido = contenido.replace(/<body([^>]*)>/i, `<body$1 data-tapin-page="${pagina}">`);
-      contenido = contenido.replace(/<\/body>/i, `${CONTROL_TEMA_GLOBAL}</body>`);
+      // El panel de negocio (mi-panel / mis-negocios) no lleva el botón de
+      // modo oscuro -- se quitó a pedido. El resto del sitio lo conserva.
+      const esPanelDeNegocio = /^\/(mi-panel|mis-negocios)(\/|$)/.test(req.path);
+      if (!esPanelDeNegocio) {
+        contenido = contenido.replace(/<\/body>/i, `${CONTROL_TEMA_GLOBAL}</body>`);
+      }
     }
     return enviar(contenido);
   };
@@ -819,6 +824,138 @@ function jsonAtributoHtml(obj) {
   return JSON.stringify(obj).replace(/'/g, "&#39;");
 }
 
+// ---------- Facturacion electronica (Alegra) ----------
+// Cada vez que se confirma un pago (compra de tarjeta o mensualidad Pro),
+// si el comprador dejo NIT/razon social, le pedimos a Alegra que genere la
+// factura electronica y la envie a la DIAN -- Tapin nunca genera el XML ni
+// habla directo con la DIAN, todo pasa por Alegra (proveedor tecnologico
+// autorizado). Requiere dos variables de entorno en Render, sacadas de
+// Alegra -> Soluciones -> Administrar mis soluciones -> Integraciones ->
+// Integracion Manual (API):
+//   ALEGRA_USER  -> el correo de la cuenta de Alegra.
+//   ALEGRA_TOKEN -> el token de acceso a la API.
+// Si estas variables no estan configuradas, o el pedido no tiene NIT, la
+// factura simplemente no se genera (sin romper el resto del flujo) -- queda
+// registrado en consola para revisar manualmente si hace falta.
+const ALEGRA_API_BASE = "https://api.alegra.com/api/v1";
+const ALEGRA_NOMBRE_ITEM_BASICO = "Plan Básico Tapin";
+const ALEGRA_NOMBRE_ITEM_PRO = "Plan Pro Tapin";
+
+function alegraConfigurado() {
+  return !!(process.env.ALEGRA_USER && process.env.ALEGRA_TOKEN);
+}
+
+function alegraAuthHeader() {
+  const credenciales = Buffer.from(`${process.env.ALEGRA_USER}:${process.env.ALEGRA_TOKEN}`).toString("base64");
+  return `Basic ${credenciales}`;
+}
+
+// Envoltorio delgado sobre fetch para hablar con la API de Alegra: agrega
+// la autenticacion y decodifica la respuesta. Lanza un error legible si
+// Alegra responde con algo distinto a 2xx (por ejemplo, plan sin acceso a
+// la API), para que quede claro en los logs de Render que fallo.
+async function alegraPeticion(ruta, opciones = {}) {
+  const resp = await fetch(`${ALEGRA_API_BASE}${ruta}`, {
+    ...opciones,
+    headers: {
+      Authorization: alegraAuthHeader(),
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(opciones.headers || {}),
+    },
+  });
+  const texto = await resp.text();
+  let cuerpo = null;
+  try { cuerpo = texto ? JSON.parse(texto) : null; } catch { cuerpo = texto; }
+  if (!resp.ok) {
+    const detalle = (cuerpo && (cuerpo.message || JSON.stringify(cuerpo))) || resp.statusText;
+    throw new Error(`Alegra respondio ${resp.status}: ${detalle}`);
+  }
+  return cuerpo;
+}
+
+// Busca un contacto (cliente) en Alegra por numero de identificacion (NIT o
+// cedula). Si no existe, lo crea. Devuelve el id numerico que pide Alegra
+// para armar la factura.
+async function buscarOCrearContactoAlegra({ nit, razonSocial, email }) {
+  const identificacion = (nit || "").replace(/[^0-9]/g, "");
+  if (!identificacion) throw new Error("Falta el NIT para crear el contacto en Alegra.");
+
+  const encontrados = await alegraPeticion(`/contacts?identification=${encodeURIComponent(identificacion)}`);
+  if (Array.isArray(encontrados) && encontrados.length > 0) {
+    return encontrados[0].id;
+  }
+
+  const nuevo = await alegraPeticion("/contacts", {
+    method: "POST",
+    body: JSON.stringify({
+      name: razonSocial || "Cliente Tapin",
+      identification: identificacion,
+      email: email || undefined,
+      type: ["client"],
+    }),
+  });
+  return nuevo.id;
+}
+
+// Busca en el catalogo de Alegra el item (producto/servicio) con este
+// nombre exacto -- "Plan Basico Tapin" o "Plan Pro Tapin". Hay que crearlos
+// una sola vez a mano en Alegra (Inventario -> Items) antes de que esto
+// funcione; aqui solo se busca su id para poder referenciarlo en la factura.
+const cacheItemsAlegra = {};
+async function buscarItemAlegraPorNombre(nombre) {
+  if (cacheItemsAlegra[nombre]) return cacheItemsAlegra[nombre];
+  const encontrados = await alegraPeticion(`/items?query=${encodeURIComponent(nombre)}&limit=5`);
+  const coincidencia = Array.isArray(encontrados)
+    ? encontrados.find((it) => (it.name || "").trim().toLowerCase() === nombre.trim().toLowerCase())
+    : null;
+  if (!coincidencia) {
+    throw new Error(`No se encontro el item "${nombre}" en el catalogo de Alegra. Crealo en Inventario -> Items con ese nombre exacto.`);
+  }
+  cacheItemsAlegra[nombre] = coincidencia.id;
+  return coincidencia.id;
+}
+
+// Crea (y valida ante la DIAN) la factura electronica de una venta de
+// Tapin. "items" es un array de { nombreItem, cantidad, precioUnitario }.
+// No lanza hacia arriba si algo falla -- un problema de facturacion no debe
+// tumbar la activacion de una tarjeta ni el registro de un pago; solo se
+// deja constancia clara en los logs para revisarlo a mano.
+async function crearFacturaAlegra({ nit, razonSocial, email, items, referencia }) {
+  if (!alegraConfigurado()) {
+    console.warn(`[Alegra] ALEGRA_USER/ALEGRA_TOKEN no configurados -- no se genero factura para ${referencia}.`);
+    return null;
+  }
+  if (!nit) {
+    console.warn(`[Alegra] Pedido ${referencia} sin NIT -- no se genero factura automatica (el cliente no la pidio).`);
+    return null;
+  }
+  try {
+    const clienteId = await buscarOCrearContactoAlegra({ nit, razonSocial, email });
+    const itemsAlegra = [];
+    for (const it of items) {
+      const itemId = await buscarItemAlegraPorNombre(it.nombreItem);
+      itemsAlegra.push({ id: itemId, price: it.precioUnitario, quantity: it.cantidad || 1 });
+    }
+    const factura = await alegraPeticion("/invoices", {
+      method: "POST",
+      body: JSON.stringify({
+        status: "open",
+        date: new Date().toISOString().slice(0, 10),
+        dueDate: new Date().toISOString().slice(0, 10),
+        client: clienteId,
+        items: itemsAlegra,
+        anotation: `Tapin -- referencia ${referencia}`,
+      }),
+    });
+    console.log(`[Alegra] Factura ${factura?.numberTemplate?.fullNumber || factura?.id || ""} creada para ${referencia}.`);
+    return factura;
+  } catch (err) {
+    console.error(`[Alegra] Error creando factura para ${referencia}:`, err.message);
+    return null;
+  }
+}
+
 // ---------- Cuentas de cliente (persona normal) ----------
 // A diferencia del dueño de negocio (que entra sin contraseña, por link mágico),
 // el cliente sí crea una cuenta real con correo + contraseña, porque necesitamos
@@ -1402,32 +1539,26 @@ function progresoMeta(eventos, metaMensual) {
   return { toquesMes, metaMensual, pct: Math.min(100, Math.round((toquesMes / metaMensual) * 100)) };
 }
 
-// Proyeccion simple y transparente del cierre del mes basada en el ritmo real.
-function proyeccionMes(eventos, negocio) {
-  const ahora = new Date();
-  const inicio = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
-  const fin = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0);
-  const dia = ahora.getDate();
-  const toquesMes = eventos.filter((e) => {
-    const fecha = new Date(e.fechaISO);
-    return fecha >= inicio && fecha <= ahora;
-  }).length;
-  const suficiente = dia >= 3 && toquesMes >= 3;
-  const promedio = toquesMes / Math.max(1, dia);
-  const proyectado = Math.max(toquesMes, Math.round(promedio * fin.getDate()));
-  const nombreMes = ahora.toLocaleDateString("es-CO", { month: "long", year: "numeric", timeZone: zonaDe(negocio) });
-  return {
-    suficiente,
-    nombreMes,
-    toquesMes,
-    proyectado,
-    promedio: Math.round(promedio * 100) / 100,
-    minimo: suficiente ? Math.max(toquesMes, Math.round(proyectado * 0.85)) : 0,
-    maximo: suficiente ? Math.round(proyectado * 1.15) : 0,
-    restantes: Math.max(0, fin.getDate() - dia),
-  };
+// Fraccion del dia de hoy ya transcurrida (0 a 1), en la zona horaria del
+// negocio -- ej: si son las 6pm (18:00), devuelve 0.75. Se usa para que la
+// proyeccion no trate "hoy" como un dia completo cuando apenas va a mitad,
+// que era el bug: antes, a las 9am con 2 toques, la proyeccion del dia
+// mostraba "2" en vez de estimar cuantos toques van a caer para el cierre.
+function fraccionDiaTranscurrida(negocio) {
+  const partes = new Date().toLocaleString("en-US", {
+    timeZone: zonaDe(negocio), hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  const [horaStr, minutoStr] = partes.split(":");
+  const hora = parseInt(horaStr, 10) % 24; // "24:00" a medianoche -> 0
+  const minuto = parseInt(minutoStr, 10) || 0;
+  return (hora + minuto / 60) / 24;
 }
 
+// Proyeccion simple y transparente de cierre de periodo basada en el ritmo
+// real de actividad. El tiempo transcurrido se cuenta en dias completos
+// mas la fraccion de hoy que ya paso (no como si "hoy" ya hubiera
+// terminado) -- asi el ritmo diario promedio, y por lo tanto la
+// proyeccion, es preciso sin importar a que hora del dia se consulte.
 function proyeccionPeriodo(eventos, negocio, periodo) {
   const ahora = new Date();
   const inicioSemana = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
@@ -1445,7 +1576,11 @@ function proyeccionPeriodo(eventos, negocio, periodo) {
   };
   const config = configuraciones[periodo] || configuraciones.mes;
   const totalDias = Math.max(1, Math.round((config.fin - config.inicio) / 86400000));
-  const transcurridos = Math.min(totalDias, Math.max(1, Math.floor((ahora - config.inicio) / 86400000) + 1));
+  // Dias completos ya pasados (sin contar hoy) + la fraccion de hoy que ya
+  // transcurrio. Piso de 1 hora (1/24) para no dividir por un numero casi
+  // cero justo despues de medianoche, lo que dispararia el promedio.
+  const diasCompletosAntes = Math.max(0, Math.floor((ahora - config.inicio) / 86400000));
+  const transcurridos = Math.min(totalDias, Math.max(1 / 24, diasCompletosAntes + fraccionDiaTranscurrida(negocio)));
   const restantes = Math.max(0, Math.ceil((config.fin - ahora) / 86400000));
   const toquesPeriodo = eventos.filter((e) => {
     const fecha = new Date(e.fechaISO);
@@ -1459,6 +1594,7 @@ function proyeccionPeriodo(eventos, negocio, periodo) {
     periodo,
     etiqueta: config.etiqueta,
     nombrePeriodo: periodo === "anio" ? `${config.etiqueta} ${ahora.getFullYear()}` : config.etiqueta,
+    nombreMes: ahora.toLocaleDateString("es-CO", { month: "long", year: "numeric", timeZone: zonaDe(negocio) }),
     toquesMes: toquesPeriodo,
     proyectado,
     promedio: Math.round(promedio * 100) / 100,
@@ -1466,6 +1602,13 @@ function proyeccionPeriodo(eventos, negocio, periodo) {
     maximo: suficiente ? Math.round(proyectado * 1.15) : 0,
     restantes,
   };
+}
+
+// La proyeccion de cierre de mes (usada en el informe PDF) es solo el caso
+// "mes" de proyeccionPeriodo -- una sola implementacion, sin logica
+// duplicada que se pueda desincronizar.
+function proyeccionMes(eventos, negocio) {
+  return proyeccionPeriodo(eventos, negocio, "mes");
 }
 
 function barraSemana(dias7) {
@@ -2996,6 +3139,11 @@ app.post("/activar/:codigo", (req, res) => {
     direccion: direccion || "",
     departamento: departamento || "",
     ciudad: ciudad || "",
+    // Se copia del pedido original (si el comprador dejo NIT al pagar la
+    // tarjeta) para poder seguir facturando electronicamente las
+    // mejoras a Pro y las renovaciones mensuales sin volver a pedirlo.
+    // Editable luego desde Configuracion del panel del negocio.
+    datosFactura: entrada.datosFactura || null,
   };
   if (planReal === "pro" && entrada.planProTipo === "anual") {
     const unAnioDespues = new Date();
@@ -4833,6 +4981,21 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           </div>
 
           <div class="config-seccion">
+            <div class="config-seccion-titulo">Facturación</div>
+            <div class="form-card">
+              <h3>Datos para factura electrónica</h3>
+              <p class="nota">Si dejas tu NIT aquí, generamos factura electrónica automática cada vez que se cobre tu Plan Pro (mejora o mensualidad). Déjalo vacío si no necesitas factura.</p>
+              <form method="POST" action="/mi-panel/${slug}/configuracion/facturacion?key=${claveUsada}">
+                <label>NIT o cédula</label>
+                <input type="text" name="nit" value="${escaparHtml((negocio.datosFactura && negocio.datosFactura.nit) || "")}" placeholder="Ej: 900123456">
+                <label>Razón social</label>
+                <input type="text" name="razonSocial" value="${escaparHtml((negocio.datosFactura && negocio.datosFactura.razonSocial) || "")}" placeholder="Ej: Mi Negocio S.A.S.">
+                <button type="submit">Guardar datos de facturación</button>
+              </form>
+            </div>
+          </div>
+
+          <div class="config-seccion">
             <div class="config-seccion-titulo">Tarjetas físicas</div>
             <div class="form-card">
               <h3>Tarjetas de este negocio</h3>
@@ -4896,6 +5059,20 @@ app.post("/mi-panel/:slug/configuracion/meta", (req, res) => {
   const metaMensual = parseInt(req.body.metaMensual, 10) || null;
   guardarCambiosNegocio(slug, negocio, { metaMensual });
   registrarAuditoria(slug, negocio, metaMensual ? `Configuraste una meta mensual de ${metaMensual} toques` : "Quitaste tu meta mensual");
+  res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
+});
+
+app.post("/mi-panel/:slug/configuracion/facturacion", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
+  const nit = (req.body.nit || "").trim();
+  const razonSocial = (req.body.razonSocial || "").trim();
+  guardarCambiosNegocio(slug, negocio, {
+    datosFactura: nit ? { nit, razonSocial } : null,
+  });
+  registrarAuditoria(slug, negocio, nit ? "Actualizaste tus datos de facturación" : "Quitaste tus datos de facturación");
   res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
 });
 
@@ -9175,6 +9352,7 @@ function verificarFirmaBold(rawBody, firmaRecibida) {
 function activarUpgradePro(slug, esAnual) {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return;
+  const precioPagado = esAnual ? PRECIO_PRO_ANUAL_COP : precioProSegunLocales(negocio.email, todosLosNegocios());
   if (esAnual) {
     const unAnioDespues = new Date();
     unAnioDespues.setFullYear(unAnioDespues.getFullYear() + 1);
@@ -9200,6 +9378,18 @@ function activarUpgradePro(slug, esAnual) {
       },
     });
     registrarAuditoria(slug, negocio, "Mejoraste a Plan Pro");
+  }
+
+  // Factura electronica (si el negocio dejo NIT en Configuracion). No
+  // bloquea el resto del flujo si Alegra falla o no esta configurado.
+  if (negocio.datosFactura && negocio.datosFactura.nit) {
+    crearFacturaAlegra({
+      nit: negocio.datosFactura.nit,
+      razonSocial: negocio.datosFactura.razonSocial,
+      email: negocio.email,
+      items: [{ nombreItem: ALEGRA_NOMBRE_ITEM_PRO, cantidad: 1, precioUnitario: precioPagado }],
+      referencia: `tapin-upgrade-${esAnual ? "anual-" : ""}${slug}`,
+    }).catch((err) => console.error("[Alegra] Error inesperado facturando upgrade:", err.message));
   }
 }
 
@@ -9246,6 +9436,19 @@ app.post("/webhook/bold", async (req, res) => {
           suscripcion: { ...negocio.suscripcion, ultimoPagoConfirmado: new Date().toISOString() },
         });
         registrarAuditoria(slug, negocio, "Pago mensual del Plan Pro confirmado");
+
+        // Factura electronica de este ciclo (si el negocio dejo NIT en
+        // Configuracion). No bloquea el resto del flujo si Alegra falla.
+        if (negocio.datosFactura && negocio.datosFactura.nit) {
+          const precioPagado = precioProSegunLocales(negocio.email, todosLosNegocios());
+          crearFacturaAlegra({
+            nit: negocio.datosFactura.nit,
+            razonSocial: negocio.datosFactura.razonSocial,
+            email: negocio.email,
+            items: [{ nombreItem: ALEGRA_NOMBRE_ITEM_PRO, cantidad: 1, precioUnitario: precioPagado }],
+            referencia,
+          }).catch((err) => console.error("[Alegra] Error inesperado facturando mensualidad:", err.message));
+        }
       }
     } else if (referencia.startsWith("tapin-")) {
       const pedidoId = referencia.slice("tapin-".length);
@@ -9296,6 +9499,26 @@ async function activarPedidoAprobado(pedidoId, req) {
     pedido.codigosGenerados = nuevosCodigos;
     pedidos[pedidoId] = pedido;
     guardarPedidos(pedidos);
+
+    // Factura electronica (si el comprador dejo NIT) -- se dispara aqui,
+    // una sola vez por pedido, junto con la generacion de codigos. No
+    // bloquea el resto del flujo si Alegra falla o no esta configurado.
+    if (pedido.nit) {
+      const itemsFactura = [
+        { nombreItem: ALEGRA_NOMBRE_ITEM_BASICO, cantidad: cantidadComprada, precioUnitario: pedido.precioUnidad },
+      ];
+      if (pedido.proIncluido) {
+        const precioPro = pedido.planProTipo === "anual" ? PRECIO_PRO_ANUAL_COP : PRECIO_PRO_COP;
+        itemsFactura.push({ nombreItem: ALEGRA_NOMBRE_ITEM_PRO, cantidad: 1, precioUnitario: precioPro });
+      }
+      crearFacturaAlegra({
+        nit: pedido.nit,
+        razonSocial: pedido.razonSocial,
+        email: pedido.email,
+        items: itemsFactura,
+        referencia: `tapin-${pedidoId}`,
+      }).catch((err) => console.error("[Alegra] Error inesperado facturando pedido:", err.message));
+    }
 
     const baseUrl = `${req.protocol}://${req.get("host")}`;
     const filasCodigos = nuevosCodigos
