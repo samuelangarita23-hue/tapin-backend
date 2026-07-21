@@ -1158,6 +1158,34 @@ function calcularResumen(eventos) {
   return { hoy, semana, dias7, ultimo, total: eventos.length };
 }
 
+// Compara actividad entre las tarjetas físicas de un mismo negocio (la
+// principal + las que estén vinculadas) — para que el dueño vea cuál
+// funciona mejor (más toques) y no solo el total combinado.
+function resumenPorTarjeta(slugPrincipal, eventos, codigosCache) {
+  const codigos = codigosCache || leerCodigos();
+  const vinculadas = tarjetasVinculadasA(slugPrincipal, codigos);
+  const tarjetas = [slugPrincipal, ...vinculadas];
+  return tarjetas
+    .map((codigo) => {
+      // Los eventos de ANTES de que existiera esto no tienen codigoTarjeta —
+      // se cuentan para la principal, porque en ese momento no podían venir
+      // de ninguna otra (las tarjetas vinculadas no existían todavía).
+      const eventosTarjeta = eventos.filter((e) =>
+        codigo === slugPrincipal ? (!e.codigoTarjeta || e.codigoTarjeta === codigo) : e.codigoTarjeta === codigo
+      );
+      const resumen = calcularResumen(eventosTarjeta);
+      return {
+        codigo,
+        etiqueta: (codigos[codigo] && codigos[codigo].etiqueta) || null,
+        esPrincipal: codigo === slugPrincipal,
+        hoy: resumen.hoy,
+        semana: resumen.semana,
+        total: resumen.total,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+}
+
 // Analiza la actividad por hora del día (0-23) durante el último mes, para
 // identificar picos (horas de más movimiento) y caídas (horas muertas).
 // También compara la última semana contra la anterior para ver si el pico
@@ -1485,7 +1513,7 @@ function graficaLinea(valores, { alto = 90, color = MARCA.verde } = {}) {
   </svg>`;
 }
 
-function registrarToque(slug, req, negocio) {
+function registrarToque(slug, req, negocio, codigoTarjeta = null) {
   const datos = leerDatos();
   if (!datos[slug]) {
     datos[slug] = { total: 0, eventos: [] };
@@ -1498,6 +1526,9 @@ function registrarToque(slug, req, negocio) {
     fechaISO: ahora.toISOString(), // fecha exacta en formato estándar (para guardar/exportar)
     fechaLegible: ahora.toLocaleString("es-CO", { timeZone: tz }), // ej: 27/6/2026, 9:14:32 a. m. (hora local del negocio)
     dispositivo: detectarDispositivo(req.headers["user-agent"]),
+    // Qué tarjeta física originó este toque (puede ser la principal o una
+    // vinculada) — permite comparar actividad entre tarjetas del mismo local.
+    codigoTarjeta: codigoTarjeta || slug,
   };
 
   datos[slug].total += 1;
@@ -1512,7 +1543,7 @@ function registrarToque(slug, req, negocio) {
   return evento;
 }
 
-function guardarTestimonio(slug, frase, valor, negocio) {
+function guardarTestimonio(slug, frase, valor, negocio, codigoTarjeta = null) {
   const datos = leerDatos();
   if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
   if (!datos[slug].testimonios) datos[slug].testimonios = [];
@@ -1522,6 +1553,7 @@ function guardarTestimonio(slug, frase, valor, negocio) {
     fechaLegible: ahora.toLocaleString("es-CO", { timeZone: zonaDe(negocio) }),
     frase,
     valor,
+    codigoTarjeta: codigoTarjeta || slug,
   });
   guardarDatos(datos);
 }
@@ -1536,7 +1568,7 @@ function promedioEstrellasFiltradas(testimonios, quejas = []) {
   return Math.round((valores.reduce((suma, valor) => suma + valor, 0) / valores.length) * 10) / 10;
 }
 
-function guardarQueja(slug, comentario, negocio, telefono = "", valor = null) {
+function guardarQueja(slug, comentario, negocio, telefono = "", valor = null, codigoTarjeta = null) {
   const datos = leerDatos();
   if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
   if (!datos[slug].quejas) datos[slug].quejas = [];
@@ -1548,6 +1580,7 @@ function guardarQueja(slug, comentario, negocio, telefono = "", valor = null) {
     telefono,
     valor: Number.isFinite(Number(valor)) && Number(valor) >= 1 && Number(valor) <= 5 ? Number(valor) : null,
     estado: "pendiente", // pendiente | contactado | resuelto
+    codigoTarjeta: codigoTarjeta || slug,
   });
   guardarDatos(datos);
 
@@ -1748,7 +1781,8 @@ const TODAS_LAS_FRASES_VALIDAS = new Set(Object.values(FRASES_POR_CATEGORIA).fla
 // si es negativa, lo manda a un formulario privado en vez de exponerlo en público.
 // Ejemplo: https://tu-dominio.com/r/mi-negocio
 app.get("/r/:slug", (req, res) => {
-  const slug = resolverSlug(req.params.slug);
+  const codigoTarjeta = req.params.slug; // el código físico exacto que se tocó
+  const slug = resolverSlug(codigoTarjeta); // el negocio al que pertenece (puede ser el mismo, o el principal si está vinculada)
   const negocio = obtenerNegocio(slug);
 
   if (!negocio) {
@@ -1759,7 +1793,7 @@ app.get("/r/:slug", (req, res) => {
     return enviarError(res, 404, "No encontramos este negocio", "El enlace de esta tarjeta no corresponde a ningún negocio activo. Si acabas de recibir la tarjeta, puede que todavía no esté activada.");
   }
 
-  registrarToque(slug, req, negocio);
+  registrarToque(slug, req, negocio, codigoTarjeta);
 
   res.send(`
     <html>
@@ -1794,7 +1828,7 @@ app.get("/r/:slug", (req, res) => {
                        stroke="${MARCA.oro}" stroke-width="1.4" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 2.5l2.9 6.06 6.6.77-4.86 4.55 1.28 6.55L12 17.3l-5.92 3.13 1.28-6.55L2.5 9.33l6.6-.77L12 2.5z"/>
                   </svg>`;
-                return `<a href="/calificar/${slug}?valor=${n}" aria-label="${n} estrella${n > 1 ? "s" : ""}">
+                return `<a href="/calificar/${codigoTarjeta}?valor=${n}" aria-label="${n} estrella${n > 1 ? "s" : ""}">
                   ${[1, 2, 3, 4, 5].map((i) => estrella(i <= n)).join("")}
                 </a>`;
               })
@@ -1810,7 +1844,8 @@ app.get("/r/:slug", (req, res) => {
 // Si es negativa (1-3), se guarda como queja privada y se le pide el detalle al cliente
 // en vez de exponer la insatisfacción en una reseña pública.
 app.get("/calificar/:slug", (req, res) => {
-  const slug = resolverSlug(req.params.slug);
+  const codigoTarjeta = req.params.slug;
+  const slug = resolverSlug(codigoTarjeta);
   const negocio = obtenerNegocio(slug);
   if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "El enlace que usaste no corresponde a ningún negocio activo en Tapin.");
 
@@ -1861,7 +1896,7 @@ app.get("/calificar/:slug", (req, res) => {
   };
   const motivosNegativos = motivosPorCategoria[negocio.categoria] || motivosPorCategoria.otro;
   const chipsNegativos = motivosNegativos
-    .map((m) => `<a href="/calificar/${slug}/rapido?valor=${valor}&motivo=${encodeURIComponent(m)}" class="chip">${m}</a>`)
+    .map((m) => `<a href="/calificar/${codigoTarjeta}/rapido?valor=${valor}&motivo=${encodeURIComponent(m)}" class="chip">${m}</a>`)
     .join("");
 
   res.send(`
@@ -1896,7 +1931,7 @@ app.get("/calificar/:slug", (req, res) => {
           <div class="chips">${chipsNegativos}</div>
 
           <div class="divisor">o cuéntanos con tus palabras</div>
-          <form method="POST" action="/calificar/${slug}">
+          <form method="POST" action="/calificar/${codigoTarjeta}">
             <input type="hidden" name="valor" value="${valor}">
             <textarea name="comentario" placeholder="Escribe aquí lo que pasó... (opcional)"></textarea>
             <input type="tel" name="telefono" placeholder="Tu teléfono (opcional, para que te llamen)" style="width:100%;margin-top:10px;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:0.92rem;font-family:inherit;box-sizing:border-box;">
@@ -1912,13 +1947,14 @@ app.get("/calificar/:slug", (req, res) => {
 // solo toque en un motivo corto guarda la queja de una vez, sin tener que
 // escribir nada. Mucho más rápido, así no se pierden clientes por pereza de teclear.
 app.get("/calificar/:slug/rapido", (req, res) => {
-  const slug = resolverSlug(req.params.slug);
+  const codigoTarjeta = req.params.slug;
+  const slug = resolverSlug(codigoTarjeta);
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const motivo = req.query.motivo || "(sin detalle)";
   const valorRapido = parseInt(req.query.valor, 10) || null;
-  guardarQueja(slug, motivo, negocio, "", valorRapido);
+  guardarQueja(slug, motivo, negocio, "", valorRapido, codigoTarjeta);
 
   // La fidelización premia la VISITA, no solo las reseñas positivas — si el
   // cliente tiene sesión iniciada, suma su sello igual que en una calificación buena.
@@ -1942,14 +1978,15 @@ app.get("/calificar/:slug/rapido", (req, res) => {
 });
 
 app.post("/calificar/:slug", async (req, res) => {
-  const slug = resolverSlug(req.params.slug);
+  const codigoTarjeta = req.params.slug;
+  const slug = resolverSlug(codigoTarjeta);
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const comentario = req.body.comentario || "(sin comentario)";
   const telefono = req.body.telefono || "";
   const valorTexto = parseInt(req.body.valor, 10) || null;
-  guardarQueja(slug, comentario, negocio, telefono, valorTexto);
+  guardarQueja(slug, comentario, negocio, telefono, valorTexto, codigoTarjeta);
 
   let selloSumado = null;
   if (esPro(negocio) && negocio.fidelizacion) {
@@ -1994,7 +2031,8 @@ app.post("/calificar/:slug", async (req, res) => {
 // Guarda el micro-testimonio elegido con un solo toque y manda al cliente a Google.
 // Esto alimenta el generador de contenido para redes (/contenido/:slug).
 app.get("/testimonio/:slug", (req, res) => {
-  const slug = resolverSlug(req.params.slug);
+  const codigoTarjeta = req.params.slug;
+  const slug = resolverSlug(codigoTarjeta);
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
@@ -2004,7 +2042,7 @@ app.get("/testimonio/:slug", (req, res) => {
   // texto libre. Esto es lo que evita que alguien arme un link con cualquier
   // cosa en "?frase=" y ese texto termine sin control dentro del prompt que
   // se le manda a la IA más adelante, al generar el caption de esa tarjeta.
-  if (frase && esPro(negocio) && TODAS_LAS_FRASES_VALIDAS.has(frase)) guardarTestimonio(slug, frase, valor, negocio);
+  if (frase && esPro(negocio) && TODAS_LAS_FRASES_VALIDAS.has(frase)) guardarTestimonio(slug, frase, valor, negocio, codigoTarjeta);
 
   res.redirect(302, negocio.googleUrl);
 });
@@ -2153,7 +2191,7 @@ app.get("/editar/:slug", limitarIntentosAdmin, (req, res) => {
     return res.status(404).send("Negocio no encontrado.");
   }
   const key = req.query.key;
-  const vinculadas = tarjetasVinculadasA(slug, codigosGetEditar);
+  const vinculadas = tarjetasVinculadasA(slug, codigosGetEditar).map((c) => ({ codigo: c, etiqueta: (codigosGetEditar[c] && codigosGetEditar[c].etiqueta) || null }));
   res.send(formularioNegocio({
     titulo: `Editar — ${negocio.nombre}`,
     accion: `/editar/${slug}?key=${key}`,
@@ -2410,10 +2448,10 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null, tar
               suman al mismo negocio. Identificador de este negocio para vincular tarjetas nuevas: <code style="background:${MARCA.verdeClaro};padding:2px 8px;border-radius:6px;">${slug}</code>
             </p>
             ${tarjetasVinculadas.length
-              ? tarjetasVinculadas.map((c) => `
+              ? tarjetasVinculadas.map((t) => `
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid ${MARCA.borde};font-size:0.85rem;">
-                  <code>${c}</code>
-                  <form method="POST" action="/editar/${slug}/desvincular/${c}?key=${key}" style="margin:0;" onsubmit="return confirm('¿Desvincular la tarjeta ${c}? Deja de sumar datos a ${escaparHtml(valores.nombre || "este negocio")} y vuelve a quedar sin activar — se puede activar de nuevo después, como negocio nuevo o vinculada a otro.');">
+                  <span>${t.etiqueta ? `<b>${escaparHtml(t.etiqueta)}</b> · ` : ""}<code>${t.codigo}</code></span>
+                  <form method="POST" action="/editar/${slug}/desvincular/${t.codigo}?key=${key}" style="margin:0;" onsubmit="return confirm('¿Desvincular la tarjeta ${t.codigo}? Deja de sumar datos a ${escaparHtml(valores.nombre || "este negocio")} y vuelve a quedar sin activar — se puede activar de nuevo después, como negocio nuevo o vinculada a otro.');">
                     <button type="submit" style="margin:0;background:#fff;color:${MARCA.rojo};border:1px solid #F0D0C8;padding:6px 12px;font-size:0.78rem;border-radius:7px;">Desvincular</button>
                   </form>
                 </div>
@@ -2449,10 +2487,14 @@ app.get("/codigos", limitarIntentosAdmin, (req, res) => {
         ? `<a href="/stats?key=${key}">Ver en el panel</a>`
         : `<a href="/activar/${codigo}" target="_blank">Activar ahora</a>`;
       const urlTarjeta = `${req.protocol}://${req.get("host")}/r/${codigo}`;
+      const factura = info.datosFactura && (info.datosFactura.razonSocial || info.datosFactura.nit)
+        ? `${escaparHtml(info.datosFactura.razonSocial || "—")}${info.datosFactura.nit ? ` (NIT ${escaparHtml(info.datosFactura.nit)})` : ""}`
+        : "—";
       return `<tr>
         <td><code class="codigo">${codigo}</code></td>
         <td>${estado}</td>
         <td class="url-cell">${urlTarjeta}</td>
+        <td style="font-size:0.8rem;">${factura}</td>
         <td>${accion}</td>
       </tr>`;
     })
@@ -2520,7 +2562,7 @@ app.get("/codigos", limitarIntentosAdmin, (req, res) => {
           </div>
 
           <table>
-            <tr><th>Código</th><th>Estado</th><th>URL para la tarjeta NFC</th><th></th></tr>
+            <tr><th>Código</th><th>Estado</th><th>URL para la tarjeta NFC</th><th>Factura</th><th></th></tr>
             ${filas || "<tr><td colspan='4'>Todavía no has generado ningún código.</td></tr>"}
           </table>
         </div>
@@ -4621,7 +4663,8 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
   const alertas = negocio.alertas || { quejas: true, reporteMensual: true };
   const datos = leerDatos();
   const auditoria = ((datos[slug] && datos[slug].auditoria) || []).slice().reverse().slice(0, 15);
-  const tarjetasDelNegocio = tarjetasVinculadasA(slug);
+  const eventosParaTarjetas = (datos[slug] && datos[slug].eventos) || [];
+  const resumenTarjetas = resumenPorTarjeta(slug, eventosParaTarjetas);
 
   res.send(`
     <html>
@@ -4784,18 +4827,36 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           <div class="config-seccion">
             <div class="config-seccion-titulo">Tarjetas físicas</div>
             <div class="form-card">
-              <h3>Tarjetas vinculadas a este negocio</h3>
+              <h3>Tarjetas de este negocio</h3>
               <p class="nota">
-                ¿Tienes más de una mesa, caja o entrada? Puedes pedir tarjetas Tapin adicionales y vincularlas
-                a este mismo negocio — no crean uno nuevo, todo lo que pase en ellas (toques, calificaciones,
-                quejas, sellos) se suma aquí mismo.
+                ¿Tienes más de una mesa, caja o entrada? Pide tarjetas Tapin adicionales y vincúlalas a este
+                mismo negocio (no crean uno nuevo) — así les pones nombre y ves cuál recibe más toques.
               </p>
-              <p class="nota" style="margin-bottom:6px;"><b>Identificador de este negocio</b> (pídelo al activar la tarjeta nueva, junto con tu clave de acceso):</p>
+              <p class="nota" style="margin-bottom:6px;"><b>Identificador de este negocio</b> (pídelo al activar una tarjeta nueva, junto con tu clave de acceso):</p>
               <div class="codigo-caja">${slug}</div>
-              ${tarjetasDelNegocio.length
-                ? `<p class="nota" style="margin:14px 0 6px;"><b>${tarjetasDelNegocio.length} tarjeta${tarjetasDelNegocio.length > 1 ? "s" : ""} adicional${tarjetasDelNegocio.length > 1 ? "es" : ""} vinculada${tarjetasDelNegocio.length > 1 ? "s" : ""}:</b></p>
-                   ${tarjetasDelNegocio.map((c) => `<div class="linea-audit"><b>${c}</b><span>Activa</span></div>`).join("")}`
-                : `<p class="nota" style="margin:14px 0 0;">Todavía no tienes tarjetas adicionales — solo esta.</p>`}
+
+              <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
+                ${resumenTarjetas.map((t, i) => `
+                  <div style="border:1px solid ${MARCA.borde};border-radius:10px;padding:12px 14px;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+                      <div>
+                        <div style="font-weight:700;font-size:0.88rem;">${escaparHtml(t.etiqueta || (t.esPrincipal ? "Tarjeta principal" : "Sin nombre"))}
+                          ${i === 0 && resumenTarjetas.length > 1 && t.total > 0 ? `<span style="background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};font-size:0.66rem;font-weight:800;padding:2px 8px;border-radius:100px;margin-left:8px;vertical-align:middle;letter-spacing:0.03em;">MÁS ACTIVA</span>` : ""}
+                        </div>
+                        <code style="font-size:0.74rem;color:${MARCA.textoSuave};">${t.codigo}</code>
+                      </div>
+                      <div style="text-align:right;font-size:0.78rem;color:${MARCA.textoSuave};white-space:nowrap;">
+                        <b style="color:${MARCA.texto};font-size:0.95rem;">${t.total}</b> toques totales<br>
+                        ${t.hoy} hoy · ${t.semana} esta semana
+                      </div>
+                    </div>
+                    <form method="POST" action="/mi-panel/${slug}/configuracion/tarjetas/${t.codigo}/nombre?key=${claveUsada}" style="display:flex;gap:8px;margin-top:10px;">
+                      <input type="text" name="nombre" value="${escaparHtml(t.etiqueta || "")}" placeholder="Ej: Mesa 3, Caja, Entrada..." maxlength="40" style="flex:1;margin:0;padding:8px 10px;font-size:0.82rem;">
+                      <button type="submit" class="secundario" style="margin:0;padding:8px 14px;font-size:0.78rem;">Guardar nombre</button>
+                    </form>
+                  </div>
+                `).join("")}
+              </div>
             </div>
           </div>
 
@@ -4862,6 +4923,29 @@ app.post("/mi-panel/:slug/configuracion/solo-lectura", (req, res) => {
   const claveSoloLectura = generarToken();
   guardarCambiosNegocio(slug, negocio, { claveSoloLectura });
   registrarAuditoria(slug, negocio, "Generaste un nuevo acceso de solo lectura");
+  res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
+});
+
+// Ponerle nombre a una tarjeta física (la principal o una vinculada) — ej:
+// "Mesa 3", "Caja", "Entrada" — para que el dueño identifique cuál es cuál
+// en vez de tener que recordar códigos como "7K9P2M".
+app.post("/mi-panel/:slug/configuracion/tarjetas/:codigo/nombre", (req, res) => {
+  const { slug, codigo } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
+
+  const codigos = leerCodigos();
+  // Solo se puede renombrar una tarjeta que de verdad es de este negocio —
+  // o la principal (codigo === slug), o una vinculada a él.
+  const esPropia = codigo === slug || (codigos[codigo] && codigos[codigo].vinculadoA === slug);
+  if (!esPropia || !codigos[codigo]) {
+    return res.status(404).send("Esa tarjeta no pertenece a este negocio.");
+  }
+  const nombreTarjeta = (req.body.nombre || "").trim().slice(0, 40);
+  codigos[codigo].etiqueta = nombreTarjeta || null;
+  guardarCodigos(codigos);
+  registrarAuditoria(slug, negocio, nombreTarjeta ? `Renombraste la tarjeta ${codigo} a "${nombreTarjeta}"` : `Quitaste el nombre de la tarjeta ${codigo}`);
   res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
 });
 
@@ -8824,6 +8908,10 @@ app.get("/pedido", (req, res) => {
               </label>
             </div>
 
+            <label style="margin-top:2px;">¿Necesitas factura a nombre de una empresa? (opcional)</label>
+            <input type="text" name="razonSocial" placeholder="Razón social (déjalo vacío si no aplica)">
+            <input type="text" name="nit" placeholder="NIT o cédula (opcional)">
+
             <button type="submit">Continuar al pago</button>
           </form>
         </div>
@@ -8893,7 +8981,7 @@ app.get("/pedido", (req, res) => {
 });
 
 app.post("/pedido", (req, res) => {
-  const { nombreNegocio, email, telefono, direccion, ciudad, departamento, incluirPro, planProTipo, cantidad } = req.body;
+  const { nombreNegocio, email, telefono, direccion, ciudad, departamento, incluirPro, planProTipo, cantidad, nit, razonSocial } = req.body;
   if (!nombreNegocio || !email || !telefono || !direccion || !ciudad || !departamento) {
     return res.status(400).send("Faltan datos del pedido.");
   }
@@ -8909,6 +8997,11 @@ app.post("/pedido", (req, res) => {
   const id = generarToken();
   pedidos[id] = {
     nombreNegocio, email, telefono, direccion, ciudad, departamento,
+    // Opcional — solo si el comprador necesita factura a nombre de una
+    // empresa. Queda guardado en el pedido y en cada tarjeta generada, listo
+    // para cuando se conecte un proveedor de facturación electrónica.
+    nit: (nit || "").trim(),
+    razonSocial: (razonSocial || "").trim(),
     cantidad: cantidadLimpia,
     precioUnidad: escalon.precio,
     descuentoAplicado: escalon.descuento,
@@ -9147,6 +9240,7 @@ app.get("/pago-confirmado", async (req, res) => {
             proIncluido: pedido.proIncluido || false,
             planProTipo: pedido.planProTipo || null,
             renovarAutomatico: pedido.proIncluido && pedido.planProTipo === "mensual" && pedido.renovarAutomatico !== false,
+            datosFactura: (pedido.nit || pedido.razonSocial) ? { nit: pedido.nit || "", razonSocial: pedido.razonSocial || "" } : null,
           };
           nuevosCodigos.push(nuevo);
         }
