@@ -864,6 +864,18 @@ function verificarChecksumWompi(payload) {
 const ALEGRA_API_BASE = "https://api.alegra.com/api/v1";
 const ALEGRA_NOMBRE_ITEM_BASICO = "Plan Básico Tapin";
 const ALEGRA_NOMBRE_ITEM_PRO = "Plan Pro Tapin";
+// Todos los precios que maneja el resto del código (PRECIO_BASICO_COP,
+// PRECIO_PRO_COP, los escalones, etc.) son precios CON IVA incluido -- es lo
+// que Wompi le cobra de verdad al cliente. Pero el campo "price" que la API
+// de Alegra espera en cada línea de factura es el precio ANTES de IVA (el
+// mismo dato que en el formulario de Alegra se llama "Precio base"): Alegra
+// le suma el IVA que tenga configurado el ítem para calcular el total. Por
+// eso, antes de mandarle el precio a Alegra, hay que "quitarle" el IVA --
+// si no, la factura queda cobrando IVA sobre un monto que ya lo incluía.
+const IVA_TAPIN = 0.19;
+function precioSinIva(montoConIva) {
+  return Math.round(montoConIva / (1 + IVA_TAPIN));
+}
 
 function alegraConfigurado() {
   return !!(process.env.ALEGRA_USER && process.env.ALEGRA_TOKEN);
@@ -959,7 +971,7 @@ async function crearFacturaAlegra({ nit, razonSocial, email, items, referencia }
     const itemsAlegra = [];
     for (const it of items) {
       const itemId = await buscarItemAlegraPorNombre(it.nombreItem);
-      itemsAlegra.push({ id: itemId, price: it.precioUnitario, quantity: it.cantidad || 1 });
+      itemsAlegra.push({ id: itemId, price: precioSinIva(it.precioUnitario), quantity: it.cantidad || 1 });
     }
     const factura = await alegraPeticion("/invoices", {
       method: "POST",
