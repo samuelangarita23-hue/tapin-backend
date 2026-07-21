@@ -85,7 +85,13 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json()); // necesario para recibir el webhook de Wompi (manda JSON)
+// El "verify" guarda el cuerpo crudo (sin parsear) en req.rawBody — lo
+// necesita el webhook de Bold para verificar su firma HMAC, ya que esa
+// firma se calcula sobre los bytes exactos que Bold mandó, no sobre el
+// objeto ya interpretado como JSON.
+app.use(express.json({
+  verify: (req, res, buf) => { req.rawBody = buf; },
+}));
 
 // Selector de tema disponible en todas las páginas HTML. Solo cambia la
 // apariencia y recuerda la preferencia en el navegador; no altera datos,
@@ -771,13 +777,20 @@ function generarToken() {
   return t;
 }
 
-// ---------- Pagos con Wompi (checkout del Plan Básico) ----------
-// Necesitas dos variables de entorno en Render, sacadas de tu dashboard de
-// comercio en Wompi (comercios.wompi.co → Desarrolladores):
-//   WOMPI_PUBLIC_KEY      → empieza con "pub_test_" (pruebas) o "pub_prod_" (real)
-//   WOMPI_INTEGRITY_SECRET → tu "Secreto de integridad" (NUNCA la Llave Privada,
-//                             son cosas distintas). Se usa solo en el servidor,
-//                             nunca se envía al navegador.
+// ---------- Pagos con Bold (checkout del Plan Básico) ----------
+// Necesitas dos variables de entorno en Render, sacadas de tu Panel de
+// Comercios de Bold (panel.bold.co → Integraciones → Llaves de integración):
+//   BOLD_API_KEY    → tu "Llave de identidad" del Botón de pagos. Va en el
+//                      atributo data-api-key del botón (se muestra en el
+//                      navegador, no es secreta) y en el header x-api-key
+//                      cuando consultamos el estado de un pago.
+//   BOLD_SECRET_KEY → tu "Llave secreta". Se usa SOLO en el servidor para
+//                      firmar cada venta (hash de integridad) y para
+//                      verificar que los avisos del webhook de verdad
+//                      vengan de Bold. Nunca se envía al navegador.
+// A diferencia de Wompi, Bold trabaja los montos en pesos enteros (COP),
+// no en centavos — por eso aquí no se multiplica nada por 100.
+const BOLD_API_BASE = "https://payments.api.bold.co";
 const PEDIDOS_FILE = path.join(DATA_DIR, "pedidos.json");
 function leerPedidos() {
   if (!fs.existsSync(PEDIDOS_FILE)) return {};
@@ -787,12 +800,23 @@ function guardarPedidos(pedidos) {
   fs.writeFileSync(PEDIDOS_FILE, JSON.stringify(pedidos, null, 2));
 }
 
-// Genera la firma de integridad que exige Wompi: SHA256 de
-// referencia + monto_en_centavos + moneda + secreto_de_integridad (en ese orden,
-// todo concatenado sin separadores). Esto se hace en el servidor por seguridad.
-function firmaIntegridadWompi(referencia, montoCentavos, moneda) {
-  const cadena = `${referencia}${montoCentavos}${moneda}${process.env.WOMPI_INTEGRITY_SECRET}`;
+// Genera el hash de integridad que exige Bold: SHA256 de
+// identificador + monto_en_pesos + moneda + llave_secreta (en ese orden,
+// todo concatenado sin separadores). Esto se hace en el servidor por
+// seguridad — si se generara en el navegador, cualquiera podría alterar
+// el monto de una venta.
+function firmaIntegridadBold(referencia, montoCOP, moneda) {
+  const cadena = `${referencia}${montoCOP}${moneda}${process.env.BOLD_SECRET_KEY}`;
   return crypto.createHash("sha256").update(cadena).digest("hex");
+}
+
+// El botón de Bold recibe varios de sus datos (customer-data, billing-address)
+// como un objeto JSON convertido a texto, puesto dentro de un atributo HTML
+// delimitado con comillas simples (así lo pide su documentación). Si algún
+// valor (nombre, dirección, etc.) trae una comilla simple, rompería el
+// atributo — por eso se escapa aquí antes de insertarlo en la página.
+function jsonAtributoHtml(obj) {
+  return JSON.stringify(obj).replace(/'/g, "&#39;");
 }
 
 // ---------- Cuentas de cliente (persona normal) ----------
@@ -2982,38 +3006,22 @@ app.post("/activar/:codigo", (req, res) => {
     entrada.negocio.billingType = "mensual";
   }
 
-  guardarCodigos(codigos);
-
   // Si el pedido incluía Plan Pro mensual y quedó marcado "renovar
-  // automáticamente", el paso que sigue de inmediato es registrar la
-  // tarjeta — sin eso, el Pro no se renueva después del primer mes y nadie
-  // se entera hasta que deje de funcionar. Se lo mostramos ANTES que el
-  // acceso al panel, como el siguiente paso obvio, no como algo opcional
-  // escondido en configuración.
+  // automáticamente", activamos el recordatorio mensual de una vez — este
+  // primer mes ya está pagado (es el pago que se acaba de hacer para
+  // activar la tarjeta), así que el próximo recordatorio sale en 1 mes.
+  // Nunca guardamos ninguna tarjeta: cada mes se manda un correo con un
+  // link de pago Bold de un clic (ver /recordatorio-pro).
   if (planReal === "pro" && entrada.planProTipo === "mensual" && entrada.renovarAutomatico) {
-    return res.send(`
-      <html>
-        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>${ESTILO_BASE}
-          .ok-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;}
-          .ok-card code{background:${MARCA.verdeClaro};padding:3px 8px;border-radius:6px;font-size:0.82rem;}
-        </style></head>
-        <body>
-          <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
-          <div class="content">
-            <div class="eyebrow">Un paso más</div>
-            <h1 class="titulo-pagina">¡Tarjeta activada! Ahora registra tu tarjeta</h1>
-            <div class="ok-card">
-              <p><b>${nombre}</b> ya está conectado a esta tarjeta Tapin, con Plan Pro activo desde ya.</p>
-              <p>Para que el Plan Pro se siga renovando solo cada mes, falta registrar una tarjeta de cobro — es lo único que queda pendiente.</p>
-              <a class="btn-primario" href="/suscripcion/${codigo}?key=${encodeURIComponent(claveLimpia)}" style="display:inline-block;margin-top:6px;">Registrar tarjeta para el cobro mensual</a>
-              <p style="margin-top:16px;font-size:0.78rem;">También puedes hacerlo después desde tu panel:<br><code>${req.protocol}://${req.get("host")}/mi-panel/${codigo}?key=${encodeURIComponent(claveLimpia)}</code></p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `);
+    entrada.negocio.suscripcion = {
+      activa: true,
+      proximoCobro: sumarUnMes(),
+      ultimoRecordatorioEnviado: null,
+      ultimoPagoConfirmado: new Date().toISOString(),
+    };
   }
+
+  guardarCodigos(codigos);
 
   res.send(`
     <html>
@@ -8751,7 +8759,7 @@ app.get("/admin/entrar", limitarIntentos(6, 15), (req, res) => {
   res.redirect(`/stats?key=${encodeURIComponent(req.query.key)}`);
 });
 
-// ---------- Flujo de compra: pedido → pago con Wompi → confirmación ----------
+// ---------- Flujo de compra: pedido → pago con Bold → confirmación ----------
 // Esto es para el Plan Básico ($119.900 COP, pago único, incluye la tarjeta física y el envío
 // y el envío). El Plan Pro (mensual) necesita una integración distinta — ver nota
 // al final del archivo README sobre pagos recurrentes.
@@ -8860,7 +8868,7 @@ app.get("/pedido", (req, res) => {
         <div class="box">
           <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
           <h1>Pide tu tarjeta Tapin</h1>
-          <p>Llena tus datos, paga en línea con Wompi, y te enviamos la tarjeta a tu negocio.</p>
+          <p>Llena tus datos, paga en línea con Bold, y te enviamos la tarjeta a tu negocio.</p>
           <div class="precio">Plan Básico — $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP c/u (incluye envío)</div>
           <form method="POST" action="/pedido">
             <label>¿Cuántas tarjetas necesitas?</label>
@@ -9020,11 +9028,11 @@ app.post("/pedido", (req, res) => {
   res.redirect(`/pagar/${id}`);
 });
 
-// Página de pago — embebe el widget oficial de Wompi con la firma de integridad
+// Página de pago — embebe el botón oficial de Bold con el hash de integridad
 // calculada en el servidor (nunca se expone el secreto al navegador).
 // Actualiza en caliente si el cliente quiere que su Plan Pro mensual se
 // renueve solo — se llama desde la casilla en /pagar/:id, ANTES de que le
-// dé clic al botón de Wompi (que lo saca de nuestro sitio).
+// dé clic al botón de Bold (que lo saca de nuestro sitio).
 app.post("/pedido/:id/renovar-automatico", (req, res) => {
   const pedidos = leerPedidos();
   const pedido = pedidos[req.params.id];
@@ -9041,18 +9049,31 @@ app.get("/pagar/:id", (req, res) => {
   const pedido = pedidos[req.params.id];
   if (!pedido) return res.status(404).send("Pedido no encontrado.");
 
-  if (!process.env.WOMPI_PUBLIC_KEY || !process.env.WOMPI_INTEGRITY_SECRET) {
+  if (!process.env.BOLD_API_KEY || !process.env.BOLD_SECRET_KEY) {
     return res.status(500).send(
-      "Los pagos todavía no están configurados. Faltan WOMPI_PUBLIC_KEY y/o " +
-      "WOMPI_INTEGRITY_SECRET como variables de entorno en Render."
+      "Los pagos todavía no están configurados. Faltan BOLD_API_KEY y/o " +
+      "BOLD_SECRET_KEY como variables de entorno en Render."
     );
   }
 
   const referencia = `tapin-${req.params.id}`;
-  const montoCentavos = pedido.monto * 100;
+  const montoCOP = pedido.monto;
   const moneda = "COP";
-  const firma = firmaIntegridadWompi(referencia, montoCentavos, moneda);
+  const firma = firmaIntegridadBold(referencia, montoCOP, moneda);
   const redirectUrl = `${req.protocol}://${req.get("host")}/pago-confirmado?pedido=${req.params.id}`;
+  const descripcionVenta = `Tapin — ${pedido.cantidad || 1} tarjeta${(pedido.cantidad || 1) > 1 ? "s" : ""}${pedido.proIncluido ? " + Plan Pro" : ""}`;
+  const datosClienteBold = jsonAtributoHtml({
+    fullName: pedido.nombreNegocio || "",
+    phone: (pedido.telefono || "").replace(/\D/g, ""),
+    dialCode: "+57",
+    email: pedido.email || "",
+  });
+  const direccionBold = jsonAtributoHtml({
+    address: pedido.direccion || "",
+    city: pedido.ciudad || "",
+    state: pedido.departamento || "",
+    country: "CO",
+  });
 
   res.send(`
     <html>
@@ -9094,7 +9115,7 @@ app.get("/pagar/:id", (req, res) => {
           <label style="display:flex;align-items:flex-start;gap:9px;text-align:left;font-size:0.82rem;color:${MARCA.textoSuave};
                         background:${MARCA.crema};border-radius:10px;padding:12px 14px;margin:14px 0;cursor:pointer;">
             <input type="checkbox" id="check-renovar" checked style="margin-top:2px;flex-shrink:0;">
-            <span>Renovar mi Plan Pro automáticamente cada mes. Al activar la tarjeta te vamos a pedir registrar una tarjeta para el cobro — puedes cancelar cuando quieras desde tu panel.</span>
+            <span>Recibir un recordatorio por correo cada mes para renovar mi Plan Pro con un clic — puedes desactivarlo cuando quieras desde tu panel.</span>
           </label>
           <script>
             document.getElementById("check-renovar").addEventListener("change", function () {
@@ -9107,169 +9128,232 @@ app.get("/pagar/:id", (req, res) => {
           </script>
           ` : ""}
 
-          <form action="https://checkout.wompi.co/p/" method="GET">
-            <input type="hidden" name="public-key" value="${process.env.WOMPI_PUBLIC_KEY}" />
-            <input type="hidden" name="currency" value="${moneda}" />
-            <input type="hidden" name="amount-in-cents" value="${montoCentavos}" />
-            <input type="hidden" name="reference" value="${referencia}" />
-            <input type="hidden" name="signature:integrity" value="${firma}" />
-            <input type="hidden" name="redirect-url" value="${redirectUrl}" />
-            <input type="hidden" name="shipping-address:address-line-1" value="${pedido.direccion}" />
-            <input type="hidden" name="shipping-address:city" value="${pedido.ciudad}" />
-            <input type="hidden" name="shipping-address:region" value="${pedido.departamento}" />
-            <input type="hidden" name="shipping-address:phone-number" value="${pedido.telefono}" />
-            <input type="hidden" name="shipping-address:country" value="CO" />
-            <button type="submit">Pagar con Wompi</button>
-          </form>
+          <script src="https://checkout.bold.co/library/boldPaymentButton.js"></script>
+          <script
+            data-bold-button
+            data-order-id="${referencia}"
+            data-currency="${moneda}"
+            data-amount="${montoCOP}"
+            data-api-key="${process.env.BOLD_API_KEY}"
+            data-integrity-signature="${firma}"
+            data-redirection-url="${redirectUrl}"
+            data-description="${escaparHtml(descripcionVenta)}"
+            data-customer-data='${datosClienteBold}'
+            data-billing-address='${direccionBold}'
+          ></script>
         </div>
       </body>
     </html>
   `);
 });
 
-// Wompi redirige aquí después del pago, con ?id=TRANSACTION_ID en la URL.
-// Consultamos el estado real de la transacción contra la API de Wompi (nunca
+// Bold redirige aquí después del pago, con ?bold-order-id=X&bold-tx-status=Y
+// en la URL. Consultamos el estado real del pago contra la API de Bold (nunca
 // confiamos solo en lo que diga la URL, porque se podría manipular).
-// Verifica que un aviso de webhook realmente venga de Wompi (y no de cualquiera
-// que le pegue a la URL). Compara un checksum SHA256 calculado con el "Secreto
-// de Eventos" (distinto del Secreto de Integridad) que Wompi te da en su panel.
-// Basado en el algoritmo documentado por Wompi — si algo no cuadra, revisa su
-// documentación oficial de eventos antes de confiar ciegamente en producción.
-function verificarChecksumWompi(payload) {
-  if (!process.env.WOMPI_EVENTS_SECRET) return false;
-  if (!payload || !payload.signature || !payload.signature.properties) return false;
-
+// Verifica que un aviso de webhook realmente venga de Bold (y no de cualquiera
+// que le pegue a la URL). Bold firma el CUERPO CRUDO de la petición: se
+// codifica en base64, se calcula un HMAC-SHA256 con la llave secreta, y el
+// resultado en hexadecimal debe coincidir con el header x-bold-signature.
+function verificarFirmaBold(rawBody, firmaRecibida) {
+  if (!process.env.BOLD_SECRET_KEY || !firmaRecibida || !rawBody) return false;
   try {
-    const valores = payload.signature.properties.map((ruta) => {
-      // Cada "ruta" es algo como "transaction.id" o "transaction.status" —
-      // navegamos el objeto payload.data siguiendo esos nombres.
-      return ruta.split(".").reduce((obj, key) => (obj ? obj[key] : undefined), payload.data);
-    });
-    const cadena = valores.join("") + payload.timestamp + process.env.WOMPI_EVENTS_SECRET;
-    const checksumCalculado = crypto.createHash("sha256").update(cadena).digest("hex").toUpperCase();
-    return checksumCalculado === String(payload.signature.checksum).toUpperCase();
+    const codificado = Buffer.from(rawBody).toString("base64");
+    const calculada = crypto.createHmac("sha256", process.env.BOLD_SECRET_KEY).update(codificado).digest("hex");
+    const a = Buffer.from(calculada, "hex");
+    const b = Buffer.from(String(firmaRecibida), "hex");
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
   } catch (err) {
-    console.error("Error verificando checksum de Wompi:", err.message);
+    console.error("Error verificando firma de Bold:", err.message);
     return false;
   }
 }
 
-// Wompi le pega a esta URL automáticamente cada vez que cambia el estado de una
-// transacción — así el pedido se marca como pagado aunque el cliente cierre el
-// navegador antes de volver a /pago-confirmado.
-// Configúrala en Wompi: Desarrollo → "URL de Eventos" → pega esta URL completa:
-// https://tu-dominio.com/webhook/wompi
-app.post("/webhook/wompi", (req, res) => {
-  const payload = req.body;
+// Activa (o renueva) el Plan Pro de un negocio tras un pago aprobado desde
+// /mejorar-a-pro. Reutilizable desde la página de confirmación (cuando el
+// cliente vuelve del pago) y desde el webhook de Bold — volver a llamarla
+// para el mismo pago no causa ningún problema, solo reescribe la misma fecha.
+function activarUpgradePro(slug, esAnual) {
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return;
+  if (esAnual) {
+    const unAnioDespues = new Date();
+    unAnioDespues.setFullYear(unAnioDespues.getFullYear() + 1);
+    guardarCambiosNegocio(slug, negocio, {
+      plan: "pro",
+      billingType: "anual",
+      proAnualHasta: unAnioDespues.toISOString(),
+    });
+    registrarAuditoria(slug, negocio, `Mejoraste a Plan Pro anual (vence ${unAnioDespues.toLocaleDateString("es-CO")})`);
+  } else {
+    // Pro mensual con recordatorio: este primer pago ya cubre el ciclo
+    // actual, así que arranca con el próximo recordatorio en 1 mes y el pago
+    // de este ciclo ya marcado como confirmado (para que /recordatorio-pro no
+    // lo baje a Básico pensando que no pagó un mes que apenas empieza).
+    guardarCambiosNegocio(slug, negocio, {
+      plan: "pro",
+      billingType: "mensual",
+      suscripcion: {
+        activa: true,
+        proximoCobro: sumarUnMes(),
+        ultimoRecordatorioEnviado: null,
+        ultimoPagoConfirmado: new Date().toISOString(),
+      },
+    });
+    registrarAuditoria(slug, negocio, "Mejoraste a Plan Pro");
+  }
+}
 
-  if (!verificarChecksumWompi(payload)) {
-    console.error("[webhook Wompi] checksum inválido o secreto no configurado — aviso ignorado.");
-    return res.status(400).json({ ok: false, motivo: "Checksum inválido." });
+// Bold le pega a esta URL automáticamente cada vez que se aprueba o rechaza
+// una venta — así el pedido/suscripción queda al día aunque el cliente
+// cierre el navegador antes de volver a tu sitio. Regístrala en Bold desde
+// panel.bold.co → Integraciones → Webhooks, con esta URL completa:
+// https://tu-dominio.com/webhook/bold
+app.post("/webhook/bold", async (req, res) => {
+  const firmaRecibida = req.headers["x-bold-signature"];
+  if (!verificarFirmaBold(req.rawBody, firmaRecibida)) {
+    console.error("[webhook Bold] firma inválida o BOLD_SECRET_KEY no configurada — aviso ignorado.");
+    return res.status(400).json({ ok: false, motivo: "Firma inválida." });
   }
 
-  const transaccion = payload?.data?.transaction;
-  if (!transaccion) return res.status(400).json({ ok: false, motivo: "Sin datos de transacción." });
+  const evento = req.body;
+  // Solo las ventas aprobadas requieren una acción automática de nuestra
+  // parte — rechazos y anulaciones no necesitan que hagamos nada aquí.
+  if (evento?.type !== "SALE_APPROVED") {
+    return res.status(200).json({ ok: true, ignorado: true });
+  }
 
-  // La referencia que generamos al crear el pedido tiene el formato "tapin-ID".
-  const referencia = transaccion.reference || "";
-  const pedidoId = referencia.startsWith("tapin-") ? referencia.slice("tapin-".length) : null;
+  const referencia = evento?.data?.metadata?.reference || "";
 
-  if (pedidoId) {
-    const pedidos = leerPedidos();
-    if (pedidos[pedidoId]) {
-      if (transaccion.status === "APPROVED") {
-        pedidos[pedidoId].estado = "aprobado";
-      } else if (transaccion.status === "DECLINED" || transaccion.status === "ERROR") {
-        pedidos[pedidoId].estado = "rechazado";
+  try {
+    if (referencia.startsWith("tapin-upgrade-anual-")) {
+      // Formato: tapin-upgrade-anual-{slug}-{timestamp}. El timestamp
+      // (Date.now(), solo dígitos) siempre es el último tramo, así que se
+      // puede recortar sin ambigüedad aunque el slug tenga guiones.
+      const partes = referencia.slice("tapin-upgrade-anual-".length).split("-");
+      activarUpgradePro(partes.slice(0, -1).join("-"), true);
+    } else if (referencia.startsWith("tapin-upgrade-")) {
+      const partes = referencia.slice("tapin-upgrade-".length).split("-");
+      activarUpgradePro(partes.slice(0, -1).join("-"), false);
+    } else if (referencia.startsWith("tapin-pro-")) {
+      // Formato: tapin-pro-{AAAAMM}-{slug} — el año-mes son siempre 6
+      // dígitos en una posición fija, así que el slug se recorta sin
+      // ambigüedad aunque tenga guiones.
+      const resto = referencia.slice("tapin-pro-".length);
+      const slug = resto.slice(7); // 6 dígitos del AAAAMM + 1 guion
+      const negocio = obtenerNegocio(slug);
+      if (negocio && negocio.suscripcion) {
+        guardarCambiosNegocio(slug, negocio, {
+          suscripcion: { ...negocio.suscripcion, ultimoPagoConfirmado: new Date().toISOString() },
+        });
+        registrarAuditoria(slug, negocio, "Pago mensual del Plan Pro confirmado");
       }
-      guardarPedidos(pedidos);
-      console.log(`[webhook Wompi] pedido ${pedidoId} actualizado a "${pedidos[pedidoId].estado}"`);
+    } else if (referencia.startsWith("tapin-")) {
+      const pedidoId = referencia.slice("tapin-".length);
+      await activarPedidoAprobado(pedidoId, req);
     }
+  } catch (err) {
+    console.error("[webhook Bold] Error procesando el evento:", err.message);
   }
 
-  // Wompi solo necesita un 200 OK para saber que el aviso llegó bien.
+  // Bold solo necesita un 200 OK para saber que el aviso llegó bien, y debe
+  // recibirlo rápido (máximo 2 segundos) — por eso no hacemos nada más pesado aquí.
   res.status(200).json({ ok: true });
 });
 
+// Genera los códigos de activación de un pedido ya aprobado y manda el
+// correo con los links de activación. Reutilizable desde /pago-confirmado
+// (cuando el cliente vuelve a la página tras pagar) y desde el webhook de
+// Bold (que puede avisar primero, o si el cliente cierra el navegador antes
+// de volver). Es seguro llamarla más de una vez para el mismo pedido: si ya
+// se generaron códigos antes, no hace nada — evita duplicar tarjetas o correos.
+async function activarPedidoAprobado(pedidoId, req) {
+  const pedidos = leerPedidos();
+  const pedido = pedidos[pedidoId];
+  if (!pedido) return;
+  const yaGenerado = pedido.estado === "aprobado" && pedido.codigosGenerados;
+  pedido.estado = "aprobado";
+
+  if (!yaGenerado) {
+    const cantidadComprada = pedido.cantidad || 1;
+    const codigos = leerCodigos();
+    const nuevosCodigos = [];
+    for (let i = 0; i < cantidadComprada; i++) {
+      let nuevo;
+      do {
+        nuevo = generarCodigo();
+      } while (codigos[nuevo]);
+      codigos[nuevo] = {
+        activado: false,
+        creado: new Date().toISOString(),
+        proIncluido: pedido.proIncluido || false,
+        planProTipo: pedido.planProTipo || null,
+        renovarAutomatico: pedido.proIncluido && pedido.planProTipo === "mensual" && pedido.renovarAutomatico !== false,
+        datosFactura: (pedido.nit || pedido.razonSocial) ? { nit: pedido.nit || "", razonSocial: pedido.razonSocial || "" } : null,
+      };
+      nuevosCodigos.push(nuevo);
+    }
+    guardarCodigos(codigos);
+    pedido.codigosGenerados = nuevosCodigos;
+    pedidos[pedidoId] = pedido;
+    guardarPedidos(pedidos);
+
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const filasCodigos = nuevosCodigos
+      .map((c) => `<li style="margin-bottom:8px;"><b style="letter-spacing:0.05em;">${c}</b> — <a href="${baseUrl}/activar/${c}">Activar esta tarjeta</a></li>`)
+      .join("");
+    enviarEmail(
+      pedido.email,
+      nuevosCodigos.length === 1 ? "Tu código de activación Tapin" : `Tus ${nuevosCodigos.length} códigos de activación Tapin`,
+      `<div style="font-family:-apple-system,Arial,sans-serif;max-width:460px;">
+         <h2 style="color:${MARCA.verdeOscuro};">¡Gracias por tu compra, ${pedido.nombreNegocio}!</h2>
+         <p>Tu pago fue aprobado. Cuando te llegue${nuevosCodigos.length > 1 ? "n" : ""} la${nuevosCodigos.length > 1 ? "s" : ""} tarjeta${nuevosCodigos.length > 1 ? "s" : ""} física${nuevosCodigos.length > 1 ? "s" : ""}, activa cada una con su link:</p>
+         <ul style="padding-left:18px;">${filasCodigos}</ul>
+         <p style="font-size:0.8rem;color:#888;">Si tienes más de una tarjeta, usa el mismo correo al activarlas para verlas todas juntas en <a href="${baseUrl}/mis-negocios">tu panel</a>.</p>
+       </div>`
+    ).catch((err) => console.error("[pago-confirmado] Error enviando códigos:", err.message));
+  } else {
+    pedidos[pedidoId] = pedido;
+    guardarPedidos(pedidos);
+  }
+}
+
 app.get("/pago-confirmado", async (req, res) => {
   const pedidoId = req.query.pedido;
-  const transaccionId = req.query.id;
   const pedidos = leerPedidos();
   const pedido = pedidos[pedidoId];
 
   let estado = "desconocido";
   let mensaje = "No pudimos confirmar el estado de tu pago automáticamente.";
 
-  if (transaccionId && process.env.WOMPI_PUBLIC_KEY) {
+  const referenciaBold = pedidoId ? `tapin-${pedidoId}` : null;
+  if (referenciaBold && process.env.BOLD_API_KEY) {
     try {
-      const base = process.env.WOMPI_PUBLIC_KEY.startsWith("pub_prod_")
-        ? "https://production.wompi.co/v1"
-        : "https://sandbox.wompi.co/v1";
-      const resp = await fetch(`${base}/transactions/${transaccionId}`);
+      const resp = await fetch(`${BOLD_API_BASE}/v2/payment-voucher/${referenciaBold}`, {
+        headers: { Authorization: `x-api-key ${process.env.BOLD_API_KEY}` },
+      });
       const data = await resp.json();
-      estado = data?.data?.status || "desconocido";
+      // NO_TRANSACTION_FOUND pasa cuando el cliente todavía no termina el pago
+      // o Bold aún no lo procesa — no es un error, solo "todavía no hay nada".
+      estado = data?.payment_status === "NO_TRANSACTION_FOUND" ? "desconocido" : (data?.payment_status || "desconocido");
     } catch (err) {
-      console.error("Error consultando transacción Wompi:", err.message);
+      console.error("Error consultando el pago en Bold:", err.message);
     }
   }
 
   if (pedido) {
     if (estado === "APPROVED") {
-      const yaGenerado = pedido.estado === "aprobado" && pedido.codigosGenerados;
-      pedido.estado = "aprobado";
       mensaje = pedido.proIncluido
         ? "¡Pago aprobado! Tu tarjeta Tapin va en camino, con tu primer mes de Plan Pro ya incluido."
         : "¡Pago aprobado! Tu tarjeta Tapin va en camino.";
-
-      // Generamos un código de activación por cada tarjeta comprada, y se los
-      // mandamos por correo de una vez — no dependemos de que Samuel los
-      // genere a mano después. Solo se hace la primera vez que se confirma
-      // (si alguien recarga esta página, no se duplican códigos ni correos).
-      if (!yaGenerado) {
-        const cantidadComprada = pedido.cantidad || 1;
-        const codigos = leerCodigos();
-        const nuevosCodigos = [];
-        for (let i = 0; i < cantidadComprada; i++) {
-          let nuevo;
-          do {
-            nuevo = generarCodigo();
-          } while (codigos[nuevo]);
-          codigos[nuevo] = {
-            activado: false,
-            creado: new Date().toISOString(),
-            proIncluido: pedido.proIncluido || false,
-            planProTipo: pedido.planProTipo || null,
-            renovarAutomatico: pedido.proIncluido && pedido.planProTipo === "mensual" && pedido.renovarAutomatico !== false,
-            datosFactura: (pedido.nit || pedido.razonSocial) ? { nit: pedido.nit || "", razonSocial: pedido.razonSocial || "" } : null,
-          };
-          nuevosCodigos.push(nuevo);
-        }
-        guardarCodigos(codigos);
-        pedido.codigosGenerados = nuevosCodigos;
-
-        const baseUrl = `${req.protocol}://${req.get("host")}`;
-        const filasCodigos = nuevosCodigos
-          .map((c) => `<li style="margin-bottom:8px;"><b style="letter-spacing:0.05em;">${c}</b> — <a href="${baseUrl}/activar/${c}">Activar esta tarjeta</a></li>`)
-          .join("");
-        enviarEmail(
-          pedido.email,
-          nuevosCodigos.length === 1 ? "Tu código de activación Tapin" : `Tus ${nuevosCodigos.length} códigos de activación Tapin`,
-          `<div style="font-family:-apple-system,Arial,sans-serif;max-width:460px;">
-             <h2 style="color:${MARCA.verdeOscuro};">¡Gracias por tu compra, ${pedido.nombreNegocio}!</h2>
-             <p>Tu pago fue aprobado. Cuando te llegue${nuevosCodigos.length > 1 ? "n" : ""} la${nuevosCodigos.length > 1 ? "s" : ""} tarjeta${nuevosCodigos.length > 1 ? "s" : ""} física${nuevosCodigos.length > 1 ? "s" : ""}, activa cada una con su link:</p>
-             <ul style="padding-left:18px;">${filasCodigos}</ul>
-             <p style="font-size:0.8rem;color:#888;">Si tienes más de una tarjeta, usa el mismo correo al activarlas para verlas todas juntas en <a href="${baseUrl}/mis-negocios">tu panel</a>.</p>
-           </div>`
-        ).catch((err) => console.error("[pago-confirmado] Error enviando códigos:", err.message));
-      }
-    } else if (estado === "DECLINED" || estado === "ERROR") {
+      await activarPedidoAprobado(pedidoId, req);
+    } else if (estado === "REJECTED" || estado === "FAILED" || estado === "VOIDED") {
       pedido.estado = "rechazado";
       mensaje = "El pago no pudo procesarse. Puedes intentar de nuevo.";
-    } else if (estado === "PENDING") {
+      pedidos[pedidoId] = pedido;
+      guardarPedidos(pedidos);
+    } else if (estado === "PROCESSING" || estado === "PENDING") {
       mensaje = "Tu pago está siendo procesado. Te avisamos por correo cuando se confirme.";
     }
-    pedidos[pedidoId] = pedido;
-    guardarPedidos(pedidos);
   }
 
   res.send(`
@@ -9315,7 +9399,7 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
   if (esPro(negocio) && req.query.plan !== "anual") {
     return res.redirect(`/mi-panel/${slug}?key=${req.query.key}`);
   }
-  if (!process.env.WOMPI_PUBLIC_KEY) {
+  if (!process.env.BOLD_API_KEY || !process.env.BOLD_SECRET_KEY) {
     return res.status(500).send("Los pagos todavía no están configurados. Contacta a Tapin.");
   }
 
@@ -9333,10 +9417,11 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
   const totalLocalesTrasUpgrade = localesProExistentes + 1;
   const escalonUpgrade = ESCALONES_PRO.find((e) => totalLocalesTrasUpgrade >= e.minimo) || ESCALONES_PRO[ESCALONES_PRO.length - 1];
   const precioProAplicable = esAnual ? PRECIO_PRO_ANUAL_COP : escalonUpgrade.precio;
-  const montoCentavos = precioProAplicable * 100;
+  const montoCOP = precioProAplicable;
   const referencia = `tapin-upgrade-${esAnual ? "anual-" : ""}${slug}-${Date.now()}`;
-  const firma = firmaIntegridadWompi(referencia, montoCentavos, moneda);
+  const firma = firmaIntegridadBold(referencia, montoCOP, moneda);
   const redirectUrl = `${req.protocol}://${req.get("host")}/mejorar-a-pro/${slug}/confirmar?key=${req.query.key}`;
+  const datosClienteUpgrade = jsonAtributoHtml({ email: negocio.email || "", fullName: negocio.nombre || "" });
 
   res.send(`
     <html>
@@ -9376,8 +9461,8 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
           </div>
 
           ${esAnual
-            ? `<p>Pagas una sola vez y quedas activo los próximos 12 meses — sin cobros automáticos ni tarjeta que registrar.</p>`
-            : `<p>Pagas el primer mes ahora y queda activo de inmediato. Los meses siguientes se cobran automáticamente a la tarjeta que registres después de este pago.</p>`}
+            ? `<p>Pagas una sola vez y quedas activo los próximos 12 meses — sin cobros automáticos.</p>`
+            : `<p>Pagas el primer mes ahora y queda activo de inmediato. Cada mes te mandamos un recordatorio por correo con un link para renovar en un clic — puedes desactivarlo cuando quieras desde tu panel.</p>`}
           <ul>
             <li>Gráfica de horas pico</li>
             <li>Reputación: positivas vs. quejas privadas</li>
@@ -9391,16 +9476,18 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
           </div>
           ${!esAnual && totalLocalesTrasUpgrade >= 4 ? `<p style="font-size:0.78rem;color:${MARCA.oro};">Esta es tu ${totalLocalesTrasUpgrade}ª tarjeta en Plan Pro — aplica la tarifa de ${totalLocalesTrasUpgrade} o más tarjetas.</p>` : ""}
 
-          <form action="https://checkout.wompi.co/p/" method="GET">
-            <input type="hidden" name="public-key" value="${process.env.WOMPI_PUBLIC_KEY}" />
-            <input type="hidden" name="currency" value="${moneda}" />
-            <input type="hidden" name="amount-in-cents" value="${montoCentavos}" />
-            <input type="hidden" name="reference" value="${referencia}" />
-            <input type="hidden" name="signature:integrity" value="${firma}" />
-            <input type="hidden" name="redirect-url" value="${redirectUrl}" />
-            <input type="hidden" name="customer-data:email" value="${negocio.email || ""}" />
-            <button type="submit">Pagar y activar Pro</button>
-          </form>
+          <script src="https://checkout.bold.co/library/boldPaymentButton.js"></script>
+          <script
+            data-bold-button
+            data-order-id="${referencia}"
+            data-currency="${moneda}"
+            data-amount="${montoCOP}"
+            data-api-key="${process.env.BOLD_API_KEY}"
+            data-integrity-signature="${firma}"
+            data-redirection-url="${redirectUrl}"
+            data-description="${escaparHtml(`Tapin — Plan Pro ${esAnual ? "anual" : "mensual"} (${negocio.nombre})`)}"
+            data-customer-data='${datosClienteUpgrade}'
+          ></script>
           <a class="volver" href="/mi-panel/${slug}?key=${req.query.key}">&larr; Volver a mi panel</a>
         </div>
       </body>
@@ -9408,7 +9495,7 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
   `);
 });
 
-// Confirma el pago de la mejora a Pro: consulta el estado real en Wompi (nunca
+// Confirma el pago de la mejora a Pro: consulta el estado real en Bold (nunca
 // confía en el query string por sí solo), y si fue aprobado, activa el plan
 // Pro del negocio y lo manda a registrar su tarjeta para el cobro mensual.
 app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
@@ -9419,38 +9506,27 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
     return res.status(401).send("No autorizado.");
   }
 
-  const transaccionId = req.query.id;
+  const boldOrderId = req.query["bold-order-id"];
   let estado = "desconocido";
 
-  if (transaccionId && process.env.WOMPI_PUBLIC_KEY) {
+  if (boldOrderId && process.env.BOLD_API_KEY) {
     try {
-      const base = baseWompi();
-      const resp = await fetch(`${base}/transactions/${transaccionId}`);
+      const resp = await fetch(`${BOLD_API_BASE}/v2/payment-voucher/${boldOrderId}`, {
+        headers: { Authorization: `x-api-key ${process.env.BOLD_API_KEY}` },
+      });
       const data = await resp.json();
-      estado = data?.data?.status || "desconocido";
-      const referenciaRecibida = data?.data?.reference || "";
+      estado = data?.payment_status === "NO_TRANSACTION_FOUND" ? "desconocido" : (data?.payment_status || "desconocido");
+      const referenciaRecibida = data?.reference_id || boldOrderId || "";
       const esAnual = referenciaRecibida.startsWith(`tapin-upgrade-anual-${slug}-`);
       const referenciaOk = esAnual || referenciaRecibida.startsWith(`tapin-upgrade-${slug}-`);
       const montoOk = esAnual
-        ? data?.data?.amount_in_cents === PRECIO_PRO_ANUAL_COP * 100
-        : ESCALONES_PRO.some((e) => data?.data?.amount_in_cents === e.precio * 100);
+        ? data?.total === PRECIO_PRO_ANUAL_COP
+        : ESCALONES_PRO.some((e) => data?.total === e.precio);
       if (estado === "APPROVED" && referenciaOk && montoOk) {
-        if (esAnual) {
-          const unAnioDespues = new Date();
-          unAnioDespues.setFullYear(unAnioDespues.getFullYear() + 1);
-          guardarCambiosNegocio(slug, negocio, {
-            plan: "pro",
-            billingType: "anual",
-            proAnualHasta: unAnioDespues.toISOString(),
-          });
-          registrarAuditoria(slug, negocio, `Mejoraste a Plan Pro anual (vence ${unAnioDespues.toLocaleDateString("es-CO")})`);
-        } else {
-          guardarCambiosNegocio(slug, negocio, { plan: "pro", billingType: "mensual" });
-          registrarAuditoria(slug, negocio, "Mejoraste a Plan Pro");
-        }
+        activarUpgradePro(slug, esAnual);
       }
     } catch (err) {
-      console.error("[mejorar-a-pro] Error consultando transacción:", err.message);
+      console.error("[mejorar-a-pro] Error consultando el pago en Bold:", err.message);
     }
   }
 
@@ -9484,9 +9560,9 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
                    <p>Pagaste el año completo — queda activo hasta el ${new Date(negocioActualizado.proAnualHasta).toLocaleDateString("es-CO")}, sin cobros automáticos ni tarjeta que registrar.</p>
                    <a class="boton" href="/mi-panel/${slug}?key=${req.query.key}">Ir a mi panel</a>`
                 : `<h1>¡Listo! ${negocio.nombre} ya está en Plan Pro.</h1>
-                   <p>Ahora registra tu tarjeta para que el cobro de los próximos meses sea automático.</p>
-                   <a class="boton" href="/suscripcion/${slug}?key=${req.query.key}">Registrar tarjeta para el cobro mensual</a>`)
-            : estado === "PENDING"
+                   <p>Cada mes te vamos a mandar un correo con un link para renovar en un clic — puedes desactivarlo cuando quieras desde tu panel.</p>
+                   <a class="boton" href="/suscripcion/${slug}?key=${req.query.key}">Ver mi suscripción</a>`)
+            : (estado === "PENDING" || estado === "PROCESSING")
               ? `<h1>Tu pago está siendo procesado</h1><p>En unos minutos se activa el Plan Pro. Te avisamos por correo.</p>`
               : `<h1>No pudimos confirmar el pago</h1><p>Si ya pagaste, espera un momento y recarga esta página. Si el pago falló, puedes intentarlo de nuevo.</p>
                  <a class="boton" href="/mejorar-a-pro/${slug}?key=${req.query.key}">Intentar de nuevo</a>`}
@@ -9497,20 +9573,13 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
 });
 
 
-// Wompi maneja suscripciones así: el dueño del negocio registra su tarjeta UNA
-// sola vez (se tokeniza, nunca guardamos el número real), Wompi nos da un
-// "payment_source_id" reutilizable, y luego cada mes el SERVIDOR le cobra a esa
-// fuente de pago directamente vía API — sin que el dueño tenga que volver a
-// ingresar nada. Necesitas UNA variable de entorno nueva en Render:
-//   WOMPI_PRIVATE_KEY → tu "Llave privada" (prv_test_... o prv_prod_...),
-//   distinta de la pública y de los secretos de integridad/eventos. Se usa
-//   SOLO aquí en el servidor — nunca se envía al navegador.
-
-function baseWompi() {
-  return (process.env.WOMPI_PUBLIC_KEY || "").startsWith("pub_prod_")
-    ? "https://production.wompi.co/v1"
-    : "https://sandbox.wompi.co/v1";
-}
+// El Plan Pro mensual se renueva por recordatorio, no por cobro automático
+// silencioso: cada mes se manda un correo con un link de pago Bold de un
+// clic (ver /recordatorio-pro más abajo). Tapin nunca guarda tarjetas —
+// Bold no ofrece todavía un token reutilizable para cobros recurrentes, y
+// guardarlas nosotros mismos exigiría cumplimiento PCI-DSS completo, que no
+// se justifica para este volumen. Si el ciclo no se paga, el negocio baja
+// solo a Plan Básico, sin cobro sorpresa.
 function sumarUnMes(fechaISO) {
   const f = fechaISO ? new Date(fechaISO) : new Date();
   f.setMonth(f.getMonth() + 1);
@@ -9563,8 +9632,10 @@ function registrarAuditoriaGlobal(accion, detalle, req) {
   fs.writeFileSync(AUDITORIA_GLOBAL_FILE, JSON.stringify(registros, null, 2));
 }
 
-// Página donde el dueño de un negocio Pro registra su tarjeta una sola vez,
-// usando el Widget de Wompi en modo "tokenize" (no cobra nada en este paso).
+// Página donde el dueño de un negocio Pro ve el estado de su recordatorio
+// mensual y puede activarlo o desactivarlo. No hay ninguna tarjeta que
+// registrar ni guardar: cada mes se manda un correo con un link de pago
+// Bold de un clic (ver /recordatorio-pro más abajo).
 app.get("/suscripcion/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
@@ -9577,8 +9648,7 @@ app.get("/suscripcion/:slug", (req, res) => {
   }
 
   const sus = negocio.suscripcion;
-  const activa = !!(sus && sus.activa && sus.paymentSourceId);
-  const cancelada = !!(sus && !sus.activa && sus.vigenteHasta);
+  const activa = !!(sus && sus.activa);
   const esAnual = negocio.billingType === "anual";
   const precioProAplicable = precioProSegunLocales(negocio.email, todosLosNegocios());
 
@@ -9623,26 +9693,18 @@ app.get("/suscripcion/:slug", (req, res) => {
               <button type="submit" class="btn btn-peligro">Bajar a Plan Básico ahora</button>
             </form>
           ` : activa ? `
-            <div class="estado ok">Tarjeta registrada. Se cobra automáticamente $${precioProAplicable.toLocaleString("es-CO")} COP cada mes.</div>
-            <p>Próximo cobro: <b>${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "pendiente"}</b></p>
-            <p style="font-size:0.8rem;">¿Cambiaste de tarjeta? Registra una nueva abajo y reemplaza la anterior.</p>
-            <form method="POST" action="/suscripcion/${slug}/registrar?key=${req.query.key}">
-              <script src="https://checkout.wompi.co/widget.js" data-render="button" data-widget-operation="tokenize" data-public-key="${process.env.WOMPI_PUBLIC_KEY || ""}"></script>
-            </form>
+            <div class="estado ok">Recordatorio automático activado — $${precioProAplicable.toLocaleString("es-CO")} COP/mes.</div>
+            <p>Próximo recordatorio: <b>${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "pendiente"}</b>. Te llega por correo con un link de pago de un clic — nunca guardamos ninguna tarjeta.</p>
+            <a class="btn btn-principal" href="/pagar-mensualidad/${slug}?key=${req.query.key}">Pagar este mes ahora</a>
             <div class="divisor"></div>
-            <form method="POST" action="/suscripcion/${slug}/cancelar?key=${req.query.key}" onsubmit="return confirm('¿Seguro que quieres cancelar? Sigues teniendo Pro hasta el ${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "final del período ya pagado"}, después bajas a Básico automáticamente, sin cobros nuevos.');">
-              <button type="submit" class="btn btn-peligro">Cancelar suscripción</button>
-            </form>
-          ` : cancelada ? `
-            <div class="estado cancelada">Cancelada — sigues en Pro hasta el <b>${new Date(sus.vigenteHasta).toLocaleDateString("es-CO")}</b>, después bajas a Básico sola, sin que hagas nada más.</div>
-            <p>¿Cambiaste de opinión? Vuelve a registrar tu tarjeta para seguir en Pro sin interrupción.</p>
-            <form method="POST" action="/suscripcion/${slug}/registrar?key=${req.query.key}">
-              <script src="https://checkout.wompi.co/widget.js" data-render="button" data-widget-operation="tokenize" data-public-key="${process.env.WOMPI_PUBLIC_KEY || ""}"></script>
+            <form method="POST" action="/suscripcion/${slug}/cancelar?key=${req.query.key}" onsubmit="return confirm('¿Seguro que quieres desactivar el recordatorio automático? Sigues en Pro hasta el ${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "final del período ya cubierto"}, después bajas a Básico sin cobros ni correos nuevos.');">
+              <button type="submit" class="btn btn-peligro">Desactivar renovación automática</button>
             </form>
           ` : `
-            <p>Registra tu tarjeta una sola vez. <b>No se te cobra nada en este paso</b> — solo queda guardada para el cobro automático de $${precioProAplicable.toLocaleString("es-CO")} COP/mes.</p>
-            <form method="POST" action="/suscripcion/${slug}/registrar?key=${req.query.key}">
-              <script src="https://checkout.wompi.co/widget.js" data-render="button" data-widget-operation="tokenize" data-public-key="${process.env.WOMPI_PUBLIC_KEY || ""}"></script>
+            <div class="estado cancelada">${sus ? `Renovación automática desactivada — sigues en Pro ${sus.vigenteHasta ? `hasta el <b>${new Date(sus.vigenteHasta).toLocaleDateString("es-CO")}</b>, después bajas a Básico sola` : "por este ciclo"}.` : "Todavía no activaste el recordatorio automático."}</div>
+            <p>Actívalo para no perder el Plan Pro: cada mes te llega un correo con un link de pago de un clic — nunca guardamos tu tarjeta.</p>
+            <form method="POST" action="/suscripcion/${slug}/activar?key=${req.query.key}">
+              <button type="submit" class="btn btn-principal">Activar recordatorio automático</button>
             </form>
           `}
 
@@ -9653,66 +9715,31 @@ app.get("/suscripcion/:slug", (req, res) => {
   `);
 });
 
-// Recibe el token de la tarjeta (nunca el número en sí) y crea una "fuente de
-// pago" (payment source) en Wompi: un identificador reutilizable para cobrar
-// esa tarjeta después, sin volver a pedirle los datos al dueño del negocio.
-app.post("/suscripcion/:slug/registrar", async (req, res) => {
+// Activa (o reactiva) el recordatorio mensual. Si nunca había tenido uno, se
+// asume que el ciclo actual ya está cubierto (por el pago que lo trajo a
+// Pro) y el próximo recordatorio sale en 1 mes. Si ya existía y solo estaba
+// desactivado, se reactiva sin perder la fecha del ciclo en curso.
+app.post("/suscripcion/:slug/activar", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
     return res.status(401).send("No autorizado.");
   }
-  if (!process.env.WOMPI_PRIVATE_KEY) {
-    return res.status(500).send("Falta configurar WOMPI_PRIVATE_KEY en Render (tu Llave privada de Wompi, no la pública).");
-  }
-  const wompiToken = req.body["wompi-token"];
-  if (!wompiToken) {
-    return res.status(400).send("No llegó el token de la tarjeta desde Wompi. Intenta de nuevo.");
-  }
-
-  try {
-    const base = baseWompi();
-    // 1. Pedimos los tokens de aceptación de términos y tratamiento de datos
-    //    (Wompi los exige para crear una fuente de pago).
-    const infoComercio = await fetch(`${base}/merchants/${process.env.WOMPI_PUBLIC_KEY}`).then((r) => r.json());
-    const acceptanceToken = infoComercio?.data?.presigned_acceptance?.acceptance_token;
-    const authToken = infoComercio?.data?.presigned_personal_data_auth?.acceptance_token;
-
-    // 2. Creamos la fuente de pago con el token de la tarjeta.
-    const resp = await fetch(`${base}/payment_sources`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.WOMPI_PRIVATE_KEY}` },
-      body: JSON.stringify({
-        type: "CARD",
-        token: wompiToken,
-        customer_email: negocio.email,
-        acceptance_token: acceptanceToken,
-        accept_personal_auth: authToken,
-      }),
-    });
-    const data = await resp.json();
-    const paymentSourceId = data?.data?.id;
-    if (!paymentSourceId) {
-      console.error("[suscripción] Wompi no devolvió payment_source:", JSON.stringify(data));
-      return res.status(502).send("Wompi no pudo guardar la tarjeta. Intenta de nuevo o revisa que la tarjeta sea válida.");
-    }
-
-    guardarCambiosNegocio(slug, negocio, {
-      suscripcion: { paymentSourceId, activa: true, proximoCobro: sumarUnMes(), ultimoCobro: null, ultimoError: null },
-    });
-
-    res.redirect(`/suscripcion/${slug}?key=${req.query.key}`);
-  } catch (err) {
-    console.error("[suscripción] Error registrando tarjeta:", err.message);
-    res.status(500).send("Ocurrió un error guardando la tarjeta. Intenta de nuevo.");
-  }
+  const sus = negocio.suscripcion;
+  guardarCambiosNegocio(slug, negocio, {
+    suscripcion: sus
+      ? { ...sus, activa: true }
+      : { activa: true, proximoCobro: sumarUnMes(), ultimoRecordatorioEnviado: null, ultimoPagoConfirmado: new Date().toISOString() },
+  });
+  registrarAuditoria(slug, negocio, "Activaste el recordatorio automático del Plan Pro");
+  res.redirect(`/suscripcion/${slug}?key=${req.query.key}`);
 });
 
-// Cancela la suscripción mensual: deja de cobrar en el futuro, pero el
-// negocio sigue en Pro hasta el final de lo que ya pagó (vigenteHasta =
-// la fecha del próximo cobro que ya no va a pasar). Después de esa fecha,
-// esPro() lo baja a Básico solo, sin que nadie tenga que hacer nada más.
+// Desactiva el recordatorio mensual: deja de mandarse el correo en el
+// futuro, pero el negocio sigue en Pro hasta el final de lo que ya pagó
+// (vigenteHasta = la fecha del próximo recordatorio, que ya no va a salir).
+// Después de esa fecha, /recordatorio-pro lo baja a Básico solo.
 app.post("/suscripcion/:slug/cancelar", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
@@ -9727,7 +9754,7 @@ app.post("/suscripcion/:slug/cancelar", (req, res) => {
   guardarCambiosNegocio(slug, negocio, {
     suscripcion: { ...sus, activa: false, vigenteHasta: sus.proximoCobro || new Date().toISOString() },
   });
-  registrarAuditoria(slug, negocio, `Cancelaste tu suscripción Pro (sigues activo hasta ${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "hoy"})`);
+  registrarAuditoria(slug, negocio, `Desactivaste el recordatorio automático (sigues en Pro hasta ${sus.proximoCobro ? new Date(sus.proximoCobro).toLocaleDateString("es-CO") : "hoy"})`);
   res.redirect(`/suscripcion/${slug}?key=${req.query.key}`);
 });
 
@@ -9750,11 +9777,6 @@ app.post("/suscripcion/:slug/bajar-anticipado", (req, res) => {
   res.redirect(`/mi-panel/${slug}?key=${req.query.key}`);
 });
 
-
-// próximo cobro ya llegó. Visítala con un cron diario o mensual (igual que
-// /notificar/:slug) — solo cobra a quien realmente le toque ese día:
-// https://tu-dominio.com/cobrar-suscripciones?key=TU_CLAVE
-// Cuenta cuántos negocios Pro activos tiene el mismo correo, y devuelve el
 // precio que le corresponde a CADA local, según la tabla de escalones.
 function precioProSegunLocales(email, todosNegocios) {
   if (!email) return PRECIO_PRO_COP;
@@ -9766,69 +9788,141 @@ function precioProSegunLocales(email, todosNegocios) {
   return (escalon || ESCALONES_PRO[ESCALONES_PRO.length - 1]).precio;
 }
 
-app.get("/cobrar-suscripciones", limitarIntentosAdmin, async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
-  if (!process.env.WOMPI_PRIVATE_KEY) {
-    return res.status(500).send("Falta configurar WOMPI_PRIVATE_KEY en Render.");
+// Arma la referencia de pago de un ciclo mensual del Plan Pro. Formato:
+// tapin-pro-{AAAAMM}-{slug} — el año-mes SIEMPRE ocupa 6 dígitos justo
+// después del prefijo, así que el webhook puede recortar el slug sin
+// ambigüedad aunque el slug tenga guiones.
+function referenciaCicloProMensual(slug, fecha = new Date()) {
+  const aaaamm = `${fecha.getFullYear()}${String(fecha.getMonth() + 1).padStart(2, "0")}`;
+  return `tapin-pro-${aaaamm}-${slug}`;
+}
+
+// Página con el botón de pago Bold para el ciclo mensual actual del Plan
+// Pro. Es la misma página a la que apunta el link del correo del
+// recordatorio, y también un botón dentro de /suscripcion/:slug para pagar
+// por adelantado sin esperar al recordatorio. Todo se calcula en el
+// servidor en el momento — nunca se pasa firma ni monto por la URL.
+app.get("/pagar-mensualidad/:slug", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "Revisa que el enlace esté completo y bien escrito.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
+    return enviarError(res, 401, "No pudimos verificar tu acceso", "El enlace debe incluir tu clave personal (?key=...).");
+  }
+  if (!esPro(negocio) || negocio.billingType === "anual") {
+    return enviarError(res, 402, "Esto no aplica para tu plan", "Esta página es solo para el Plan Pro mensual.", { texto: "Ir a mi panel", href: `/mi-panel/${slug}?key=${req.query.key}` });
+  }
+  if (!process.env.BOLD_API_KEY || !process.env.BOLD_SECRET_KEY) {
+    return res.status(500).send("Los pagos todavía no están configurados. Contacta a Tapin.");
   }
 
+  const precioProAplicable = precioProSegunLocales(negocio.email, todosLosNegocios());
+  const referencia = referenciaCicloProMensual(slug);
+  const montoCOP = precioProAplicable;
+  const firma = firmaIntegridadBold(referencia, montoCOP, "COP");
+  const redirectUrl = `${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${encodeURIComponent(req.query.key)}`;
+  const datosClienteMensual = jsonAtributoHtml({ email: negocio.email || "", fullName: negocio.nombre || "" });
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Pagar mensualidad Pro — ${negocio.nombre}</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:'Inter','Segoe UI',-apple-system,Arial,sans-serif;background:${MARCA.crema};
+               margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+          .box{background:#fff;border-radius:18px;padding:34px 30px;max-width:400px;width:100%;text-align:center;
+               box-shadow:0 10px 40px rgba(0,0,0,0.08);}
+          h1{font-size:1.1rem;color:${MARCA.texto};margin:14px 0 6px;}
+          p{color:${MARCA.textoSuave};font-size:0.85rem;}
+          .monto{font-size:1.6rem;font-weight:800;color:${MARCA.verde};margin:14px 0;}
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
+          <h1>Renovación mensual — ${negocio.nombre}</h1>
+          <p>Un solo pago para seguir en Plan Pro este mes.</p>
+          <div class="monto">$${precioProAplicable.toLocaleString("es-CO")} COP</div>
+
+          <script src="https://checkout.bold.co/library/boldPaymentButton.js"></script>
+          <script
+            data-bold-button
+            data-order-id="${referencia}"
+            data-currency="COP"
+            data-amount="${montoCOP}"
+            data-api-key="${process.env.BOLD_API_KEY}"
+            data-integrity-signature="${firma}"
+            data-redirection-url="${redirectUrl}"
+            data-description="${escaparHtml(`Tapin — mensualidad Pro (${negocio.nombre})`)}"
+            data-customer-data='${datosClienteMensual}'
+          ></script>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.get("/recordatorio-pro", limitarIntentosAdmin, async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
+
   const negocios = todosLosNegocios();
-  const base = baseWompi();
   const hoy = new Date();
   const resultado = [];
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
 
   for (const slug in negocios) {
     const negocio = negocios[slug];
-    if (!esPro(negocio)) continue;
+    if (!esPro(negocio) || negocio.billingType === "anual") continue;
     const sus = negocio.suscripcion;
-    if (!sus || !sus.activa || !sus.paymentSourceId) continue;
-    if (sus.proximoCobro && new Date(sus.proximoCobro) > hoy) continue; // todavía no toca
+    if (!sus || !sus.activa) continue;
+    if (sus.proximoCobro && new Date(sus.proximoCobro) > hoy) continue; // todavía no le toca
+
+    const cicloAnteriorPagado = !sus.ultimoRecordatorioEnviado
+      || (sus.ultimoPagoConfirmado && new Date(sus.ultimoPagoConfirmado) >= new Date(sus.ultimoRecordatorioEnviado));
+
+    if (!cicloAnteriorPagado) {
+      // El recordatorio anterior nunca se pagó — se acabó la gracia, baja a
+      // Básico. Nada de tarjetas rechazadas ni reintentos silenciosos: es un
+      // cambio de plan explícito, visible en el panel y avisado por correo.
+      guardarCambiosNegocio(slug, negocio, { plan: "basico" });
+      registrarAuditoriaGlobal("bajar_por_no_pago", `Negocio "${negocio.nombre}" (${slug}) bajado a Básico por no pagar el ciclo mensual del Plan Pro`, req);
+      const tokenPanel = generarLinkAccesoNegocio(slug, 30);
+      await enviarEmail(
+        negocio.email,
+        `Tu Plan Pro de Tapin bajó a Plan Básico`,
+        `<p>No detectamos el pago de tu mensualidad Pro del ciclo pasado, así que <b>${negocio.nombre}</b> bajó a Plan Básico — sin cobro adicional ni penalidad.</p>
+         <p>Puedes volver a Pro cuando quieras desde tu panel: ${baseUrl}/mejorar-a-pro/${slug}?key=${tokenPanel}</p>`
+      ).catch((err) => console.error("[recordatorio-pro] Error avisando baja:", err.message));
+      resultado.push({ slug, accion: "bajado_a_basico" });
+      continue;
+    }
 
     const precioAplicable = precioProSegunLocales(negocio.email, negocios);
-    const referencia = `tapin-sub-${slug}-${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, "0")}`;
-    const montoCentavos = precioAplicable * 100;
-    const firma = firmaIntegridadWompi(referencia, montoCentavos, "COP");
+    const referencia = referenciaCicloProMensual(slug, hoy);
+    const tokenPago = generarLinkAccesoNegocio(slug, 15);
+
+    guardarCambiosNegocio(slug, negocio, {
+      suscripcion: { ...sus, ultimoRecordatorioEnviado: hoy.toISOString(), proximoCobro: sumarUnMes(sus.proximoCobro) },
+    });
 
     try {
-      const resp = await fetch(`${base}/transactions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.WOMPI_PRIVATE_KEY}` },
-        body: JSON.stringify({
-          amount_in_cents: montoCentavos,
-          currency: "COP",
-          customer_email: negocio.email,
-          payment_method: { type: "CARD", installments: 1 },
-          payment_source_id: sus.paymentSourceId,
-          reference: referencia,
-          signature: firma,
-        }),
-      });
-      const data = await resp.json();
-      const estado = data?.data?.status || "ERROR";
-
-      if (estado === "APPROVED" || estado === "PENDING") {
-        guardarCambiosNegocio(slug, negocio, {
-          suscripcion: { ...sus, ultimoCobro: new Date().toISOString(), proximoCobro: sumarUnMes(sus.proximoCobro), ultimoError: null },
-        });
-        resultado.push({ slug, estado, precioAplicado: precioAplicable });
-      } else {
-        // No reintentamos solos ni desactivamos el plan automáticamente —
-        // solo avisamos, para que decidas manualmente si le das un plazo o no.
-        guardarCambiosNegocio(slug, negocio, {
-          suscripcion: { ...sus, ultimoCobro: new Date().toISOString(), ultimoError: estado },
-        });
-        resultado.push({ slug, estado: `FALLÓ (${estado})` });
-        const tokenSuscripcion = generarLinkAccesoNegocio(slug, 10);
-        await enviarEmail(
-          negocio.email,
-          "No pudimos procesar tu suscripción Pro de Tapin",
-          `<p>Intentamos cobrar tu mensualidad del Plan Pro y la tarjeta registrada fue rechazada (estado: ${estado}).</p>
-           <p>Por favor registra una tarjeta válida aquí: ${req.protocol}://${req.get("host")}/suscripcion/${slug}?key=${tokenSuscripcion}</p>`
-        );
-      }
+      await enviarEmail(
+        negocio.email,
+        `Tu Plan Pro de Tapin se renueva este mes — $${precioAplicable.toLocaleString("es-CO")} COP`,
+        `<div style="font-family:-apple-system,Arial,sans-serif;max-width:460px;">
+           <h2 style="color:${MARCA.verdeOscuro};">Renueva tu Plan Pro en un clic</h2>
+           <p>Para seguir disfrutando el Plan Pro en <b>${negocio.nombre}</b>, confirma el pago de este mes:</p>
+           <p><a href="${baseUrl}/pagar-mensualidad/${slug}?key=${tokenPago}" style="display:inline-block;background:${MARCA.verdeOscuro};color:#fff;padding:12px 20px;border-radius:8px;font-weight:700;text-decoration:none;">Pagar $${precioAplicable.toLocaleString("es-CO")} COP</a></p>
+           <p style="font-size:0.82rem;color:#888;">Si no pagas, tu negocio baja automáticamente a Plan Básico al final de este período — sin penalidad ni cobro sorpresa.</p>
+         </div>`
+      );
+      resultado.push({ slug, accion: "recordatorio_enviado", monto: precioAplicable });
     } catch (err) {
-      console.error(`[cobrar-suscripciones] Error con ${slug}:`, err.message);
-      resultado.push({ slug, estado: "ERROR_SERVIDOR" });
+      console.error(`[recordatorio-pro] Error enviando correo a ${slug}:`, err.message);
+      resultado.push({ slug, accion: "ERROR_CORREO" });
     }
   }
 
@@ -9921,7 +10015,7 @@ app.get("/privacidad", (req, res) => {
 
           <h2>1. ¿Qué datos recogemos?</h2>
           <ul>
-            <li><b>De los negocios:</b> nombre del negocio, correo electrónico, dirección, categoría, enlace de reseñas de Google, y datos de facturación procesados por nuestro proveedor de pagos (Wompi).</li>
+            <li><b>De los negocios:</b> nombre del negocio, correo electrónico, dirección, categoría, enlace de reseñas de Google, y datos de facturación procesados por nuestro proveedor de pagos (Bold).</li>
             <li><b>De los clientes finales que califican con la tarjeta:</b> calificación (1-5), comentario opcional (si la calificación es negativa), teléfono (opcional), fecha, hora, y tipo de dispositivo. No pedimos ni guardamos nombres de clientes finales salvo que decidan crear una cuenta de usuario.</li>
             <li><b>De usuarios registrados (clientes con cuenta):</b> nombre, correo, y contraseña (guardada de forma cifrada, nunca en texto plano).</li>
           </ul>
@@ -9931,15 +10025,15 @@ app.get("/privacidad", (req, res) => {
             <li>Operar el servicio: redirigir calificaciones positivas a Google, mostrar retroalimentación privada al negocio correspondiente.</li>
             <li>Generar estadísticas y reportes para el negocio (horas pico, tendencias, comparación con su categoría).</li>
             <li>Enviar alertas y reportes por correo a los negocios.</li>
-            <li>Procesar pagos y suscripciones a través de Wompi.</li>
+            <li>Procesar pagos y suscripciones a través de Bold.</li>
             <li>Mejorar el servicio y dar soporte.</li>
           </ul>
 
           <h2>3. ¿Con quién compartimos tus datos?</h2>
-          <p>No vendemos ni compartimos tus datos personales con terceros para fines de mercadeo. Compartimos información únicamente con proveedores necesarios para operar el servicio: Wompi (pagos), y proveedores de infraestructura (hosting de correo y servidores). Estos proveedores solo acceden a lo estrictamente necesario para prestar su servicio.</p>
+          <p>No vendemos ni compartimos tus datos personales con terceros para fines de mercadeo. Compartimos información únicamente con proveedores necesarios para operar el servicio: Bold (pagos), y proveedores de infraestructura (hosting de correo y servidores). Estos proveedores solo acceden a lo estrictamente necesario para prestar su servicio.</p>
 
           <h2>4. ¿Cómo protegemos tus datos?</h2>
-          <p>Los datos se almacenan en servidores con acceso restringido. Las contraseñas se guardan cifradas. Las transacciones de pago se procesan directamente por Wompi — Tapin nunca almacena números de tarjeta completos.</p>
+          <p>Los datos se almacenan en servidores con acceso restringido. Las contraseñas se guardan cifradas. Las transacciones de pago se procesan directamente por Bold — Tapin nunca almacena números de tarjeta.</p>
 
           <h2>5. ¿Cuáles son tus derechos?</h2>
           <p>Como titular de tus datos, tienes derecho a conocer, actualizar, rectificar y solicitar la eliminación de tus datos personales, así como a revocar la autorización otorgada para su tratamiento. Para ejercer estos derechos, escríbenos al correo de soporte indicado en la página de contacto.</p>
@@ -9986,7 +10080,7 @@ app.get("/terminos", (req, res) => {
           <p>Tapin es un servicio de tarjetas con tecnología NFC que permite a los clientes de un negocio calificar su experiencia con un toque, dirigiendo las calificaciones positivas a Google y gestionando las negativas de forma privada.</p>
 
           <h2>2. Planes y pagos</h2>
-          <p>El Plan Básico se cobra como pago único e incluye la tarjeta física, envío, y funciones esenciales. El Plan Pro se cobra mensualmente y se renueva automáticamente hasta que el negocio cancele. Los pagos se procesan a través de Wompi. Los precios vigentes están publicados en <a href="/conoce">/conoce</a> y pueden cambiar con previo aviso.</p>
+          <p>El Plan Básico se cobra como pago único e incluye la tarjeta física, envío, y funciones esenciales. El Plan Pro se cobra mensualmente mediante un recordatorio de pago (no un cobro automático silencioso) hasta que el negocio lo desactive. Los pagos se procesan a través de Bold. Los precios vigentes están publicados en <a href="/conoce">/conoce</a> y pueden cambiar con previo aviso.</p>
 
           <h2>3. Responsabilidad sobre las reseñas</h2>
           <p>Tapin facilita la redirección de clientes a la plataforma de reseñas de Google, pero no controla, edita, ni garantiza el contenido de las reseñas publicadas por terceros en Google. Tapin tampoco publica reseñas en nombre de los clientes ni de los negocios.</p>
