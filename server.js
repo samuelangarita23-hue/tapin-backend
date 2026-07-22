@@ -957,17 +957,21 @@ async function buscarItemAlegraPorNombre(nombre) {
 // No lanza hacia arriba si algo falla -- un problema de facturacion no debe
 // tumbar la activacion de una tarjeta ni el registro de un pago; solo se
 // deja constancia clara en los logs para revisarlo a mano.
+// Si la venta no trae NIT, NO se omite la factura: como responsable de IVA
+// hay que facturar TODAS las ventas, asi que se emite a nombre del
+// "consumidor final" con el NIT generico 222222222222 que la normatividad
+// DIAN define exactamente para este caso.
+const NIT_CONSUMIDOR_FINAL = "222222222222";
 async function crearFacturaAlegra({ nit, razonSocial, email, items, referencia }) {
   if (!alegraConfigurado()) {
     console.warn(`[Alegra] ALEGRA_USER/ALEGRA_TOKEN no configurados -- no se genero factura para ${referencia}.`);
     return null;
   }
-  if (!nit) {
-    console.warn(`[Alegra] Pedido ${referencia} sin NIT -- no se genero factura automatica (el cliente no la pidio).`);
-    return null;
-  }
+  const nitLimpio = (nit || "").trim();
+  const nitFactura = nitLimpio || NIT_CONSUMIDOR_FINAL;
+  const razonFactura = nitLimpio ? razonSocial : "Consumidor final";
   try {
-    const clienteId = await buscarOCrearContactoAlegra({ nit, razonSocial, email });
+    const clienteId = await buscarOCrearContactoAlegra({ nit: nitFactura, razonSocial: razonFactura, email: nitLimpio ? email : undefined });
     const itemsAlegra = [];
     for (const it of items) {
       const itemId = await buscarItemAlegraPorNombre(it.nombreItem);
@@ -982,6 +986,11 @@ async function crearFacturaAlegra({ nit, razonSocial, email, items, referencia }
         client: clienteId,
         items: itemsAlegra,
         anotation: `Tapin -- referencia ${referencia}`,
+        // Pide a Alegra emitir la factura electronicamente ante la DIAN de
+        // una vez (sin esto puede quedar como borrador interno sin validar).
+        // Si las facturas aparecen en Alegra pero sin numero DIAN, revisar
+        // este campo contra la documentacion vigente de su API.
+        stamp: { generateStamp: true },
       }),
     });
     console.log(`[Alegra] Factura ${factura?.numberTemplate?.fullNumber || factura?.id || ""} creada para ${referencia}.`);
@@ -9372,13 +9381,33 @@ app.get("/pagar/:id", (req, res) => {
 // La verificación de firma del webhook (verificarChecksumWompi) ya está
 // definida más arriba, junto al resto de helpers de Wompi.
 
+// Registro de referencias de pago ya facturadas en Alegra, guardado en el
+// propio negocio. Existe porque el mismo pago puede llegar por DOS caminos
+// casi al tiempo (el webhook de Wompi y la página de confirmación cuando el
+// cliente vuelve del pago), y el webhook además puede reintentarse — sin
+// esta marca, cada camino generaría su propia factura ante la DIAN.
+function yaSeFacturo(negocio, referencia) {
+  return Array.isArray(negocio.facturasEmitidas) && negocio.facturasEmitidas.includes(referencia);
+}
+// Devuelve el objeto de cambios a incluir en guardarCambiosNegocio para
+// marcar la referencia como facturada (con tope para que no crezca infinito).
+function marcaFacturaEmitida(negocio, referencia) {
+  const lista = Array.isArray(negocio.facturasEmitidas) ? negocio.facturasEmitidas : [];
+  return { facturasEmitidas: [...lista, referencia].slice(-100) };
+}
+
 // Activa (o renueva) el Plan Pro de un negocio tras un pago aprobado desde
 // /mejorar-a-pro. Reutilizable desde la página de confirmación (cuando el
 // cliente vuelve del pago) y desde el webhook de Wompi — volver a llamarla
-// para el mismo pago no causa ningún problema, solo reescribe la misma fecha.
-function activarUpgradePro(slug, esAnual) {
+// para el mismo pago no causa ningún problema: los cambios de plan solo se
+// reescriben iguales, y la factura se genera una única vez gracias a la
+// marca por referencia.
+function activarUpgradePro(slug, esAnual, referencia) {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return;
+  const referenciaFactura = referencia || `tapin-upgrade-${esAnual ? "anual-" : ""}${slug}`;
+  const yaFacturado = yaSeFacturo(negocio, referenciaFactura);
+  const marcaFactura = yaFacturado ? {} : marcaFacturaEmitida(negocio, referenciaFactura);
   const precioPagado = esAnual ? PRECIO_PRO_ANUAL_COP : precioProSegunLocales(negocio.email, todosLosNegocios());
   if (esAnual) {
     const unAnioDespues = new Date();
@@ -9387,6 +9416,7 @@ function activarUpgradePro(slug, esAnual) {
       plan: "pro",
       billingType: "anual",
       proAnualHasta: unAnioDespues.toISOString(),
+      ...marcaFactura,
     });
     registrarAuditoria(slug, negocio, `Mejoraste a Plan Pro anual (vence ${unAnioDespues.toLocaleDateString("es-CO")})`);
   } else {
@@ -9404,19 +9434,21 @@ function activarUpgradePro(slug, esAnual) {
         proximoCobro: sumarUnMes(),
         ultimoPagoConfirmado: new Date().toISOString(),
       },
+      ...marcaFactura,
     });
     registrarAuditoria(slug, negocio, "Mejoraste a Plan Pro");
   }
 
-  // Factura electronica (si el negocio dejo NIT en Configuracion). No
-  // bloquea el resto del flujo si Alegra falla o no esta configurado.
-  if (negocio.datosFactura && negocio.datosFactura.nit) {
+  // Factura electronica: solo la primera vez que llega esta referencia.
+  // Si el negocio no dejo NIT en Configuracion, sale a consumidor final.
+  // No bloquea el resto del flujo si Alegra falla o no esta configurado.
+  if (!yaFacturado) {
     crearFacturaAlegra({
-      nit: negocio.datosFactura.nit,
-      razonSocial: negocio.datosFactura.razonSocial,
+      nit: negocio.datosFactura && negocio.datosFactura.nit,
+      razonSocial: negocio.datosFactura && negocio.datosFactura.razonSocial,
       email: negocio.email,
       items: [{ nombreItem: ALEGRA_NOMBRE_ITEM_PRO, cantidad: 1, precioUnitario: precioPagado }],
-      referencia: `tapin-upgrade-${esAnual ? "anual-" : ""}${slug}`,
+      referencia: referenciaFactura,
     }).catch((err) => console.error("[Alegra] Error inesperado facturando upgrade:", err.message));
   }
 }
@@ -9448,10 +9480,10 @@ app.post("/webhook/wompi", async (req, res) => {
       // (Date.now(), solo dígitos) siempre es el último tramo, así que se
       // puede recortar sin ambigüedad aunque el slug tenga guiones.
       const partes = referencia.slice("tapin-upgrade-anual-".length).split("-");
-      activarUpgradePro(partes.slice(0, -1).join("-"), true);
+      activarUpgradePro(partes.slice(0, -1).join("-"), true, referencia);
     } else if (referencia.startsWith("tapin-upgrade-")) {
       const partes = referencia.slice("tapin-upgrade-".length).split("-");
-      activarUpgradePro(partes.slice(0, -1).join("-"), false);
+      activarUpgradePro(partes.slice(0, -1).join("-"), false, referencia);
     } else if (referencia.startsWith("tapin-pro-")) {
       // Formato: tapin-pro-{AAAAMM}-{slug} — el año-mes son siempre 6
       // dígitos en una posición fija, así que el slug se recorta sin
@@ -9460,18 +9492,23 @@ app.post("/webhook/wompi", async (req, res) => {
       const slug = resto.slice(7); // 6 dígitos del AAAAMM + 1 guion
       const negocio = obtenerNegocio(slug);
       if (negocio && negocio.suscripcion) {
+        // La referencia trae el año-mes, asi que es unica por ciclo: si
+        // Wompi reenvia este mismo aviso, la marca evita facturar dos veces.
+        const yaFacturado = yaSeFacturo(negocio, referencia);
         guardarCambiosNegocio(slug, negocio, {
           suscripcion: { ...negocio.suscripcion, ultimoPagoConfirmado: new Date().toISOString() },
+          ...(yaFacturado ? {} : marcaFacturaEmitida(negocio, referencia)),
         });
         registrarAuditoria(slug, negocio, "Pago mensual del Plan Pro confirmado");
 
-        // Factura electronica de este ciclo (si el negocio dejo NIT en
-        // Configuracion). No bloquea el resto del flujo si Alegra falla.
-        if (negocio.datosFactura && negocio.datosFactura.nit) {
+        // Factura electronica de este ciclo. Si el negocio no dejo NIT en
+        // Configuracion, sale a consumidor final. No bloquea el resto del
+        // flujo si Alegra falla.
+        if (!yaFacturado) {
           const precioPagado = precioProSegunLocales(negocio.email, todosLosNegocios());
           crearFacturaAlegra({
-            nit: negocio.datosFactura.nit,
-            razonSocial: negocio.datosFactura.razonSocial,
+            nit: negocio.datosFactura && negocio.datosFactura.nit,
+            razonSocial: negocio.datosFactura && negocio.datosFactura.razonSocial,
             email: negocio.email,
             items: [{ nombreItem: ALEGRA_NOMBRE_ITEM_PRO, cantidad: 1, precioUnitario: precioPagado }],
             referencia,
@@ -9527,10 +9564,12 @@ async function activarPedidoAprobado(pedidoId, req) {
     pedidos[pedidoId] = pedido;
     guardarPedidos(pedidos);
 
-    // Factura electronica (si el comprador dejo NIT) -- se dispara aqui,
-    // una sola vez por pedido, junto con la generacion de codigos. No
+    // Factura electronica -- se dispara aqui, una sola vez por pedido,
+    // junto con la generacion de codigos (el flag yaGenerado de arriba
+    // evita duplicados si el webhook y /pago-confirmado llegan a la vez).
+    // Si el comprador no dejo NIT, sale a nombre del consumidor final. No
     // bloquea el resto del flujo si Alegra falla o no esta configurado.
-    if (pedido.nit) {
+    {
       const itemsFactura = [
         { nombreItem: ALEGRA_NOMBRE_ITEM_BASICO, cantidad: cantidadComprada, precioUnitario: pedido.precioUnidad },
       ];
@@ -9765,7 +9804,7 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
         ? data?.data?.amount_in_cents === PRECIO_PRO_ANUAL_COP * 100
         : ESCALONES_PRO.some((e) => data?.data?.amount_in_cents === e.precio * 100);
       if (estado === "APPROVED" && referenciaOk && montoOk) {
-        activarUpgradePro(slug, esAnual);
+        activarUpgradePro(slug, esAnual, referenciaRecibida);
       }
     } catch (err) {
       console.error("[mejorar-a-pro] Error consultando la transacción en Wompi:", err.message);
