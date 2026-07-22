@@ -1,5 +1,5 @@
 // server.js
-// Backend de Tapin: cuenta y registra cada toque NFC/QR con fecha y hora exactas,
+// Backend de Tapin: cuenta y registra cada toque NFC con fecha y hora exactas,
 // redirige al cliente a Google, y permite exportar el historial por negocio
 // (útil para cobrar la suscripción a tus clientes con datos reales).
 
@@ -655,7 +655,7 @@ document.addEventListener("submit", function (e) {
 
 // ---------- Configuración de negocios ----------
 // Agrega aquí un negocio por cada Tapin que tengas en la calle.
-// "slug" es lo que va en la URL del QR/NFC, ej: /r/mi-negocio
+// "slug" es lo que va en la URL programada en el chip NFC, ej: /r/mi-negocio
 // "categoria" se usa para comparar el negocio contra otros del mismo tipo (punto 9).
 // "claveAcceso" es opcional: si la pones, el dueño puede entrar a SU PROPIO panel
 // (/mi-panel/slug?key=claveAcceso) sin ver los datos de tus otros negocios.
@@ -701,7 +701,7 @@ function guardarDatos(datos) {
 
 // ---------- Códigos de activación ----------
 // Permite generar un código único por cada tarjeta Tapin física ANTES de saber
-// a qué negocio va a parar. Programas el QR/NFC con ese código, y cuando consigas
+// a qué negocio va a parar. Programas el chip NFC con ese código, y cuando consigas
 // el cliente, lo activas con sus datos reales (nombre, enlace de Google, categoría).
 
 const CODIGOS_FILE = path.join(DATA_DIR, "codigos.json");
@@ -1987,7 +1987,7 @@ const TODAS_LAS_FRASES_VALIDAS = new Set(Object.values(FRASES_POR_CATEGORIA).fla
 
 // ---------- Rutas ----------
 
-// Esta es la URL que va en el QR o se programa en el chip NFC de la tarjeta Tapin.
+// Esta es la URL que se programa en el chip NFC de la tarjeta Tapin.
 // En vez de redirigir directo a Google, primero muestra una pantalla rápida
 // de "¿cómo te fue?" — si la respuesta es positiva, lo manda a Google;
 // si es negativa, lo manda a un formulario privado en vez de exponerlo en público.
@@ -2942,6 +2942,13 @@ app.get("/activar/:codigo", (req, res) => {
 
               <label>Enlace de reseñas de Google</label>
               <input type="url" name="googleUrl" id="input-google-url" required placeholder="https://g.page/r/.../review">
+              <div style="background:${MARCA.crema};border-radius:9px;padding:12px 14px;margin-top:8px;font-size:0.78rem;color:${MARCA.textoSuave};line-height:1.6;">
+                <b style="color:${MARCA.texto};">¿De dónde saco este enlace?</b><br>
+                1. Busca el nombre de tu negocio en Google, entrando con el Gmail que lo administra.<br>
+                2. En el panel de dueño que te aparece, toca el botón <b>"Pedir reseñas"</b>.<br>
+                3. Copia el enlace que te da Google (empieza por <b>g.page/r/...</b>) y pégalo aquí.<br>
+                <span style="color:${MARCA.textoSuave};">También sirve el enlace de tu negocio en Google Maps (botón "Compartir" → empieza por <b>maps.app.goo.gl/...</b>). Solo se aceptan enlaces de Google — a este enlace llegan tus clientes cuando tocan la tarjeta y califican bien.</span>
+              </div>
 
               <label>Email del negocio (alertas y reportes llegan aquí)</label>
               <input type="email" name="email" required placeholder="dueno@negocio.com">
@@ -3157,8 +3164,10 @@ app.post("/activar/:codigo", (req, res) => {
   }
   if (!esLinkGoogleValido(googleUrl)) {
     return res.status(400).send(
-      "Ese enlace no parece ser de Google Maps/Reseñas. Verifica que hayas copiado el link correcto " +
-      "(debe empezar por algo como https://g.page/... o https://maps.app.goo.gl/... o https://www.google.com/maps/...) y vuelve a intentarlo."
+      "Ese enlace no parece ser de Google Maps/Reseñas. Debe empezar por https://g.page/... o " +
+      "https://maps.app.goo.gl/... o https://www.google.com/maps/... — Para sacarlo: busca el nombre de tu " +
+      "negocio en Google con el Gmail que lo administra, y en el panel de dueño toca el botón \"Pedir reseñas\". " +
+      "Copia ese enlace, regresa e inténtalo de nuevo."
     );
   }
   const claveLimpia = (claveAcceso || "").trim();
@@ -5057,7 +5066,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           </div>
 
           <div class="config-seccion">
-            <div class="config-seccion-titulo">Tarjetas físicas</div>
+            <div class="config-seccion-titulo">Tarjetas vinculadas</div>
             <div class="form-card">
               <h3>Tarjetas de este negocio</h3>
               <p class="nota">
@@ -5086,6 +5095,11 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
                       <input type="text" name="nombre" value="${escaparHtml(t.etiqueta || "")}" placeholder="Ej: Mesa 3, Caja, Entrada..." maxlength="40" style="flex:1;margin:0;padding:8px 10px;font-size:0.82rem;">
                       <button type="submit" class="secundario" style="margin:0;padding:8px 14px;font-size:0.78rem;">Guardar nombre</button>
                     </form>
+                    ${t.codigo !== slug ? `
+                    <form method="POST" action="/mi-panel/${slug}/configuracion/tarjetas/${t.codigo}/desvincular?key=${claveUsada}" style="margin-top:8px;" onsubmit="return confirm('¿Desvincular la tarjeta ${t.codigo}? Deja de sumar toques a este negocio y vuelve a quedar sin activar — se puede activar de nuevo después, como negocio nuevo o vinculada a otro.');">
+                      <button type="submit" style="margin:0;background:#fff;color:${MARCA.rojo};border:1px solid #F0D0C8;padding:6px 12px;font-size:0.76rem;border-radius:7px;">Desvincular esta tarjeta</button>
+                    </form>
+                    ` : ""}
                   </div>
                 `).join("")}
               </div>
@@ -5192,6 +5206,31 @@ app.post("/mi-panel/:slug/configuracion/tarjetas/:codigo/nombre", (req, res) => 
   codigos[codigo].etiqueta = nombreTarjeta || null;
   guardarCodigos(codigos);
   registrarAuditoria(slug, negocio, nombreTarjeta ? `Renombraste la tarjeta ${codigo} a "${nombreTarjeta}"` : `Quitaste el nombre de la tarjeta ${codigo}`);
+  res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
+});
+
+// Desvincula una tarjeta adicional del negocio -- versión para el propio
+// dueño, con su clave normal (la versión de /editar/:slug es solo para
+// administración con ADMIN_KEY). La tarjeta deja de sumar toques a este
+// negocio y vuelve a quedar "sin activar", lista para activarse de nuevo
+// (como negocio nuevo, o vinculada a otro).
+app.post("/mi-panel/:slug/configuracion/tarjetas/:codigo/desvincular", (req, res) => {
+  const { slug, codigo } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
+
+  if (codigo === slug) {
+    return res.status(400).send("No puedes desvincular la tarjeta principal de un negocio.");
+  }
+  const codigos = leerCodigos();
+  const entrada = codigos[codigo];
+  if (!entrada || entrada.vinculadoA !== slug) {
+    return res.status(404).send("Esa tarjeta no está vinculada a este negocio.");
+  }
+  codigos[codigo] = { creado: entrada.creado || new Date().toISOString() };
+  guardarCodigos(codigos);
+  registrarAuditoria(slug, negocio, `Desvinculaste la tarjeta ${codigo} de este negocio`);
   res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
 });
 
@@ -5649,6 +5688,25 @@ async function generarInformePDF(negocio, slug) {
     ? nombresDiaCorto[porDiaSemana.indexOf(Math.max(...porDiaSemana))]
     : null;
 
+  // Desglose por tipo de dispositivo -- dato que ya se capturaba en cada
+  // toque pero nunca se analizaba en conjunto, solo se listaba toque por
+  // toque en el anexo. Agregarlo dice algo real del negocio: si casi todo
+  // es iPhone/Android, confirma que el toque NFC funciona bien desde
+  // celular (lo esperado); si aparece mucho Windows/Mac/Desconocido, casi
+  // siempre es personal probando la tarjeta desde un computador, no
+  // clientes reales, y vale la pena que el negocio lo sepa.
+  const conteoDispositivo = {};
+  for (const e of eventos) {
+    const d = e.dispositivo || "Desconocido";
+    conteoDispositivo[d] = (conteoDispositivo[d] || 0) + 1;
+  }
+  const totalConDispositivo = eventos.length;
+  const rankingDispositivo = Object.entries(conteoDispositivo).sort((a, b) => b[1] - a[1]);
+  const toquesMovil = (conteoDispositivo["iPhone/iPad"] || 0) + (conteoDispositivo["Android"] || 0);
+  const toquesSospechosos = totalConDispositivo - toquesMovil;
+  const pctMovil = totalConDispositivo ? Math.round((toquesMovil / totalConDispositivo) * 100) : 0;
+  const pctSospechoso = totalConDispositivo ? Math.round((toquesSospechosos / totalConDispositivo) * 100) : 0;
+
   const pdfDoc = await PDFDocument.create();
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -5745,7 +5803,11 @@ async function generarInformePDF(negocio, slug) {
     if (delta !== null) {
       const positivo = delta >= 0;
       const texto = (positivo ? "+" : "") + delta + "%";
-      page.drawText((positivo ? "▲ " : "▼ ") + texto, { x: x + 16, y: y - 58, size: 8, font: fontBold, color: positivo ? verde : rojo });
+      // Nada de flechas ▲/▼ aqui -- la fuente estandar de pdf-lib (WinAnsi)
+      // no las puede codificar y hacia fallar la generacion del PDF entero
+      // (bug real, no relacionado con lo que se pidio, encontrado al
+      // probar el informe). El signo +/- y el color ya distinguen subida/bajada.
+      page.drawText(texto, { x: x + 16, y: y - 58, size: 8, font: fontBold, color: positivo ? verde : rojo });
     }
   }
 
@@ -6149,6 +6211,59 @@ async function generarInformePDF(negocio, slug) {
   });
   piePagina(pReco);
 
+  // ---------- Cómo llegan tus clientes (desglose por dispositivo) ----------
+  const pDispositivos = pdfDoc.addPage([ANCHO, ALTO]);
+  encabezadoSeccion(pDispositivos, "Cómo llegan tus clientes", negocio.nombre);
+
+  y = ALTO - 108;
+  pDispositivos.drawText(
+    "De qué tipo de celular o equipo vienen los toques registrados en tu tarjeta.",
+    { x: MARGEN, y, size: 9, font: fontItalic, color: gris }
+  );
+  y -= 34;
+
+  if (totalConDispositivo === 0) {
+    pDispositivos.drawText("Todavía no hay toques suficientes para este análisis.", { x: MARGEN, y, size: 9.5, font, color: gris });
+    y -= 20;
+  } else {
+    // Estadística principal: % desde celular, en grande.
+    pDispositivos.drawText(String(pctMovil) + "%", { x: MARGEN, y: y - 6, size: 30, font: fontBold, color: verde });
+    pDispositivos.drawText("de tus toques vienen de un celular (iPhone o Android)", { x: MARGEN + 92, y: y - 2, size: 9.5, font, color: oscuro, maxWidth: 300 });
+    y -= 46;
+
+    // Barras horizontales por tipo de dispositivo, de mayor a menor.
+    const anchoBarraMax = ANCHO - 100 - 150;
+    rankingDispositivo.forEach(([nombreDisp, cuenta]) => {
+      const pct = Math.round((cuenta / totalConDispositivo) * 100);
+      pDispositivos.drawText(nombreDisp, { x: MARGEN, y: y - 10, size: 9, font, color: oscuro });
+      pDispositivos.drawRectangle({ x: MARGEN + 130, y: y - 13, width: anchoBarraMax, height: 12, color: verdeClaro });
+      pDispositivos.drawRectangle({ x: MARGEN + 130, y: y - 13, width: Math.max(3, (anchoBarraMax * pct) / 100), height: 12, color: verde });
+      pDispositivos.drawText(pct + "% (" + cuenta + ")", { x: MARGEN + 130 + anchoBarraMax + 10, y: y - 11, size: 8.5, font: fontBold, color: verdeOscuro });
+      y -= 26;
+    });
+    y -= 14;
+
+    // Aviso automático si hay una proporción alta de dispositivos que no
+    // son un celular normal de cliente -- casi siempre es personal
+    // probando la tarjeta desde un computador de la caja o el mostrador.
+    if (pctSospechoso >= 15 && totalConDispositivo >= 5) {
+      y -= dibujarCaja(
+        pDispositivos, MARGEN, y, ANCHO - 100,
+        "El " + pctSospechoso + "% de los toques no vienen de un celular (Windows, Mac o sin identificar). " +
+        "Casi siempre es señal de que alguien probó la tarjeta desde un computador, no de un cliente real -- " +
+        "vale la pena confirmarlo con tu equipo para que las cifras reflejen solo visitas reales.",
+        { color: oro, fondo: oroClaro, size: 8.5, etiqueta: "A revisar" }
+      );
+    } else {
+      y -= dibujarCaja(
+        pDispositivos, MARGEN, y, ANCHO - 100,
+        "La gran mayoría de tus toques vienen de un celular, como se espera de una tarjeta NFC -- es una buena señal de que las cifras de este informe reflejan clientes reales.",
+        { color: verde, fondo: verdeClaro, size: 8.5, etiqueta: "Confirmado" }
+      );
+    }
+  }
+  piePagina(pDispositivos);
+
   const detalle = pdfDoc.addPage([ANCHO, ALTO]);
   encabezadoSeccion(detalle, "Anexo - detalle de interacciones", negocio.nombre);
 
@@ -6179,7 +6294,7 @@ async function generarInformePDF(negocio, slug) {
     detalle.drawText("Metodología", { x: MARGEN, y, size: 10, font: fontBold, color: oscuro });
     y -= 16;
     const notaMetodologica =
-      "Todas las cifras de este informe provienen exclusivamente de los toques NFC/QR y calificaciones registrados en la tarjeta Tapin de este negocio. " +
+      "Todas las cifras de este informe provienen exclusivamente de los toques NFC y calificaciones registrados en la tarjeta Tapin de este negocio. " +
       "Las proyecciones se calculan a partir del ritmo diario observado en el periodo, con un rango de +-15% para reflejar la incertidumbre natural. " +
       "Los promedios y percentiles sectoriales solo se muestran cuando hay al menos 3 negocios comparables de la misma categoría y país. " +
       "Las calificaciones negativas nunca se publican en Google; se gestionan como retroalimentación privada.";
