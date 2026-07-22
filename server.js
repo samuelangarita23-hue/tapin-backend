@@ -1,5 +1,5 @@
 // server.js
-// Backend de Tapin: cuenta y registra cada toque NFC con fecha y hora exactas,
+// Backend de Tapin: cuenta y registra cada toque NFC/QR con fecha y hora exactas,
 // redirige al cliente a Google, y permite exportar el historial por negocio
 // (útil para cobrar la suscripción a tus clientes con datos reales).
 
@@ -85,7 +85,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.use(express.json()); // necesario para recibir el webhook de Wompi (manda JSON)
 
 // Selector de tema disponible en todas las páginas HTML. Solo cambia la
 // apariencia y recuerda la preferencia en el navegador; no altera datos,
@@ -217,12 +217,7 @@ app.use((req, res, next) => {
       else if (/^\/(mi-panel|mis-negocios)(\/|$)/.test(req.path) || /^\/editar\/[^/]+/.test(req.path)) pagina = "negocio";
       else if (/^\/(admin|stats|editar|codigos|auditoria|respaldo)(\/|$)/.test(req.path)) pagina = "admin";
       contenido = contenido.replace(/<body([^>]*)>/i, `<body$1 data-tapin-page="${pagina}">`);
-      // El panel de negocio (mi-panel / mis-negocios) no lleva el botón de
-      // modo oscuro -- se quitó a pedido. El resto del sitio lo conserva.
-      const esPanelDeNegocio = /^\/(mi-panel|mis-negocios)(\/|$)/.test(req.path);
-      if (!esPanelDeNegocio) {
-        contenido = contenido.replace(/<\/body>/i, `${CONTROL_TEMA_GLOBAL}</body>`);
-      }
+      contenido = contenido.replace(/<\/body>/i, `${CONTROL_TEMA_GLOBAL}</body>`);
     }
     return enviar(contenido);
   };
@@ -499,163 +494,15 @@ const ESTILO_BASE = `
   .eyebrow{font-size:0.72rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
   .titulo-pagina{font-family:'Playfair Display',Georgia,serif;font-size:clamp(1.9rem,3vw,2.7rem);font-weight:700;margin:0 0 8px;letter-spacing:-.03em;color:var(--ink);}
   .subtitulo{color:${MARCA.textoSuave};font-size:0.92rem;margin-bottom:30px;}
-  /* ---------- Sistema de botones reutilizable ---------- */
-  button,.btn{font-family:'DM Sans','Segoe UI',sans-serif;cursor:pointer;
-              transition:transform .15s ease,box-shadow .15s ease,background-color .15s ease,border-color .15s ease,opacity .15s ease;}
+  button,.btn{transition:transform .2s ease,box-shadow .2s ease;font-family:'DM Sans','Segoe UI',sans-serif;}
   button:hover,.btn:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(5,58,36,.14);}
-  button:active,.btn:active{transform:translateY(0);box-shadow:0 3px 8px rgba(5,58,36,.12);}
-  button:disabled,.btn:disabled,.btn[aria-disabled="true"]{opacity:.55;cursor:not-allowed;pointer-events:none;
-                                                            transform:none!important;box-shadow:none!important;}
-
-  .btn-primario{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:${MARCA.verdeOscuro};
-                color:#fff;border:none;border-radius:9px;padding:12px 22px;font-weight:700;font-size:0.88rem;
-                text-decoration:none;line-height:1.2;}
-  .btn-primario:hover{background:${MARCA.verde};}
-  .btn-secundario{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#fff;
-                  color:${MARCA.texto};border:1.5px solid ${MARCA.borde};border-radius:9px;padding:12px 22px;
-                  font-weight:700;font-size:0.88rem;text-decoration:none;line-height:1.2;}
-  .btn-secundario:hover{background:${MARCA.verdeClaro};border-color:${MARCA.verde};}
-  .btn-peligro{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#fff;
-               color:#a83a2b;border:1.5px solid #f0d0c8;border-radius:9px;padding:12px 22px;
-               font-weight:700;font-size:0.88rem;text-decoration:none;line-height:1.2;}
-  .btn-peligro:hover{background:#FDF2F1;border-color:#a83a2b;}
-  .btn-ghost{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:transparent;
-             color:${MARCA.verdeOscuro};border:none;padding:8px 10px;font-weight:600;font-size:0.85rem;
-             text-decoration:none;border-radius:7px;}
-  .btn-ghost:hover{background:rgba(13,67,43,.07);}
-
-  /* ---------- Foco visible (navegación con teclado) ---------- */
-  a:focus-visible,button:focus-visible,.btn:focus-visible,[tabindex]:focus-visible{
-    outline:3px solid ${MARCA.oro};outline-offset:2px;border-radius:4px;
-  }
   input:focus,select:focus,textarea:focus{outline:none;border-color:${MARCA.verde}!important;box-shadow:0 0 0 3px rgba(15,81,50,.12);}
   h1,h2,h3{font-family:'Playfair Display',Georgia,serif;}
 `;
 
-// Estilo compartido del layout tipo dashboard (sidebar + contenido) usado por
-// el panel del negocio (/mi-panel) y el panel de administrador (/stats).
-// Tratamiento deliberadamente "serio": tipografía de palo seco, fondo gris
-// neutro, tarjetas planas con poco radio -- look de software de gestion, no
-// de landing page.
-const ESTILO_DASHBOARD = `
-  html,body{height:100%;}
-  body{background:#F5F6F8;font-family:'Inter','DM Sans','Segoe UI',-apple-system,Arial,sans-serif;}
-  h1,h2,h3{font-family:'Inter','DM Sans','Segoe UI',-apple-system,Arial,sans-serif;letter-spacing:-.01em;}
-  .dashboard-layout{display:flex;min-height:100vh;align-items:stretch;}
-  .sidebar{width:236px;flex-shrink:0;background:${MARCA.verdeOscuro};
-           color:#fff;display:flex;flex-direction:column;padding:26px 18px;box-sizing:border-box;position:sticky;top:0;height:100vh;}
-  .sidebar-logo{padding:0 8px;margin-bottom:34px;}
-  .sidebar-nav{display:flex;flex-direction:column;gap:2px;flex:1;}
-  .sidebar-nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:8px;
-                 color:#C7D9CE;text-decoration:none;font-size:0.85rem;font-weight:500;transition:background .15s,color .15s;}
-  .sidebar-nav a:hover{background:rgba(255,255,255,0.07);color:#fff;}
-  .sidebar-nav a.activo{background:rgba(255,255,255,0.12);color:#fff;font-weight:600;}
-  .sidebar-nav a svg{flex-shrink:0;width:17px;height:17px;}
-  .sidebar-nav a.deshabilitado{opacity:0.4;pointer-events:none;}
-  .sidebar-pie{border-top:1px solid rgba(255,255,255,0.12);padding-top:14px;margin-top:14px;}
-  .sidebar-pie a{display:inline-flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;
-                 color:#C7D9CE;text-decoration:none;font-size:0.7rem;font-weight:600;}
-  .sidebar-pie a svg{flex-shrink:0;width:14px;height:14px;}
-  .sidebar-pie a:hover{background:rgba(255,255,255,0.07);color:#fff;}
-  .dashboard-main{flex:1;min-width:0;padding:34px 40px 60px;box-sizing:border-box;}
-  @media (max-width:900px){
-    .dashboard-layout{flex-direction:column;}
-    .sidebar{width:100%;height:auto;position:relative;flex-direction:row;align-items:center;
-             overflow-x:auto;padding:14px 16px;gap:8px;}
-    .sidebar-logo{margin-bottom:0;}
-    .sidebar-nav{flex-direction:row;flex:none;}
-    .sidebar-nav a{padding:8px 12px;white-space:nowrap;}
-    .sidebar-pie{border-top:none;margin-top:0;padding-top:0;}
-    .sidebar-pie a{padding:8px 12px;white-space:nowrap;}
-    .dashboard-main{padding:22px 16px 50px;}
-  }
-
-  .dash-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
-  .dash-header h1{font-family:'Inter','DM Sans','Segoe UI',-apple-system,Arial,sans-serif;font-size:1.55rem;font-weight:700;margin:0;color:${MARCA.texto};letter-spacing:-.02em;}
-  .dash-header-chip{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid ${MARCA.borde};
-                    border-radius:8px;padding:7px 14px;font-size:0.76rem;font-weight:600;color:${MARCA.verdeOscuro};
-                    box-shadow:0 1px 2px rgba(16,24,32,.04);}
-
-  .dash-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;}
-  @media (max-width:760px){.dash-cards{grid-template-columns:1fr;}}
-  .dash-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:18px 20px;
-             box-shadow:0 1px 2px rgba(16,24,32,.04);}
-  .dash-card-lbl{font-size:0.74rem;color:${MARCA.textoSuave};font-weight:600;margin-bottom:10px;}
-  .dash-card-num{font-size:1.85rem;font-weight:700;color:${MARCA.texto};line-height:1;}
-  .dash-card-sub{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:4px;}
-  .dash-card-delta{display:inline-flex;align-items:center;gap:3px;font-size:0.74rem;font-weight:700;margin-top:10px;}
-  .dash-card-delta.up{color:${MARCA.verde};}
-  .dash-card-delta.down{color:${MARCA.rojo};}
-  .dash-card-estrellas{color:${MARCA.oro};font-size:1rem;letter-spacing:2px;margin-top:6px;}
-
-  .dash-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-  @media (max-width:900px){.dash-charts{grid-template-columns:1fr;}}
-  .dash-panel{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:18px 20px;
-              box-shadow:0 1px 2px rgba(16,24,32,.04);}
-  .dash-panel-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:16px;}
-  .dash-panel-titulo{font-size:0.9rem;font-weight:700;color:${MARCA.texto};}
-  .dash-panel-sub{font-size:0.72rem;color:${MARCA.textoSuave};margin-top:2px;}
-  .dash-panel-num{font-size:1.45rem;font-weight:700;color:${MARCA.texto};text-align:right;}
-  .dash-panel-numlbl{font-size:0.7rem;color:${MARCA.textoSuave};text-align:right;}
-  .dash-actividad-bars{display:flex;align-items:flex-end;gap:8px;height:110px;}
-`;
-
-// Página de error con la marca de Tapin — reemplaza las respuestas de texto
-// plano (que se ven como una falla técnica) por algo que un cliente que paga
-// por esto puede ver sin pensar "esto está a medio hacer". Se usa en los
-// puntos de mayor tráfico: escaneo de tarjeta, calificar, panel de negocio,
-// login de administrador.
-function paginaError({ codigo = 404, titulo = "No encontramos esta página", mensaje = "Puede que el enlace esté vencido o mal escrito.", enlaceTexto = null, enlaceHref = null } = {}) {
-  return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escaparHtml(titulo)} — Tapin</title>
-  <style>${ESTILO_BASE}
-    body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
-    .caja-error{background:#fff;border-radius:20px;padding:44px 38px;max-width:440px;width:100%;text-align:center;
-                box-shadow:0 20px 50px rgba(9,49,30,.1);border:1px solid ${MARCA.borde};box-sizing:border-box;}
-    .caja-error .codigo{font-size:0.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${MARCA.textoSuave};margin:18px 0 6px;}
-    .caja-error h1{font-size:1.35rem;margin:0 0 10px;letter-spacing:-.02em;}
-    .caja-error p{color:${MARCA.textoSuave};font-size:0.92rem;line-height:1.6;margin:0 0 24px;}
-  </style>
-</head>
-<body>
-  <div class="caja-error">
-    ${logoSvg(MARCA.verdeOscuro, 28)}
-    <div class="codigo">Error ${codigo}</div>
-    <h1>${escaparHtml(titulo)}</h1>
-    <p>${escaparHtml(mensaje)}</p>
-    ${enlaceHref ? `<a class="btn-primario" href="${enlaceHref}">${escaparHtml(enlaceTexto || "Volver al inicio")}</a>` : ""}
-  </div>
-</body>
-</html>`;
-}
-function enviarError(res, codigo, titulo, mensaje, enlace) {
-  return res.status(codigo).send(paginaError({ codigo, titulo, mensaje, enlaceTexto: enlace && enlace.texto, enlaceHref: enlace && enlace.href }));
-}
-
-// Script compartido: deshabilita el botón de "guardar" apenas se envía un
-// formulario y le cambia el texto, para que quede claro que la acción se
-// está procesando y para que no se pueda hacer doble clic y mandar el mismo
-// formulario dos veces. Se ignoran los formularios GET (búsquedas, login por
-// URL) porque esos navegan de inmediato, no "guardan" nada.
-const SCRIPT_ENVIO_FORMULARIO = `
-document.addEventListener("submit", function (e) {
-  var form = e.target;
-  if (!form || (form.method && form.method.toLowerCase() === "get")) return;
-  var boton = form.querySelector('button[type="submit"]');
-  if (!boton || boton.disabled) return;
-  boton.dataset.textoOriginal = boton.textContent;
-  boton.disabled = true;
-  boton.textContent = "Guardando…";
-});
-`;
-
 // ---------- Configuración de negocios ----------
 // Agrega aquí un negocio por cada Tapin que tengas en la calle.
-// "slug" es lo que va en la URL programada en el chip NFC, ej: /r/mi-negocio
+// "slug" es lo que va en la URL del QR/NFC, ej: /r/mi-negocio
 // "categoria" se usa para comparar el negocio contra otros del mismo tipo (punto 9).
 // "claveAcceso" es opcional: si la pones, el dueño puede entrar a SU PROPIO panel
 // (/mi-panel/slug?key=claveAcceso) sin ver los datos de tus otros negocios.
@@ -701,7 +548,7 @@ function guardarDatos(datos) {
 
 // ---------- Códigos de activación ----------
 // Permite generar un código único por cada tarjeta Tapin física ANTES de saber
-// a qué negocio va a parar. Programas el chip NFC con ese código, y cuando consigas
+// a qué negocio va a parar. Programas el QR/NFC con ese código, y cuando consigas
 // el cliente, lo activas con sus datos reales (nombre, enlace de Google, categoría).
 
 const CODIGOS_FILE = path.join(DATA_DIR, "codigos.json");
@@ -717,40 +564,6 @@ function leerCodigos() {
 
 function guardarCodigos(codigos) {
   fs.writeFileSync(CODIGOS_FILE, JSON.stringify(codigos, null, 2));
-}
-
-// ---------- Varias tarjetas físicas, un mismo negocio ----------
-// Un local puede tener más de una tarjeta Tapin (una por mesa, una en la
-// caja, una en la entrada, etc.) sin que eso deba crear negocios distintos
-// ni dividir sus estadísticas. Cuando se activa una tarjeta y se vincula a
-// un negocio que YA existe (en vez de darle datos de un negocio nuevo), esa
-// tarjeta se guarda con "vinculadoA: <slug del negocio principal>" y no
-// tiene su propio objeto "negocio" — todo lo que pase en ella (toques,
-// calificaciones, quejas, sellos de fidelización) se resuelve y se guarda
-// bajo el slug del negocio principal.
-//
-// resolverSlug() sigue esa cadena hasta llegar al slug real que tiene los
-// datos — así, cualquier parte del código que reciba un slug de la URL (que
-// puede ser el de una tarjeta vinculada) puede resolverlo UNA vez y de ahí
-// en adelante trabajar como si siempre hubiera sido el negocio principal.
-function resolverSlug(slugOriginal, codigosCache) {
-  const codigos = codigosCache || leerCodigos();
-  let slug = slugOriginal;
-  const visitados = new Set();
-  while (codigos[slug] && codigos[slug].vinculadoA && !visitados.has(slug)) {
-    visitados.add(slug);
-    slug = codigos[slug].vinculadoA;
-  }
-  return slug;
-}
-
-// Todas las tarjetas (códigos) que hoy apuntan a un negocio principal dado —
-// para mostrarlas en su panel/edición ("este negocio tiene 3 tarjetas").
-function tarjetasVinculadasA(slugPrincipal, codigosCache) {
-  const codigos = codigosCache || leerCodigos();
-  return Object.keys(codigos).filter(
-    (c) => codigos[c].vinculadoA === slugPrincipal && !codigos[c].desactivado
-  );
 }
 
 // ---------- Login mágico de dueños (sin contraseña) ----------
@@ -777,27 +590,12 @@ function generarToken() {
 }
 
 // ---------- Pagos con Wompi (checkout del Plan Básico) ----------
-// Necesitas cuatro variables de entorno en Render, sacadas de tu Panel de
-// Comercios de Wompi (comercios.wompi.co → Desarrolladores):
-//   WOMPI_PUBLIC_KEY       → Llave pública (pub_test_.../pub_prod_...). Va
-//                            en el formulario de pago (se muestra en el
-//                            navegador, no es secreta) y decide si se usa
-//                            el ambiente sandbox o producción.
-//   WOMPI_INTEGRITY_SECRET → "Secreto de integridad". Se usa SOLO en el
-//                            servidor para firmar cada venta (hash de
-//                            integridad). Nunca se envía al navegador.
-//   WOMPI_EVENTS_SECRET    → "Secreto de eventos" (distinto del de
-//                            integridad, también sale en el panel de
-//                            Wompi). Se usa para verificar que los avisos
-//                            del webhook de verdad vengan de Wompi.
-//   WOMPI_PRIVATE_KEY      → Llave privada (prv_test_.../prv_prod_...). Se
-//                            usa SOLO en el servidor para tokenizar
-//                            tarjetas (fuentes de pago reutilizables) y
-//                            cobrar la mensualidad del Plan Pro sola cada
-//                            mes, sin que el dueño del negocio tenga que
-//                            volver a pagar a mano.
-// A diferencia de Bold, Wompi trabaja los montos en CENTAVOS (amount_in_cents),
-// no en pesos enteros — por eso aquí sí se multiplica por 100.
+// Necesitas dos variables de entorno en Render, sacadas de tu dashboard de
+// comercio en Wompi (comercios.wompi.co → Desarrolladores):
+//   WOMPI_PUBLIC_KEY      → empieza con "pub_test_" (pruebas) o "pub_prod_" (real)
+//   WOMPI_INTEGRITY_SECRET → tu "Secreto de integridad" (NUNCA la Llave Privada,
+//                             son cosas distintas). Se usa solo en el servidor,
+//                             nunca se envía al navegador.
 const PEDIDOS_FILE = path.join(DATA_DIR, "pedidos.json");
 function leerPedidos() {
   if (!fs.existsSync(PEDIDOS_FILE)) return {};
@@ -808,197 +606,11 @@ function guardarPedidos(pedidos) {
 }
 
 // Genera la firma de integridad que exige Wompi: SHA256 de
-// referencia + monto_en_centavos + moneda + secreto_de_integridad (en ese
-// orden, todo concatenado sin separadores). Esto se hace en el servidor
-// por seguridad — si se generara en el navegador, cualquiera podría
-// alterar el monto de una venta.
+// referencia + monto_en_centavos + moneda + secreto_de_integridad (en ese orden,
+// todo concatenado sin separadores). Esto se hace en el servidor por seguridad.
 function firmaIntegridadWompi(referencia, montoCentavos, moneda) {
   const cadena = `${referencia}${montoCentavos}${moneda}${process.env.WOMPI_INTEGRITY_SECRET}`;
   return crypto.createHash("sha256").update(cadena).digest("hex");
-}
-
-// Wompi tiene dos ambientes con distinta URL base — se elige solo mirando
-// el prefijo de la llave pública configurada (pub_prod_ = producción real,
-// cualquier otra cosa = sandbox de pruebas).
-function baseWompi() {
-  return (process.env.WOMPI_PUBLIC_KEY || "").startsWith("pub_prod_")
-    ? "https://production.wompi.co/v1"
-    : "https://sandbox.wompi.co/v1";
-}
-
-// Verifica que un aviso de webhook realmente venga de Wompi (y no de
-// cualquiera que le pegue a la URL). Wompi arma un checksum SHA256 con los
-// valores de las propiedades listadas en payload.signature.properties (rutas
-// como "transaction.id" navegadas dentro de payload.data), más el timestamp
-// del evento, más el Secreto de Eventos — todo concatenado sin separadores,
-// en mayúsculas al final.
-function verificarChecksumWompi(payload) {
-  if (!process.env.WOMPI_EVENTS_SECRET) return false;
-  if (!payload || !payload.signature || !payload.signature.properties) return false;
-  try {
-    const valores = payload.signature.properties.map((ruta) =>
-      ruta.split(".").reduce((obj, key) => (obj ? obj[key] : undefined), payload.data)
-    );
-    const cadena = valores.join("") + payload.timestamp + process.env.WOMPI_EVENTS_SECRET;
-    const checksumCalculado = crypto.createHash("sha256").update(cadena).digest("hex").toUpperCase();
-    return checksumCalculado === String(payload.signature.checksum).toUpperCase();
-  } catch (err) {
-    console.error("Error verificando checksum de Wompi:", err.message);
-    return false;
-  }
-}
-
-// ---------- Facturacion electronica (Alegra) ----------
-// Cada vez que se confirma un pago (compra de tarjeta o mensualidad Pro),
-// si el comprador dejo NIT/razon social, le pedimos a Alegra que genere la
-// factura electronica y la envie a la DIAN -- Tapin nunca genera el XML ni
-// habla directo con la DIAN, todo pasa por Alegra (proveedor tecnologico
-// autorizado). Requiere dos variables de entorno en Render, sacadas de
-// Alegra -> Soluciones -> Administrar mis soluciones -> Integraciones ->
-// Integracion Manual (API):
-//   ALEGRA_USER  -> el correo de la cuenta de Alegra.
-//   ALEGRA_TOKEN -> el token de acceso a la API.
-// Si estas variables no estan configuradas, o el pedido no tiene NIT, la
-// factura simplemente no se genera (sin romper el resto del flujo) -- queda
-// registrado en consola para revisar manualmente si hace falta.
-const ALEGRA_API_BASE = "https://api.alegra.com/api/v1";
-const ALEGRA_NOMBRE_ITEM_BASICO = "Plan Básico Tapin";
-const ALEGRA_NOMBRE_ITEM_PRO = "Plan Pro Tapin";
-// Todos los precios que maneja el resto del código (PRECIO_BASICO_COP,
-// PRECIO_PRO_COP, los escalones, etc.) son precios CON IVA incluido -- es lo
-// que Wompi le cobra de verdad al cliente. Pero el campo "price" que la API
-// de Alegra espera en cada línea de factura es el precio ANTES de IVA (el
-// mismo dato que en el formulario de Alegra se llama "Precio base"): Alegra
-// le suma el IVA que tenga configurado el ítem para calcular el total. Por
-// eso, antes de mandarle el precio a Alegra, hay que "quitarle" el IVA --
-// si no, la factura queda cobrando IVA sobre un monto que ya lo incluía.
-const IVA_TAPIN = 0.19;
-function precioSinIva(montoConIva) {
-  return Math.round(montoConIva / (1 + IVA_TAPIN));
-}
-
-function alegraConfigurado() {
-  return !!(process.env.ALEGRA_USER && process.env.ALEGRA_TOKEN);
-}
-
-function alegraAuthHeader() {
-  const credenciales = Buffer.from(`${process.env.ALEGRA_USER}:${process.env.ALEGRA_TOKEN}`).toString("base64");
-  return `Basic ${credenciales}`;
-}
-
-// Envoltorio delgado sobre fetch para hablar con la API de Alegra: agrega
-// la autenticacion y decodifica la respuesta. Lanza un error legible si
-// Alegra responde con algo distinto a 2xx (por ejemplo, plan sin acceso a
-// la API), para que quede claro en los logs de Render que fallo.
-async function alegraPeticion(ruta, opciones = {}) {
-  const resp = await fetch(`${ALEGRA_API_BASE}${ruta}`, {
-    ...opciones,
-    headers: {
-      Authorization: alegraAuthHeader(),
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(opciones.headers || {}),
-    },
-  });
-  const texto = await resp.text();
-  let cuerpo = null;
-  try { cuerpo = texto ? JSON.parse(texto) : null; } catch { cuerpo = texto; }
-  if (!resp.ok) {
-    const detalle = (cuerpo && (cuerpo.message || JSON.stringify(cuerpo))) || resp.statusText;
-    throw new Error(`Alegra respondio ${resp.status}: ${detalle}`);
-  }
-  return cuerpo;
-}
-
-// Busca un contacto (cliente) en Alegra por numero de identificacion (NIT o
-// cedula). Si no existe, lo crea. Devuelve el id numerico que pide Alegra
-// para armar la factura.
-async function buscarOCrearContactoAlegra({ nit, razonSocial, email }) {
-  const identificacion = (nit || "").replace(/[^0-9]/g, "");
-  if (!identificacion) throw new Error("Falta el NIT para crear el contacto en Alegra.");
-
-  const encontrados = await alegraPeticion(`/contacts?identification=${encodeURIComponent(identificacion)}`);
-  if (Array.isArray(encontrados) && encontrados.length > 0) {
-    return encontrados[0].id;
-  }
-
-  const nuevo = await alegraPeticion("/contacts", {
-    method: "POST",
-    body: JSON.stringify({
-      name: razonSocial || "Cliente Tapin",
-      identification: identificacion,
-      email: email || undefined,
-      type: ["client"],
-    }),
-  });
-  return nuevo.id;
-}
-
-// Busca en el catalogo de Alegra el item (producto/servicio) con este
-// nombre exacto -- "Plan Basico Tapin" o "Plan Pro Tapin". Hay que crearlos
-// una sola vez a mano en Alegra (Inventario -> Items) antes de que esto
-// funcione; aqui solo se busca su id para poder referenciarlo en la factura.
-const cacheItemsAlegra = {};
-async function buscarItemAlegraPorNombre(nombre) {
-  if (cacheItemsAlegra[nombre]) return cacheItemsAlegra[nombre];
-  const encontrados = await alegraPeticion(`/items?query=${encodeURIComponent(nombre)}&limit=5`);
-  const coincidencia = Array.isArray(encontrados)
-    ? encontrados.find((it) => (it.name || "").trim().toLowerCase() === nombre.trim().toLowerCase())
-    : null;
-  if (!coincidencia) {
-    throw new Error(`No se encontro el item "${nombre}" en el catalogo de Alegra. Crealo en Inventario -> Items con ese nombre exacto.`);
-  }
-  cacheItemsAlegra[nombre] = coincidencia.id;
-  return coincidencia.id;
-}
-
-// Crea (y valida ante la DIAN) la factura electronica de una venta de
-// Tapin. "items" es un array de { nombreItem, cantidad, precioUnitario }.
-// No lanza hacia arriba si algo falla -- un problema de facturacion no debe
-// tumbar la activacion de una tarjeta ni el registro de un pago; solo se
-// deja constancia clara en los logs para revisarlo a mano.
-// Si la venta no trae NIT, NO se omite la factura: como responsable de IVA
-// hay que facturar TODAS las ventas, asi que se emite a nombre del
-// "consumidor final" con el NIT generico 222222222222 que la normatividad
-// DIAN define exactamente para este caso.
-const NIT_CONSUMIDOR_FINAL = "222222222222";
-async function crearFacturaAlegra({ nit, razonSocial, email, items, referencia }) {
-  if (!alegraConfigurado()) {
-    console.warn(`[Alegra] ALEGRA_USER/ALEGRA_TOKEN no configurados -- no se genero factura para ${referencia}.`);
-    return null;
-  }
-  const nitLimpio = (nit || "").trim();
-  const nitFactura = nitLimpio || NIT_CONSUMIDOR_FINAL;
-  const razonFactura = nitLimpio ? razonSocial : "Consumidor final";
-  try {
-    const clienteId = await buscarOCrearContactoAlegra({ nit: nitFactura, razonSocial: razonFactura, email: nitLimpio ? email : undefined });
-    const itemsAlegra = [];
-    for (const it of items) {
-      const itemId = await buscarItemAlegraPorNombre(it.nombreItem);
-      itemsAlegra.push({ id: itemId, price: precioSinIva(it.precioUnitario), quantity: it.cantidad || 1 });
-    }
-    const factura = await alegraPeticion("/invoices", {
-      method: "POST",
-      body: JSON.stringify({
-        status: "open",
-        date: new Date().toISOString().slice(0, 10),
-        dueDate: new Date().toISOString().slice(0, 10),
-        client: clienteId,
-        items: itemsAlegra,
-        anotation: `Tapin -- referencia ${referencia}`,
-        // Pide a Alegra emitir la factura electronicamente ante la DIAN de
-        // una vez (sin esto puede quedar como borrador interno sin validar).
-        // Si las facturas aparecen en Alegra pero sin numero DIAN, revisar
-        // este campo contra la documentacion vigente de su API.
-        stamp: { generateStamp: true },
-      }),
-    });
-    console.log(`[Alegra] Factura ${factura?.numberTemplate?.fullNumber || factura?.id || ""} creada para ${referencia}.`);
-    return factura;
-  } catch (err) {
-    console.error(`[Alegra] Error creando factura para ${referencia}:`, err.message);
-    return null;
-  }
 }
 
 // ---------- Cuentas de cliente (persona normal) ----------
@@ -1095,7 +707,7 @@ function leerTokensAccesoNegocio() {
 function guardarTokensAccesoNegocio(tokens) {
   fs.writeFileSync(TOKENS_ACCESO_NEGOCIO_FILE, JSON.stringify(tokens, null, 2));
 }
-function generarLinkAccesoNegocio(slug, diasValidez = 7, esAdmin = false) {
+function generarLinkAccesoNegocio(slug, diasValidez = 7) {
   const tokens = leerTokensAccesoNegocio();
   // limpieza de tokens vencidos, para que el archivo no crezca sin control
   const ahora = Date.now();
@@ -1103,20 +715,9 @@ function generarLinkAccesoNegocio(slug, diasValidez = 7, esAdmin = false) {
     if (new Date(tokens[t].expiraEl).getTime() < ahora) delete tokens[t];
   }
   const token = "tok_" + generarToken();
-  // Los tokens generados para el administrador (al entrar desde /stats) llevan
-  // esAdmin:true — así el panel no le exige plan Pro al negocio para dejarlo
-  // ver secciones Pro mientras navega en modo administrador.
-  tokens[token] = { slug, expiraEl: new Date(ahora + diasValidez * 24 * 60 * 60 * 1000).toISOString(), esAdmin };
+  tokens[token] = { slug, expiraEl: new Date(ahora + diasValidez * 24 * 60 * 60 * 1000).toISOString() };
   guardarTokensAccesoNegocio(tokens);
   return token;
-}
-// Indica si una clave/intento es un token temporal emitido específicamente
-// para el administrador (y no uno normal de dueño de negocio).
-function claveEsTokenAdmin(intento) {
-  if (typeof intento !== "string" || !intento.startsWith("tok_")) return false;
-  const tokens = leerTokensAccesoNegocio();
-  const entrada = tokens[intento];
-  return !!(entrada && entrada.esAdmin && new Date(entrada.expiraEl) > new Date());
 }
 
 // Lee cookies manualmente del header (sin depender de cookie-parser).
@@ -1198,13 +799,8 @@ function generarCodigo() {
 // Busca un negocio primero en NEGOCIOS (configurado a mano en el código)
 // y si no lo encuentra, en los códigos de activación ya activados.
 // Esto permite que /r/:slug funcione igual para ambos casos.
-function obtenerNegocio(slugOriginal) {
+function obtenerNegocio(slug) {
   const codigos = leerCodigos();
-  // Si "slugOriginal" es una tarjeta vinculada a otro negocio (varias
-  // tarjetas físicas de un mismo local), esto la resuelve al negocio
-  // principal — así da igual con cuál de las tarjetas del local se entre,
-  // siempre se ve la misma información.
-  const slug = resolverSlug(slugOriginal, codigos);
   const entrada = codigos[slug];
   if (entrada && entrada.desactivado) return null; // tarjeta quitada explícitamente
   if (entrada && entrada.activado && entrada.negocio) {
@@ -1302,11 +898,7 @@ function autorizadoProNegocio(req, negocio, slug) {
   const key = slug ? claveEfectiva(req, slug) : req.query.key;
   if (key === ADMIN_KEY) return true;
   if (!tieneClaveConfigurada(negocio)) return false;
-  if (!claveNegocioValida(negocio, slug, key)) return false;
-  // Si el administrador está navegando el panel (token emitido para él),
-  // puede ver las secciones Pro aunque el negocio esté en plan Básico.
-  if (claveEsTokenAdmin(key)) return true;
-  return esPro(negocio);
+  return claveNegocioValida(negocio, slug, key) && esPro(negocio);
 }
 
 // Detecta tipo de dispositivo de forma simple a partir del user-agent
@@ -1321,22 +913,6 @@ function detectarDispositivo(userAgent = "") {
 
 // Calcula métricas de resumen para el dashboard: hoy, esta semana, último toque,
 // y un mini-histograma de los últimos 7 días (para la barra tipo gráfica).
-// Convierte una fecha ISO en un texto relativo tipo "Hace 2 horas" — usado
-// en la lista de actividad reciente del panel para que se lea como un
-// dashboard de verdad, no como una tabla de auditoría.
-function tiempoRelativo(fechaISO) {
-  const diffMs = Math.max(0, Date.now() - new Date(fechaISO).getTime());
-  const minutos = Math.floor(diffMs / 60000);
-  if (minutos < 1) return "Hace un momento";
-  if (minutos < 60) return `Hace ${minutos} min`;
-  const horas = Math.floor(minutos / 60);
-  if (horas < 24) return `Hace ${horas} hora${horas === 1 ? "" : "s"}`;
-  const dias = Math.floor(horas / 24);
-  if (dias < 30) return `Hace ${dias} día${dias === 1 ? "" : "s"}`;
-  const meses = Math.floor(dias / 30);
-  return `Hace ${meses} mes${meses === 1 ? "" : "es"}`;
-}
-
 function calcularResumen(eventos) {
   const ahora = new Date();
   const inicioHoy = new Date(ahora);
@@ -1362,34 +938,6 @@ function calcularResumen(eventos) {
   const ultimo = eventos.length ? eventos[eventos.length - 1] : null;
 
   return { hoy, semana, dias7, ultimo, total: eventos.length };
-}
-
-// Compara actividad entre las tarjetas físicas de un mismo negocio (la
-// principal + las que estén vinculadas) — para que el dueño vea cuál
-// funciona mejor (más toques) y no solo el total combinado.
-function resumenPorTarjeta(slugPrincipal, eventos, codigosCache) {
-  const codigos = codigosCache || leerCodigos();
-  const vinculadas = tarjetasVinculadasA(slugPrincipal, codigos);
-  const tarjetas = [slugPrincipal, ...vinculadas];
-  return tarjetas
-    .map((codigo) => {
-      // Los eventos de ANTES de que existiera esto no tienen codigoTarjeta —
-      // se cuentan para la principal, porque en ese momento no podían venir
-      // de ninguna otra (las tarjetas vinculadas no existían todavía).
-      const eventosTarjeta = eventos.filter((e) =>
-        codigo === slugPrincipal ? (!e.codigoTarjeta || e.codigoTarjeta === codigo) : e.codigoTarjeta === codigo
-      );
-      const resumen = calcularResumen(eventosTarjeta);
-      return {
-        codigo,
-        etiqueta: (codigos[codigo] && codigos[codigo].etiqueta) || null,
-        esPrincipal: codigo === slugPrincipal,
-        hoy: resumen.hoy,
-        semana: resumen.semana,
-        total: resumen.total,
-      };
-    })
-    .sort((a, b) => b.total - a.total);
 }
 
 // Analiza la actividad por hora del día (0-23) durante el último mes, para
@@ -1584,26 +1132,32 @@ function progresoMeta(eventos, metaMensual) {
   return { toquesMes, metaMensual, pct: Math.min(100, Math.round((toquesMes / metaMensual) * 100)) };
 }
 
-// Fraccion del dia de hoy ya transcurrida (0 a 1), en la zona horaria del
-// negocio -- ej: si son las 6pm (18:00), devuelve 0.75. Se usa para que la
-// proyeccion no trate "hoy" como un dia completo cuando apenas va a mitad,
-// que era el bug: antes, a las 9am con 2 toques, la proyeccion del dia
-// mostraba "2" en vez de estimar cuantos toques van a caer para el cierre.
-function fraccionDiaTranscurrida(negocio) {
-  const partes = new Date().toLocaleString("en-US", {
-    timeZone: zonaDe(negocio), hour: "2-digit", minute: "2-digit", hour12: false,
-  });
-  const [horaStr, minutoStr] = partes.split(":");
-  const hora = parseInt(horaStr, 10) % 24; // "24:00" a medianoche -> 0
-  const minuto = parseInt(minutoStr, 10) || 0;
-  return (hora + minuto / 60) / 24;
+// Proyeccion simple y transparente del cierre del mes basada en el ritmo real.
+function proyeccionMes(eventos, negocio) {
+  const ahora = new Date();
+  const inicio = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+  const fin = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0);
+  const dia = ahora.getDate();
+  const toquesMes = eventos.filter((e) => {
+    const fecha = new Date(e.fechaISO);
+    return fecha >= inicio && fecha <= ahora;
+  }).length;
+  const suficiente = dia >= 3 && toquesMes >= 3;
+  const promedio = toquesMes / Math.max(1, dia);
+  const proyectado = Math.max(toquesMes, Math.round(promedio * fin.getDate()));
+  const nombreMes = ahora.toLocaleDateString("es-CO", { month: "long", year: "numeric", timeZone: zonaDe(negocio) });
+  return {
+    suficiente,
+    nombreMes,
+    toquesMes,
+    proyectado,
+    promedio: Math.round(promedio * 100) / 100,
+    minimo: suficiente ? Math.max(toquesMes, Math.round(proyectado * 0.85)) : 0,
+    maximo: suficiente ? Math.round(proyectado * 1.15) : 0,
+    restantes: Math.max(0, fin.getDate() - dia),
+  };
 }
 
-// Proyeccion simple y transparente de cierre de periodo basada en el ritmo
-// real de actividad. El tiempo transcurrido se cuenta en dias completos
-// mas la fraccion de hoy que ya paso (no como si "hoy" ya hubiera
-// terminado) -- asi el ritmo diario promedio, y por lo tanto la
-// proyeccion, es preciso sin importar a que hora del dia se consulte.
 function proyeccionPeriodo(eventos, negocio, periodo) {
   const ahora = new Date();
   const inicioSemana = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
@@ -1621,11 +1175,7 @@ function proyeccionPeriodo(eventos, negocio, periodo) {
   };
   const config = configuraciones[periodo] || configuraciones.mes;
   const totalDias = Math.max(1, Math.round((config.fin - config.inicio) / 86400000));
-  // Dias completos ya pasados (sin contar hoy) + la fraccion de hoy que ya
-  // transcurrio. Piso de 1 hora (1/24) para no dividir por un numero casi
-  // cero justo despues de medianoche, lo que dispararia el promedio.
-  const diasCompletosAntes = Math.max(0, Math.floor((ahora - config.inicio) / 86400000));
-  const transcurridos = Math.min(totalDias, Math.max(1 / 24, diasCompletosAntes + fraccionDiaTranscurrida(negocio)));
+  const transcurridos = Math.min(totalDias, Math.max(1, Math.floor((ahora - config.inicio) / 86400000) + 1));
   const restantes = Math.max(0, Math.ceil((config.fin - ahora) / 86400000));
   const toquesPeriodo = eventos.filter((e) => {
     const fecha = new Date(e.fechaISO);
@@ -1639,7 +1189,6 @@ function proyeccionPeriodo(eventos, negocio, periodo) {
     periodo,
     etiqueta: config.etiqueta,
     nombrePeriodo: periodo === "anio" ? `${config.etiqueta} ${ahora.getFullYear()}` : config.etiqueta,
-    nombreMes: ahora.toLocaleDateString("es-CO", { month: "long", year: "numeric", timeZone: zonaDe(negocio) }),
     toquesMes: toquesPeriodo,
     proyectado,
     promedio: Math.round(promedio * 100) / 100,
@@ -1647,13 +1196,6 @@ function proyeccionPeriodo(eventos, negocio, periodo) {
     maximo: suficiente ? Math.round(proyectado * 1.15) : 0,
     restantes,
   };
-}
-
-// La proyeccion de cierre de mes (usada en el informe PDF) es solo el caso
-// "mes" de proyeccionPeriodo -- una sola implementacion, sin logica
-// duplicada que se pueda desincronizar.
-function proyeccionMes(eventos, negocio) {
-  return proyeccionPeriodo(eventos, negocio, "mes");
 }
 
 function barraSemana(dias7) {
@@ -1667,11 +1209,15 @@ function barraSemana(dias7) {
   }
   return dias7
     .map((v, i) => {
-      const alturaPx = 6 + Math.round((v / max) * 46);
+      const alturaPx = 10 + Math.round((v / max) * 82);
+      const esPico = v > 0 && v === Math.max(...dias7);
+      const colorBarra = esPico
+        ? `linear-gradient(180deg,#F7D77D,${MARCA.oro})`
+        : `linear-gradient(180deg,#2C9560,${MARCA.verde})`;
       return `
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;flex:1;height:100%;">
-          <div style="font-size:0.75rem;font-weight:700;color:${MARCA.textoSuave};line-height:1;">${v}</div>
-          <div style="width:100%;max-width:22px;height:${alturaPx}px;background:#0F5132;border-radius:4px 4px 0 0;"></div>
+          <div style="font-size:0.75rem;font-weight:800;color:${esPico ? "#8A6200" : MARCA.textoSuave};line-height:1;">${v}</div>
+          <div style="width:100%;max-width:34px;height:${alturaPx}px;background:${colorBarra};border-radius:6px 6px 2px 2px;box-shadow:inset 0 1px rgba(255,255,255,.28);"></div>
           <div style="font-size:0.62rem;color:#999;text-transform:capitalize;line-height:1;">${nombresDias[i]}</div>
         </div>`;
     })
@@ -1706,26 +1252,13 @@ function graficaLinea(valores, { alto = 90, color = MARCA.verde } = {}) {
   });
   const lineaPath = "M" + puntos.join(" L");
   const areaPath = `${lineaPath} L${ancho},${alto} L0,${alto} Z`;
-  // Puntos cada pocos días para no saturar la línea con un punto por dato —
-  // el mismo efecto visual "punteado" de un dashboard pulido, sin perder
-  // legibilidad cuando hay 30 o más valores.
-  const saltoPuntos = Math.max(1, Math.ceil(datos.length / 12));
-  const marcadores = puntos
-    .map((p, i) => (i % saltoPuntos === 0 || i === puntos.length - 1 ? p : null))
-    .filter(Boolean)
-    .map((p) => {
-      const [cx, cy] = p.split(",");
-      return `<circle cx="${cx}" cy="${cy}" r="1.6" fill="${color}" vector-effect="non-scaling-stroke"/>`;
-    })
-    .join("");
   return `<svg viewBox="0 0 ${ancho} ${alto}" preserveAspectRatio="none" style="width:100%;height:${alto}px;display:block;">
     <path d="${areaPath}" fill="${color}" opacity="0.12" stroke="none"/>
     <path d="${lineaPath}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/>
-    ${marcadores}
   </svg>`;
 }
 
-function registrarToque(slug, req, negocio, codigoTarjeta = null) {
+function registrarToque(slug, req, negocio) {
   const datos = leerDatos();
   if (!datos[slug]) {
     datos[slug] = { total: 0, eventos: [] };
@@ -1738,9 +1271,6 @@ function registrarToque(slug, req, negocio, codigoTarjeta = null) {
     fechaISO: ahora.toISOString(), // fecha exacta en formato estándar (para guardar/exportar)
     fechaLegible: ahora.toLocaleString("es-CO", { timeZone: tz }), // ej: 27/6/2026, 9:14:32 a. m. (hora local del negocio)
     dispositivo: detectarDispositivo(req.headers["user-agent"]),
-    // Qué tarjeta física originó este toque (puede ser la principal o una
-    // vinculada) — permite comparar actividad entre tarjetas del mismo local.
-    codigoTarjeta: codigoTarjeta || slug,
   };
 
   datos[slug].total += 1;
@@ -1755,7 +1285,7 @@ function registrarToque(slug, req, negocio, codigoTarjeta = null) {
   return evento;
 }
 
-function guardarTestimonio(slug, frase, valor, negocio, codigoTarjeta = null) {
+function guardarTestimonio(slug, frase, valor, negocio) {
   const datos = leerDatos();
   if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
   if (!datos[slug].testimonios) datos[slug].testimonios = [];
@@ -1765,7 +1295,6 @@ function guardarTestimonio(slug, frase, valor, negocio, codigoTarjeta = null) {
     fechaLegible: ahora.toLocaleString("es-CO", { timeZone: zonaDe(negocio) }),
     frase,
     valor,
-    codigoTarjeta: codigoTarjeta || slug,
   });
   guardarDatos(datos);
 }
@@ -1780,7 +1309,7 @@ function promedioEstrellasFiltradas(testimonios, quejas = []) {
   return Math.round((valores.reduce((suma, valor) => suma + valor, 0) / valores.length) * 10) / 10;
 }
 
-function guardarQueja(slug, comentario, negocio, telefono = "", valor = null, codigoTarjeta = null) {
+function guardarQueja(slug, comentario, negocio, telefono = "", valor = null) {
   const datos = leerDatos();
   if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
   if (!datos[slug].quejas) datos[slug].quejas = [];
@@ -1792,7 +1321,6 @@ function guardarQueja(slug, comentario, negocio, telefono = "", valor = null, co
     telefono,
     valor: Number.isFinite(Number(valor)) && Number(valor) >= 1 && Number(valor) <= 5 ? Number(valor) : null,
     estado: "pendiente", // pendiente | contactado | resuelto
-    codigoTarjeta: codigoTarjeta || slug,
   });
   guardarDatos(datos);
 
@@ -1915,59 +1443,12 @@ function promedioSector(categoria, slugActual, datos) {
   const pares = Object.entries(todos).filter(
     ([slug, n]) => n.categoria === categoria && slug !== slugActual
   );
-  // Con menos de 2 negocios parecidos, "el promedio del sector" sería en
-  // realidad el dato de un solo competidor puntual — no lo mostramos para
-  // no exponer a nadie sin querer.
-  if (pares.length < 2) return null;
+  if (pares.length === 0) return null;
   const total = pares.reduce((acc, [slug]) => {
     const eventos = (datos[slug] && datos[slug].eventos) || [];
     return acc + calcularResumen(eventos).semana;
   }, 0);
   return Math.round(total / pares.length);
-}
-
-// Radar de sector: además del tráfico (lo que ya hacía promedioSector),
-// compara calificación promedio, tasa de conversión (toques -> reseñas) y
-// tasa de resolución de quejas contra el promedio de negocios de la misma
-// categoría. Mismo piso de privacidad: con menos de 2 negocios parecidos,
-// no se muestra nada — un "promedio" de un solo negocio lo identifica
-// directamente.
-function radarSector(negocio, slug, todosNegocios, datos) {
-  const pares = Object.entries(todosNegocios).filter(
-    ([s, n]) => n.categoria === negocio.categoria && s !== slug
-  );
-  if (pares.length < 2) return null;
-
-  const metricasDe = (s) => {
-    const eventos = (datos[s] && datos[s].eventos) || [];
-    const testimonios = (datos[s] && datos[s].testimonios) || [];
-    const quejas = (datos[s] && datos[s].quejas) || [];
-    const r = calcularResumen(eventos);
-    const totalResenas = testimonios.length + quejas.length;
-    return {
-      trafico: r.semana,
-      calificacion: promedioEstrellasFiltradas(testimonios, quejas),
-      conversion: r.total > 0 ? totalResenas / r.total : null,
-      resolucion: quejas.length > 0 ? quejas.filter((q) => q.estado === "resuelto").length / quejas.length : null,
-    };
-  };
-
-  const promedioDe = (valores) => {
-    const validos = valores.filter((v) => v !== null && Number.isFinite(v));
-    if (!validos.length) return null;
-    return validos.reduce((a, b) => a + b, 0) / validos.length;
-  };
-
-  const propio = metricasDe(slug);
-  const delSector = pares.map(([s]) => metricasDe(s));
-
-  return {
-    negociosComparados: pares.length,
-    trafico: { propio: propio.trafico, sector: promedioDe(delSector.map((m) => m.trafico)) },
-    calificacion: { propio: propio.calificacion, sector: promedioDe(delSector.map((m) => m.calificacion)) },
-    conversion: { propio: propio.conversion, sector: promedioDe(delSector.map((m) => m.conversion)) },
-    resolucion: { propio: propio.resolucion, sector: promedioDe(delSector.map((m) => m.resolucion)) },
-  };
 }
 
 // Lista blanca de frases válidas de testimonio — se usa tanto para mostrar
@@ -1987,14 +1468,13 @@ const TODAS_LAS_FRASES_VALIDAS = new Set(Object.values(FRASES_POR_CATEGORIA).fla
 
 // ---------- Rutas ----------
 
-// Esta es la URL que se programa en el chip NFC de la tarjeta Tapin.
+// Esta es la URL que va en el QR o se programa en el chip NFC de la tarjeta Tapin.
 // En vez de redirigir directo a Google, primero muestra una pantalla rápida
 // de "¿cómo te fue?" — si la respuesta es positiva, lo manda a Google;
 // si es negativa, lo manda a un formulario privado en vez de exponerlo en público.
 // Ejemplo: https://tu-dominio.com/r/mi-negocio
 app.get("/r/:slug", (req, res) => {
-  const codigoTarjeta = req.params.slug; // el código físico exacto que se tocó
-  const slug = resolverSlug(codigoTarjeta); // el negocio al que pertenece (puede ser el mismo, o el principal si está vinculada)
+  const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
 
   if (!negocio) {
@@ -2002,10 +1482,17 @@ app.get("/r/:slug", (req, res) => {
     if (codigos[slug] && !codigos[slug].activado) {
       return res.redirect(302, `/mis-negocios?codigo=${slug}`);
     }
-    return enviarError(res, 404, "No encontramos este negocio", "El enlace de esta tarjeta no corresponde a ningún negocio activo. Si acabas de recibir la tarjeta, puede que todavía no esté activada.");
+    return res.status(404).send("Negocio no encontrado. Revisa el enlace de la tarjeta NFC.");
   }
 
-  registrarToque(slug, req, negocio, codigoTarjeta);
+  registrarToque(slug, req, negocio);
+
+  // El filtro de calificación es exclusivo del Plan Pro. En el plan Gratis
+  // registramos el toque para las estadísticas básicas y enviamos al cliente
+  // directamente al enlace de reseñas de Google.
+  if (!esPro(negocio)) {
+    return res.redirect(302, negocio.googleUrl);
+  }
 
   res.send(`
     <html>
@@ -2040,7 +1527,7 @@ app.get("/r/:slug", (req, res) => {
                        stroke="${MARCA.oro}" stroke-width="1.4" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 2.5l2.9 6.06 6.6.77-4.86 4.55 1.28 6.55L12 17.3l-5.92 3.13 1.28-6.55L2.5 9.33l6.6-.77L12 2.5z"/>
                   </svg>`;
-                return `<a href="/calificar/${codigoTarjeta}?valor=${n}" aria-label="${n} estrella${n > 1 ? "s" : ""}">
+                return `<a href="/calificar/${slug}?valor=${n}" aria-label="${n} estrella${n > 1 ? "s" : ""}">
                   ${[1, 2, 3, 4, 5].map((i) => estrella(i <= n)).join("")}
                 </a>`;
               })
@@ -2056,10 +1543,9 @@ app.get("/r/:slug", (req, res) => {
 // Si es negativa (1-3), se guarda como queja privada y se le pide el detalle al cliente
 // en vez de exponer la insatisfacción en una reseña pública.
 app.get("/calificar/:slug", (req, res) => {
-  const codigoTarjeta = req.params.slug;
-  const slug = resolverSlug(codigoTarjeta);
+  const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
-  if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "El enlace que usaste no corresponde a ningún negocio activo en Tapin.");
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const valor = parseInt(req.query.valor, 10);
   let selloSumado = null; // se usa más abajo para avisarle al cliente si aplica
@@ -2091,9 +1577,56 @@ app.get("/calificar/:slug", (req, res) => {
   }
 
   if (valor >= 4) {
-    // Calificación positiva (4-5): directo a Google, sin pantallas ni
-    // preguntas intermedias — ni siquiera en Plan Pro.
-    return res.redirect(302, negocio.googleUrl);
+    // El generador de contenido (frases con un toque) es exclusivo del Plan Pro.
+    // Los negocios básicos van directo a Google, sin este paso extra.
+    if (!esPro(negocio)) {
+      return res.redirect(302, negocio.googleUrl);
+    }
+
+    const frases = FRASES_POR_CATEGORIA[negocio.categoria] || FRASES_POR_CATEGORIA.otro;
+    const chips = frases
+      .map(
+        (f) =>
+          `<a href="/testimonio/${slug}?valor=${valor}&frase=${encodeURIComponent(f)}" class="chip">${f}</a>`
+      )
+      .join("");
+
+    return res.send(`
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>${negocio.nombre}</title>
+          <style>
+            *{box-sizing:border-box;}
+            body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F8F4EC;
+                 display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;}
+            .box{background:#fff;border-radius:18px;padding:32px 26px;max-width:380px;width:100%;
+                 text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.08);}
+            h1{font-size:1.15rem;margin:0 0 6px;color:#16201C;}
+            p{color:#777;font-size:0.88rem;margin:0 0 20px;}
+            .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:18px;}
+            .chip{background:#F1F7F4;color:#0F5132;border:1px solid #DCEAE2;border-radius:100px;
+                  padding:10px 14px;font-size:0.85rem;font-weight:600;text-decoration:none;}
+            .chip:active{transform:scale(0.96);}
+            .saltar{display:block;color:#999;font-size:0.82rem;text-decoration:underline;}
+            .sello-aviso{background:#FBF6E9;border-radius:10px;padding:10px 14px;font-size:0.8rem;
+                        color:#7A5A00;margin-bottom:16px;}
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            <h1>¡Qué bueno! 🎉</h1>
+            <p>¿Qué fue lo que más te gustó? (toca una, opcional)</p>
+            ${selloSumado ? `<div class="sello-aviso">${selloSumado.listo
+              ? `¡Beneficio desbloqueado! Ya tienes: ${selloSumado.fid.premio}`
+              : `+1 sello de fidelización — llevas ${selloSumado.actual.sellos} de ${selloSumado.fid.metaSellos}`}</div>` : ""}
+            <div class="chips">${chips}</div>
+            <a class="saltar" href="${negocio.googleUrl}">Saltar e ir directo a Google &rarr;</a>
+          </div>
+        </body>
+      </html>
+    `);
   }
 
   // Calificación negativa: mostramos un formulario privado en vez de mandarlo a Google.
@@ -2108,7 +1641,7 @@ app.get("/calificar/:slug", (req, res) => {
   };
   const motivosNegativos = motivosPorCategoria[negocio.categoria] || motivosPorCategoria.otro;
   const chipsNegativos = motivosNegativos
-    .map((m) => `<a href="/calificar/${codigoTarjeta}/rapido?valor=${valor}&motivo=${encodeURIComponent(m)}" class="chip">${m}</a>`)
+    .map((m) => `<a href="/calificar/${slug}/rapido?valor=${valor}&motivo=${encodeURIComponent(m)}" class="chip">${m}</a>`)
     .join("");
 
   res.send(`
@@ -2143,7 +1676,7 @@ app.get("/calificar/:slug", (req, res) => {
           <div class="chips">${chipsNegativos}</div>
 
           <div class="divisor">o cuéntanos con tus palabras</div>
-          <form method="POST" action="/calificar/${codigoTarjeta}">
+          <form method="POST" action="/calificar/${slug}">
             <input type="hidden" name="valor" value="${valor}">
             <textarea name="comentario" placeholder="Escribe aquí lo que pasó... (opcional)"></textarea>
             <input type="tel" name="telefono" placeholder="Tu teléfono (opcional, para que te llamen)" style="width:100%;margin-top:10px;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:0.92rem;font-family:inherit;box-sizing:border-box;">
@@ -2159,14 +1692,13 @@ app.get("/calificar/:slug", (req, res) => {
 // solo toque en un motivo corto guarda la queja de una vez, sin tener que
 // escribir nada. Mucho más rápido, así no se pierden clientes por pereza de teclear.
 app.get("/calificar/:slug/rapido", (req, res) => {
-  const codigoTarjeta = req.params.slug;
-  const slug = resolverSlug(codigoTarjeta);
+  const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const motivo = req.query.motivo || "(sin detalle)";
   const valorRapido = parseInt(req.query.valor, 10) || null;
-  guardarQueja(slug, motivo, negocio, "", valorRapido, codigoTarjeta);
+  guardarQueja(slug, motivo, negocio, "", valorRapido);
 
   // La fidelización premia la VISITA, no solo las reseñas positivas — si el
   // cliente tiene sesión iniciada, suma su sello igual que en una calificación buena.
@@ -2190,15 +1722,14 @@ app.get("/calificar/:slug/rapido", (req, res) => {
 });
 
 app.post("/calificar/:slug", async (req, res) => {
-  const codigoTarjeta = req.params.slug;
-  const slug = resolverSlug(codigoTarjeta);
+  const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   const comentario = req.body.comentario || "(sin comentario)";
   const telefono = req.body.telefono || "";
   const valorTexto = parseInt(req.body.valor, 10) || null;
-  guardarQueja(slug, comentario, negocio, telefono, valorTexto, codigoTarjeta);
+  guardarQueja(slug, comentario, negocio, telefono, valorTexto);
 
   let selloSumado = null;
   if (esPro(negocio) && negocio.fidelizacion) {
@@ -2243,8 +1774,7 @@ app.post("/calificar/:slug", async (req, res) => {
 // Guarda el micro-testimonio elegido con un solo toque y manda al cliente a Google.
 // Esto alimenta el generador de contenido para redes (/contenido/:slug).
 app.get("/testimonio/:slug", (req, res) => {
-  const codigoTarjeta = req.params.slug;
-  const slug = resolverSlug(codigoTarjeta);
+  const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
@@ -2254,7 +1784,7 @@ app.get("/testimonio/:slug", (req, res) => {
   // texto libre. Esto es lo que evita que alguien arme un link con cualquier
   // cosa en "?frase=" y ese texto termine sin control dentro del prompt que
   // se le manda a la IA más adelante, al generar el caption de esa tarjeta.
-  if (frase && esPro(negocio) && TODAS_LAS_FRASES_VALIDAS.has(frase)) guardarTestimonio(slug, frase, valor, negocio, codigoTarjeta);
+  if (frase && esPro(negocio) && TODAS_LAS_FRASES_VALIDAS.has(frase)) guardarTestimonio(slug, frase, valor, negocio);
 
   res.redirect(302, negocio.googleUrl);
 });
@@ -2273,16 +1803,13 @@ app.get("/editar", limitarIntentosAdmin, (req, res) => {
   }
   const key = req.query.key;
   const todos = todosLosNegocios();
-  const codigosTodos = leerCodigos();
 
   const filas = Object.entries(todos)
     .map(([slug, n]) => {
-      const vinculadas = tarjetasVinculadasA(slug, codigosTodos);
       return `<tr>
         <td><b>${n.nombre}</b></td>
         <td><code class="codigo">/r/${slug}</code></td>
         <td>${n.categoria || "—"}</td>
-        <td>${vinculadas.length ? `${1 + vinculadas.length} tarjetas` : "1 tarjeta"}</td>
         <td><a href="/editar/${slug}?key=${key}">Editar</a> &nbsp;·&nbsp; <a href="/editar/${slug}/quitar?key=${key}" style="color:${MARCA.rojo};">Quitar</a></td>
       </tr>`;
     })
@@ -2326,8 +1853,8 @@ app.get("/editar", limitarIntentosAdmin, (req, res) => {
           ` : ""}
 
           <table>
-            <tr><th>Nombre</th><th>Enlace de toque</th><th>Categoría</th><th>Tarjetas</th><th></th></tr>
-            ${filas || "<tr><td colspan='5'>Todavía no hay negocios.</td></tr>"}
+            <tr><th>Nombre</th><th>Enlace de toque</th><th>Categoría</th><th></th></tr>
+            ${filas || "<tr><td colspan='4'>Todavía no hay negocios.</td></tr>"}
           </table>
         </div>
       </body>
@@ -2390,27 +1917,18 @@ app.get("/editar/:slug", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
-  const codigosGetEditar = leerCodigos();
-  const slug = resolverSlug(req.params.slug, codigosGetEditar);
-  // Si alguien entra con el código de una tarjeta vinculada, lo mandamos al
-  // negocio principal — así nunca se edita/guarda por accidente sobre una
-  // tarjeta que no tiene su propio objeto "negocio".
-  if (slug !== req.params.slug) {
-    return res.redirect(`/editar/${slug}?key=${req.query.key}`);
-  }
+  const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) {
     return res.status(404).send("Negocio no encontrado.");
   }
   const key = req.query.key;
-  const vinculadas = tarjetasVinculadasA(slug, codigosGetEditar).map((c) => ({ codigo: c, etiqueta: (codigosGetEditar[c] && codigosGetEditar[c].etiqueta) || null }));
   res.send(formularioNegocio({
     titulo: `Editar — ${negocio.nombre}`,
     accion: `/editar/${slug}?key=${key}`,
     key,
     valores: negocio,
     slug,
-    tarjetasVinculadas: vinculadas,
   }));
 });
 
@@ -2418,10 +1936,7 @@ app.post("/editar/:slug", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
-  const slug = resolverSlug(req.params.slug);
-  if (slug !== req.params.slug) {
-    return res.status(400).send("Esta es una tarjeta vinculada, no un negocio propio — edita el negocio principal.");
-  }
+  const { slug } = req.params;
   const negocioActual = obtenerNegocio(slug);
   if (!negocioActual) {
     return res.status(404).send("Negocio no encontrado.");
@@ -2545,32 +2060,8 @@ app.post("/editar/:slug/quitar", limitarIntentosAdmin, (req, res) => {
   res.redirect(`/editar?key=${req.query.key}`);
 });
 
-// Desvincula una tarjeta adicional de su negocio principal — la tarjeta deja
-// de sumar datos a ese negocio y vuelve a quedar "sin activar", lista para
-// activarse de nuevo (como negocio nuevo, o vinculada a otro distinto).
-app.post("/editar/:slugPrincipal/desvincular/:codigo", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
-    return res.status(401).send("No autorizado.");
-  }
-  const { slugPrincipal, codigo } = req.params;
-  const codigos = leerCodigos();
-  const entrada = codigos[codigo];
-  if (!entrada || entrada.vinculadoA !== slugPrincipal) {
-    return res.status(404).send("Esa tarjeta no está vinculada a este negocio.");
-  }
-  const negocioPrincipal = obtenerNegocio(slugPrincipal);
-  codigos[codigo] = { creado: entrada.creado || new Date().toISOString() };
-  guardarCodigos(codigos);
-  registrarAuditoriaGlobal(
-    "desvincular_tarjeta",
-    `Tarjeta ${codigo} desvinculada de "${negocioPrincipal ? negocioPrincipal.nombre : slugPrincipal}" (${slugPrincipal}) — queda sin activar`,
-    req
-  );
-  res.redirect(`/editar/${slugPrincipal}?key=${req.query.key}`);
-});
-
 // Plantilla reutilizable del formulario de crear/editar negocio.
-function formularioNegocio({ titulo, accion, key, valores = {}, slug = null, tarjetasVinculadas = [] }) {
+function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
   const categorias = ["restaurante", "peluqueria", "tienda", "clinica", "otro"];
   const opciones = categorias
     .map((c) => `<option value="${c}" ${valores.categoria === c ? "selected" : ""}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`)
@@ -2651,26 +2142,6 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null, tar
             </form>
             ${slug ? `<a class="quitar-link" href="/editar/${slug}/quitar?key=${key}">Quitar esta tarjeta</a>` : ""}
           </div>
-
-          ${slug ? `
-          <div class="form-card" style="margin-top:16px;">
-            <h3 style="margin:0 0 4px;font-size:0.92rem;">Tarjetas vinculadas a este negocio</h3>
-            <p style="color:${MARCA.textoSuave};font-size:0.8rem;margin:0 0 14px;line-height:1.5;">
-              Un mismo local puede tener varias tarjetas físicas (una por mesa, una en la caja, etc.) — todas
-              suman al mismo negocio. Identificador de este negocio para vincular tarjetas nuevas: <code style="background:${MARCA.verdeClaro};padding:2px 8px;border-radius:6px;">${slug}</code>
-            </p>
-            ${tarjetasVinculadas.length
-              ? tarjetasVinculadas.map((t) => `
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid ${MARCA.borde};font-size:0.85rem;">
-                  <span>${t.etiqueta ? `<b>${escaparHtml(t.etiqueta)}</b> · ` : ""}<code>${t.codigo}</code></span>
-                  <form method="POST" action="/editar/${slug}/desvincular/${t.codigo}?key=${key}" style="margin:0;" onsubmit="return confirm('¿Desvincular la tarjeta ${t.codigo}? Deja de sumar datos a ${escaparHtml(valores.nombre || "este negocio")} y vuelve a quedar sin activar — se puede activar de nuevo después, como negocio nuevo o vinculada a otro.');">
-                    <button type="submit" style="margin:0;background:#fff;color:${MARCA.rojo};border:1px solid #F0D0C8;padding:6px 12px;font-size:0.78rem;border-radius:7px;">Desvincular</button>
-                  </form>
-                </div>
-              `).join("")
-              : `<p style="color:${MARCA.textoSuave};font-size:0.82rem;margin:0;">Todavía no tiene tarjetas adicionales vinculadas.</p>`}
-          </div>
-          ` : ""}
         </div>
       </body>
     </html>
@@ -2699,14 +2170,10 @@ app.get("/codigos", limitarIntentosAdmin, (req, res) => {
         ? `<a href="/stats?key=${key}">Ver en el panel</a>`
         : `<a href="/activar/${codigo}" target="_blank">Activar ahora</a>`;
       const urlTarjeta = `${req.protocol}://${req.get("host")}/r/${codigo}`;
-      const factura = info.datosFactura && (info.datosFactura.razonSocial || info.datosFactura.nit)
-        ? `${escaparHtml(info.datosFactura.razonSocial || "—")}${info.datosFactura.nit ? ` (NIT ${escaparHtml(info.datosFactura.nit)})` : ""}`
-        : "—";
       return `<tr>
         <td><code class="codigo">${codigo}</code></td>
         <td>${estado}</td>
         <td class="url-cell">${urlTarjeta}</td>
-        <td style="font-size:0.8rem;">${factura}</td>
         <td>${accion}</td>
       </tr>`;
     })
@@ -2774,7 +2241,7 @@ app.get("/codigos", limitarIntentosAdmin, (req, res) => {
           </div>
 
           <table>
-            <tr><th>Código</th><th>Estado</th><th>URL para la tarjeta NFC</th><th>Factura</th><th></th></tr>
+            <tr><th>Código</th><th>Estado</th><th>URL para la tarjeta NFC</th><th></th></tr>
             ${filas || "<tr><td colspan='4'>Todavía no has generado ningún código.</td></tr>"}
           </table>
         </div>
@@ -2839,6 +2306,17 @@ app.post("/codigos/generar", limitarIntentosAdmin, async (req, res) => {
 
 // Formulario para activar una tarjeta: el negocio (o tú, en su nombre) llena sus datos reales.
 // Visítalo así: https://tu-dominio.com/activar/7K9P2M
+// Redirección simple para poder activar una tarjeta escribiendo el código
+// desde un formulario normal (GET con query, no con parámetro de ruta) —
+// usado por el pequeño formulario "Activar otra tarjeta" dentro del panel
+// del negocio, así el dueño no tiene que salir a buscar el enlace de
+// activación por otro lado.
+app.get("/activar", (req, res) => {
+  const codigo = (req.query.codigo || "").trim();
+  if (!codigo) return res.redirect(302, "/mis-negocios");
+  res.redirect(302, `/activar/${encodeURIComponent(codigo)}`);
+});
+
 app.get("/activar/:codigo", (req, res) => {
   const { codigo } = req.params;
   const codigos = leerCodigos();
@@ -2848,12 +2326,10 @@ app.get("/activar/:codigo", (req, res) => {
     return res.status(404).send("Código no válido. Verifica que lo escribiste bien.");
   }
   if (entrada.activado) {
-    const negocioDeEstaTarjeta = obtenerNegocio(codigo);
     return res.send(`
       <html><body style="font-family:sans-serif;padding:40px;text-align:center;">
         <h2>Esta tarjeta ya está activada</h2>
-        <p>Pertenece a: <b>${negocioDeEstaTarjeta ? negocioDeEstaTarjeta.nombre : "(negocio no encontrado)"}</b></p>
-        ${entrada.vinculadoA ? `<p style="color:#888;font-size:0.85rem;">Es una tarjeta adicional vinculada a ese negocio.</p>` : ""}
+        <p>Pertenece a: <b>${entrada.negocio.nombre}</b></p>
       </body></html>
     `);
   }
@@ -2890,11 +2366,6 @@ app.get("/activar/:codigo", (req, res) => {
           .cat-chip{border:1.5px solid ${MARCA.borde};border-radius:100px;padding:9px 16px;font-size:0.84rem;
                     font-weight:600;color:${MARCA.textoSuave};cursor:pointer;background:#fff;transition:all 0.12s;}
           .cat-chip.activo{background:${MARCA.verde};border-color:${MARCA.verde};color:#fff;}
-
-          .modo-toggle{display:flex;gap:8px;margin-bottom:20px;background:${MARCA.crema};border-radius:11px;padding:4px;}
-          .modo-btn{flex:1;text-align:center;padding:10px 10px;border-radius:8px;font-size:0.82rem;font-weight:700;
-                    color:${MARCA.textoSuave};cursor:pointer;transition:all 0.12s;}
-          .modo-btn.activo{background:#fff;color:${MARCA.verdeOscuro};box-shadow:0 2px 6px rgba(11,61,44,0.1);}
         </style>
       </head>
       <body>
@@ -2906,28 +2377,6 @@ app.get("/activar/:codigo", (req, res) => {
 
           <div class="form-card">
             <form method="POST" action="/activar/${codigo}" id="form-activar">
-              <div class="modo-toggle">
-                <div class="modo-btn activo" data-modo="nuevo">Es un negocio nuevo</div>
-                <div class="modo-btn" data-modo="vincular">Ya tengo un negocio en Tapin</div>
-              </div>
-              <input type="hidden" name="modo" id="input-modo" value="nuevo">
-
-              <div id="bloque-vincular" style="display:none;">
-                <p class="nota" style="margin:0 0 16px;font-size:0.82rem;color:${MARCA.textoSuave};line-height:1.5;">
-                  Úsalo si este local ya tiene otra tarjeta Tapin activa — por ejemplo, una tarjeta por mesa, o una
-                  en la caja y otra en la entrada. Esta tarjeta se suma a las estadísticas del mismo negocio, no
-                  crea uno aparte.
-                </p>
-                <label>Identificador del negocio ya activo</label>
-                <input type="text" name="slugExistente" id="input-slug-existente"
-                       placeholder="Lo encuentras en tu panel → Configuración → Tarjetas vinculadas">
-
-                <label>Clave de acceso de ese negocio</label>
-                <input type="text" name="claveExistente" id="input-clave-existente"
-                       placeholder="La misma clave con la que entras a su panel">
-              </div>
-
-              <div id="bloque-nuevo">
               ${process.env.GOOGLE_PLACES_API_KEY ? `
               <label>Busca tu negocio en Google (opcional — te llena los datos solo)</label>
               <input type="text" id="buscador-places" placeholder="Escribe el nombre de tu negocio..."
@@ -2942,13 +2391,6 @@ app.get("/activar/:codigo", (req, res) => {
 
               <label>Enlace de reseñas de Google</label>
               <input type="url" name="googleUrl" id="input-google-url" required placeholder="https://g.page/r/.../review">
-              <div style="background:${MARCA.crema};border-radius:9px;padding:12px 14px;margin-top:8px;font-size:0.78rem;color:${MARCA.textoSuave};line-height:1.6;">
-                <b style="color:${MARCA.texto};">¿De dónde saco este enlace?</b><br>
-                1. Busca el nombre de tu negocio en Google, entrando con el Gmail que lo administra.<br>
-                2. En el panel de dueño que te aparece, toca el botón <b>"Pedir reseñas"</b>.<br>
-                3. Copia el enlace que te da Google (empieza por <b>g.page/r/...</b>) y pégalo aquí.<br>
-                <span style="color:${MARCA.textoSuave};">También sirve el enlace de tu negocio en Google Maps (botón "Compartir" → empieza por <b>maps.app.goo.gl/...</b>). Solo se aceptan enlaces de Google — a este enlace llegan tus clientes cuando tocan la tarjeta y califican bien.</span>
-              </div>
 
               <label>Email del negocio (alertas y reportes llegan aquí)</label>
               <input type="email" name="email" required placeholder="dueno@negocio.com">
@@ -2997,10 +2439,9 @@ app.get("/activar/:codigo", (req, res) => {
                 <option value="miami" data-codigo="us">Estados Unidos (Miami)</option>
               </select>
 
-              </div>
-
               <button type="submit">Activar tarjeta</button>
-            </form>          </div>
+            </form>
+          </div>
         </div>
 
         <script>
@@ -3043,27 +2484,6 @@ app.get("/activar/:codigo", (req, res) => {
               inputCiudadActivar.placeholder = 'Primero elige el departamento';
             }
           });
-
-          // ---------- Selector "negocio nuevo" vs. "vincular a uno existente" ----------
-          const bloqueNuevo = document.getElementById('bloque-nuevo');
-          const bloqueVincular = document.getElementById('bloque-vincular');
-          const inputModo = document.getElementById('input-modo');
-          const camposSoloNuevo = bloqueNuevo.querySelectorAll('[required]');
-          const camposSoloVincular = bloqueVincular.querySelectorAll('input');
-
-          document.querySelectorAll('.modo-btn').forEach((btn) => {
-            btn.addEventListener('click', () => {
-              document.querySelectorAll('.modo-btn').forEach((b) => b.classList.remove('activo'));
-              btn.classList.add('activo');
-              const modo = btn.dataset.modo;
-              inputModo.value = modo;
-              const esVincular = modo === 'vincular';
-              bloqueNuevo.style.display = esVincular ? 'none' : '';
-              bloqueVincular.style.display = esVincular ? '' : 'none';
-              camposSoloNuevo.forEach((c) => { c.required = !esVincular; });
-              camposSoloVincular.forEach((c) => { c.required = esVincular; });
-            });
-          });
         </script>
         ${process.env.GOOGLE_PLACES_API_KEY ? `
         <script>
@@ -3099,75 +2519,14 @@ app.post("/activar/:codigo", (req, res) => {
   if (!entrada) return res.status(404).send("Código no válido.");
   if (entrada.activado) return res.status(400).send("Esta tarjeta ya fue activada antes.");
 
-  const modo = req.body.modo === "vincular" ? "vincular" : "nuevo";
-
-  // Modo "vincular": esta tarjeta NO crea un negocio nuevo — se conecta a uno
-  // que ya existe (varias tarjetas físicas para un mismo local). Se exige la
-  // clave de acceso del negocio destino para comprobar que quien activa esta
-  // tarjeta de verdad es dueño de ese negocio, y no solo adivinó su identificador.
-  if (modo === "vincular") {
-    const slugInput = (req.body.slugExistente || "").trim();
-    const claveInput = (req.body.claveExistente || "").trim();
-    if (!slugInput || !claveInput) {
-      return res.status(400).send("Falta el identificador del negocio existente o su clave de acceso.");
-    }
-    const slugPrincipal = resolverSlug(slugInput, codigos);
-    if (slugPrincipal === codigo) {
-      return res.status(400).send("No puedes vincular una tarjeta consigo misma.");
-    }
-    const negocioExistente = obtenerNegocio(slugPrincipal);
-    if (!negocioExistente) {
-      return res.status(404).send("No encontramos ningún negocio activo con ese identificador. Verifica que lo hayas copiado bien.");
-    }
-    if (!tieneClaveConfigurada(negocioExistente) || !claveNegocioValida(negocioExistente, slugPrincipal, claveInput)) {
-      return res.status(401).send("La clave no coincide con la de ese negocio. Verifícala e inténtalo de nuevo.");
-    }
-    entrada.activado = true;
-    entrada.activadoEl = new Date().toISOString();
-    entrada.vinculadoA = slugPrincipal;
-    delete entrada.negocio;
-    guardarCodigos(codigos);
-    registrarAuditoriaGlobal(
-      "vincular_tarjeta",
-      `Tarjeta ${codigo} vinculada al negocio "${negocioExistente.nombre}" (${slugPrincipal}) — tarjeta adicional del mismo local`,
-      req
-    );
-
-    return res.send(`
-      <html>
-        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>${ESTILO_BASE}
-          .ok-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;}
-          .ok-card code{background:${MARCA.verdeClaro};padding:3px 8px;border-radius:6px;font-size:0.82rem;}
-        </style></head>
-        <body>
-          <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
-          <div class="content">
-            <div class="eyebrow">Listo</div>
-            <h1 class="titulo-pagina">¡Tarjeta vinculada!</h1>
-            <div class="ok-card">
-              <p>Esta tarjeta ya está conectada a <b>${escaparHtml(negocioExistente.nombre)}</b> — todo lo que pase en ella
-                 (toques, calificaciones, quejas, sellos de fidelización) se suma a las estadísticas de ese mismo negocio,
-                 no crea uno aparte.</p>
-              <p>Panel de este negocio:<br><code>${req.protocol}://${req.get("host")}/mi-panel/${slugPrincipal}?key=${encodeURIComponent(claveInput)}</code></p>
-              <p>La tarjeta ya está lista — el cliente puede empezar a usarla de inmediato.</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `);
-  }
-
   const { nombre, googleUrl, categoria, pais, email, plan, direccion, departamento, ciudad, claveAcceso } = req.body;
   if (!nombre || !googleUrl) {
     return res.status(400).send("Faltan datos: nombre y enlace de Google son obligatorios.");
   }
   if (!esLinkGoogleValido(googleUrl)) {
     return res.status(400).send(
-      "Ese enlace no parece ser de Google Maps/Reseñas. Debe empezar por https://g.page/... o " +
-      "https://maps.app.goo.gl/... o https://www.google.com/maps/... — Para sacarlo: busca el nombre de tu " +
-      "negocio en Google con el Gmail que lo administra, y en el panel de dueño toca el botón \"Pedir reseñas\". " +
-      "Copia ese enlace, regresa e inténtalo de nuevo."
+      "Ese enlace no parece ser de Google Maps/Reseñas. Verifica que hayas copiado el link correcto " +
+      "(debe empezar por algo como https://g.page/... o https://maps.app.goo.gl/... o https://www.google.com/maps/...) y vuelve a intentarlo."
     );
   }
   const claveLimpia = (claveAcceso || "").trim();
@@ -3193,11 +2552,6 @@ app.post("/activar/:codigo", (req, res) => {
     direccion: direccion || "",
     departamento: departamento || "",
     ciudad: ciudad || "",
-    // Se copia del pedido original (si el comprador dejo NIT al pagar la
-    // tarjeta) para poder seguir facturando electronicamente las
-    // mejoras a Pro y las renovaciones mensuales sin volver a pedirlo.
-    // Editable luego desde Configuracion del panel del negocio.
-    datosFactura: entrada.datosFactura || null,
   };
   if (planReal === "pro" && entrada.planProTipo === "anual") {
     const unAnioDespues = new Date();
@@ -3209,37 +2563,6 @@ app.post("/activar/:codigo", (req, res) => {
   }
 
   guardarCodigos(codigos);
-
-  // Si el pedido incluía Plan Pro mensual y quedó marcado "renovar
-  // automáticamente", el paso que sigue de inmediato es registrar la
-  // tarjeta — sin eso, el Pro no se renueva después del primer mes y nadie
-  // se entera hasta que deje de funcionar. Se lo mostramos ANTES que el
-  // acceso normal al panel, como el siguiente paso obvio, no como algo
-  // opcional escondido en configuración.
-  if (planReal === "pro" && entrada.planProTipo === "mensual" && entrada.renovarAutomatico) {
-    return res.send(`
-      <html>
-        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>${ESTILO_BASE}
-          .ok-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;}
-          .ok-card code{background:${MARCA.verdeClaro};padding:3px 8px;border-radius:6px;font-size:0.82rem;}
-        </style></head>
-        <body>
-          <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
-          <div class="content">
-            <div class="eyebrow">Un paso más</div>
-            <h1 class="titulo-pagina">¡Tarjeta activada! Ahora registra tu tarjeta</h1>
-            <div class="ok-card">
-              <p><b>${nombre}</b> ya está conectado a esta tarjeta Tapin, con Plan Pro activo desde ya.</p>
-              <p>Para que el Plan Pro se siga renovando solo cada mes, falta registrar una tarjeta de cobro — es lo único que queda pendiente.</p>
-              <a class="btn-primario" href="/suscripcion/${codigo}?key=${encodeURIComponent(claveLimpia)}" style="display:inline-block;margin-top:6px;">Registrar tarjeta para el cobro mensual</a>
-              <p style="margin-top:16px;font-size:0.78rem;">También puedes hacerlo después desde tu panel:<br><code>${req.protocol}://${req.get("host")}/mi-panel/${codigo}?key=${encodeURIComponent(claveLimpia)}</code></p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `);
-  }
 
   res.send(`
     <html>
@@ -3266,40 +2589,7 @@ app.post("/activar/:codigo", (req, res) => {
 
 app.get("/stats", limitarIntentosAdmin, (req, res) => {
   if (req.query.key !== ADMIN_KEY) {
-    if (req.query.key) {
-      return enviarError(res, 401, "Clave incorrecta", "La clave que ingresaste no es válida. Verifícala e inténtalo de nuevo.", { texto: "Volver a intentar", href: "/stats" });
-    }
-    return res.status(401).send(`<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Acceso administrador — Tapin</title>
-  <style>${ESTILO_BASE}
-    body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
-    .caja-login{background:#fff;border-radius:20px;padding:40px 38px;max-width:380px;width:100%;text-align:center;
-                box-shadow:0 20px 50px rgba(9,49,30,.1);border:1px solid ${MARCA.borde};box-sizing:border-box;}
-    .caja-login h1{font-size:1.25rem;margin:16px 0 6px;letter-spacing:-.02em;}
-    .caja-login p{color:${MARCA.textoSuave};font-size:0.86rem;line-height:1.5;margin:0 0 24px;}
-    .caja-login label{display:block;text-align:left;font-size:0.78rem;font-weight:600;color:${MARCA.texto};margin-bottom:6px;}
-    .caja-login input{width:100%;box-sizing:border-box;padding:12px 14px;border:1.5px solid ${MARCA.borde};border-radius:9px;
-                       font-size:0.92rem;font-family:inherit;margin-bottom:16px;}
-    .caja-login button{width:100%;}
-  </style>
-</head>
-<body>
-  <div class="caja-login">
-    ${logoSvg(MARCA.verdeOscuro, 28)}
-    <h1>Acceso de administrador</h1>
-    <p>Ingresa tu clave para entrar al panel de administración de Tapin.</p>
-    <form method="GET" action="/stats">
-      <label for="key">Clave de administrador</label>
-      <input type="password" id="key" name="key" autofocus required autocomplete="current-password">
-      <button type="submit" class="btn-primario">Entrar</button>
-    </form>
-  </div>
-</body>
-</html>`);
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   iniciarSesionAdmin(res);
 
@@ -3379,7 +2669,7 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
     // Se crea un token temporal limitado exclusivamente a este negocio para
     // abrir su panel sin pedir otra clave ni exponer la clave real.
     const tokenPanelAdmin = tieneClaveConfigurada(NEGOCIOS_TOTAL[slug])
-      ? generarLinkAccesoNegocio(slug, 1, true)
+      ? generarLinkAccesoNegocio(slug, 1)
       : null;
 
     return `
@@ -3466,129 +2756,105 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          ${ESTILO_DASHBOARD}
-          .content{max-width:none;padding:0;}
-          .seccion{margin-bottom:40px;}
-          .seccion-header{text-align:left;margin-bottom:20px;}
-          .seccion-header h2{font-size:1.1rem;font-weight:700;margin:0 0 4px;}
-          .seccion-header p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0;}
+          .content{max-width:880px;}
+          .seccion{margin-bottom:48px;}
+          .seccion-header{text-align:center;margin-bottom:24px;}
+          .seccion-header .eyebrow{justify-content:center;}
+          .seccion-header h2{font-size:1.15rem;font-weight:700;margin:0 0 4px;}
+          .seccion-header p{color:${MARCA.textoSuave};font-size:0.86rem;margin:0;}
 
           /* Resumen global */
-          .dash-cards-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;}
-          @media (max-width:900px){.dash-cards-4{grid-template-columns:repeat(2,1fr);}}
-          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:20px 22px;margin-top:14px;
-                      box-shadow:0 1px 2px rgba(16,24,32,.04);}
-          .chart-card-titulo{font-size:0.8rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:16px;text-align:center;}
-          .sparkline-grande{height:110px;max-width:520px;margin:0 auto;}
+          .resumen-grid{display:flex;gap:14px;flex-wrap:wrap;}
+          .resumen-box{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px 16px;text-align:center;
+                       box-shadow:0 1px 2px rgba(11,61,44,0.04);flex:1;min-width:140px;}
+          .resumen-num{font-size:2rem;font-weight:700;color:${MARCA.verdeOscuro};line-height:1;}
+          .resumen-lbl{font-size:0.74rem;color:${MARCA.textoSuave};margin-top:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
+          .chart-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px 24px;margin-top:16px;
+                      box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .chart-card-titulo{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};margin-bottom:18px;text-align:center;}
+          .sparkline-grande{height:120px;max-width:520px;margin:0 auto;}
 
           /* Lista de negocios */
-          .lista-negocios{display:flex;flex-direction:column;gap:14px;}
-          .card{background:#fff;border-radius:10px;padding:22px;box-shadow:0 1px 2px rgba(16,24,32,.04);border:1px solid ${MARCA.borde};transition:box-shadow .2s;}
-          .card:hover{box-shadow:0 1px 2px rgba(16,24,32,.04), 0 6px 16px rgba(16,24,32,.06);}
+          .lista-negocios{display:flex;flex-direction:column;gap:16px;}
+          .card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 1px 2px rgba(11,61,44,0.04), 0 8px 24px rgba(11,61,44,0.06);border:1px solid ${MARCA.borde};transition:box-shadow .2s;}
+          .card:hover{box-shadow:0 1px 2px rgba(11,61,44,0.05), 0 12px 32px rgba(11,61,44,0.10);}
           .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
-          .card-nombre{font-weight:700;font-size:1.02rem;letter-spacing:-0.01em;}
-          .badge-pro{background:${MARCA.oro};color:#fff;font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:4px;letter-spacing:0.04em;vertical-align:middle;}
-          .badge-basico{background:${MARCA.borde};color:${MARCA.textoSuave};font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:4px;letter-spacing:0.04em;vertical-align:middle;}
-          .card-slug{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:2px;font-family:'SFMono-Regular',Consolas,monospace;}
-          .card-total{text-align:right;font-size:1.5rem;font-weight:700;color:${MARCA.texto};line-height:1;}
+          .card-nombre{font-weight:700;font-size:1.08rem;letter-spacing:-0.01em;}
+          .badge-pro{background:${MARCA.oro};color:#fff;font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:100px;letter-spacing:0.04em;vertical-align:middle;}
+          .badge-basico{background:${MARCA.borde};color:${MARCA.textoSuave};font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:100px;letter-spacing:0.04em;vertical-align:middle;}
+          .card-slug{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:2px;font-family:monospace;}
+          .card-total{text-align:right;font-size:1.7rem;font-weight:700;color:${MARCA.verde};line-height:1;}
           .card-total span{display:block;font-size:0.6rem;font-weight:600;color:${MARCA.textoSuave};margin-top:4px;letter-spacing:0.04em;text-transform:uppercase;}
-          .card-metrics{display:flex;gap:12px;margin-bottom:22px;max-width:340px;}
-          .metric{background:${MARCA.verdeClaro};border-radius:8px;padding:12px 14px;flex:1;text-align:center;}
-          .metric-num{font-size:1.2rem;font-weight:700;color:${MARCA.verdeOscuro};}
-          .metric-lbl{font-size:0.66rem;color:${MARCA.verde};margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
-          .sparkline{display:flex;align-items:flex-end;gap:5px;height:84px;margin-bottom:16px;max-width:300px;}
+          .card-metrics{display:flex;gap:12px;margin-bottom:26px;max-width:340px;}
+          .metric{background:${MARCA.verdeClaro};border-radius:12px;padding:12px 14px;flex:1;text-align:center;}
+          .metric-num{font-size:1.3rem;font-weight:700;color:${MARCA.verdeOscuro};}
+          .metric-lbl{font-size:0.68rem;color:${MARCA.verde};margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}
+          .sparkline{display:flex;align-items:flex-end;gap:5px;height:92px;margin-bottom:16px;max-width:300px;}
           .sector-badge{font-size:0.74rem;font-weight:700;margin-bottom:14px;}
-          .reporte-badge{font-size:0.74rem;font-weight:700;margin-bottom:14px;padding:6px 10px;border-radius:6px;display:inline-block;}
+          .reporte-badge{font-size:0.74rem;font-weight:700;margin-bottom:14px;padding:6px 10px;border-radius:8px;display:inline-block;}
           .reporte-badge.ok{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};}
           .reporte-badge.fail{background:#FBEFE9;color:#993C1D;}
           .reporte-badge.pendiente{background:#F3F1EC;color:${MARCA.textoSuave};}
           .card-ultimo{font-size:0.82rem;color:${MARCA.textoSuave};margin-bottom:16px;padding-top:14px;border-top:1px solid ${MARCA.borde};}
           .card-ultimo b{color:${MARCA.texto};}
-          .card-actions{display:flex;flex-wrap:wrap;gap:6px;}
+          .card-actions{display:flex;flex-wrap:wrap;gap:8px;}
           .card-actions a{color:${MARCA.verdeOscuro};font-weight:600;text-decoration:none;font-size:0.74rem;
-                          white-space:nowrap;background:${MARCA.verdeClaro};padding:6px 11px;border-radius:6px;}
+                          white-space:nowrap;background:${MARCA.verdeClaro};padding:6px 12px;border-radius:100px;}
           .card-actions a:hover{background:${MARCA.verde};color:#fff;}
-          .card-actions a.btn-panel-negocio{background:${MARCA.verdeOscuro};color:#fff;border-color:${MARCA.verdeOscuro};font-weight:700;}
+          .card-actions a.btn-panel-negocio{background:${MARCA.verdeOscuro};color:#fff;border-color:${MARCA.verdeOscuro};font-weight:800;}
           .card-actions a.btn-panel-negocio:hover{background:${MARCA.verde};color:#fff;}
           .card-actions .sin-panel{font-size:0.74rem;color:${MARCA.textoSuave};padding:8px 10px;}
-          .seccion-pais{margin-bottom:32px;}
+          .seccion-pais{margin-bottom:36px;}
           .pais-header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;
-                       border-bottom:1px solid ${MARCA.borde};padding-bottom:10px;margin-bottom:16px;}
-          .pais-titulo{font-size:1rem;font-weight:700;color:${MARCA.texto};}
+                       border-bottom:2px solid ${MARCA.verdeOscuro};padding-bottom:10px;margin-bottom:18px;}
+          .pais-titulo{font-size:1.15rem;font-weight:800;color:${MARCA.verdeOscuro};}
           .pais-conteo{font-size:0.78rem;color:${MARCA.textoSuave};font-weight:600;}
-          .botones-paises{display:flex;flex-wrap:wrap;margin-bottom:20px;}
-          .btn-pais{background:#fff;border:1px solid ${MARCA.borde};color:${MARCA.texto};font-weight:600;
-                    font-size:0.8rem;padding:8px 16px;border-radius:6px;text-decoration:none;
+          .botones-paises{display:flex;flex-wrap:wrap;justify-content:center;margin-bottom:28px;}
+          .btn-pais{background:#fff;border:1px solid ${MARCA.borde};color:${MARCA.texto};font-weight:700;
+                    font-size:0.82rem;padding:9px 18px;border-radius:100px;text-decoration:none;
                     margin:0 8px 8px 0;display:inline-block;}
           .btn-pais:hover{border-color:${MARCA.verdeOscuro};background:${MARCA.verdeClaro};}
+          .topbar-nav{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:flex-end;}
+          .topbar-nav a{color:#CFE3D8;font-size:0.78rem;font-weight:600;text-decoration:none;white-space:nowrap;}
+          .topbar-nav a:hover{color:#fff;text-decoration:underline;}
           @media (max-width:640px){
+            .topbar{flex-direction:column;align-items:flex-start;gap:10px;padding:16px 20px;}
+            .topbar-nav{justify-content:flex-start;width:100%;}
+            .content{padding:20px 16px 50px;}
             .card{padding:18px;}
             .card-top{flex-wrap:wrap;gap:10px;}
           }
         </style>
       </head>
       <body>
-        <div class="dashboard-layout">
-          <aside class="sidebar">
-            <div class="sidebar-logo">${logoSvg("#FFFFFF", 26)}</div>
-            <nav class="sidebar-nav">
-              <a href="/stats?key=${key}" class="activo">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
-                Resumen
-              </a>
-              <a href="/descubre" target="_blank">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20a15.3 15.3 0 010-20z"/></svg>
-                Mapa público
-              </a>
-              <a href="/editar?key=${key}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4z"/></svg>
-                Editar negocios
-              </a>
-              <a href="/codigos?key=${key}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>
-                Generar tarjetas
-              </a>
-              <a href="/auditoria?key=${key}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg>
-                Auditoría
-              </a>
-              <a href="/respaldo?key=${key}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Respaldo
-              </a>
-            </nav>
-            <div class="sidebar-pie">
-              <a href="/">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                Cerrar sesión
-              </a>
-            </div>
-          </aside>
-          <main class="dashboard-main">
-        <div class="content" style="padding:0;max-width:none;">
-
-          <div class="dash-header">
-            <div>
-              <div class="eyebrow" style="margin-bottom:2px;">Administrador</div>
-              <h1>Resumen general</h1>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <span class="dash-header-chip">${totalNegocios} ${totalNegocios === 1 ? "tarjeta activa" : "tarjetas activas"}</span>
-              <span class="dash-header-chip" style="font-weight:500;color:${MARCA.textoSuave};">Actualizado al ${new Date().toLocaleDateString("es-CO")}</span>
-            </div>
+        <div class="topbar">
+          <div style="display:flex;align-items:center;gap:0;">${logoSvg("#FFFFFF", 30)}</div>
+          <div class="topbar-nav">
+            <a href="/descubre" target="_blank">Mapa público</a>
+            <a href="/editar?key=${key}">Editar negocios</a>
+            <a href="/codigos?key=${key}">+ Generar tarjetas</a>
+            <a href="/auditoria?key=${key}">Auditoría</a>
+            <a href="/respaldo?key=${key}">Respaldo</a>
           </div>
+        </div>
+        <div class="content">
 
           <div class="seccion">
-            <div class="dash-cards-4">
-              <div class="dash-card"><div class="dash-card-lbl">Tarjetas activas</div><div class="dash-card-num">${totalNegocios}</div></div>
-              <div class="dash-card"><div class="dash-card-lbl">Toques totales</div><div class="dash-card-num">${totalToquesGlobal}</div></div>
-              <div class="dash-card"><div class="dash-card-lbl">Toques hoy</div><div class="dash-card-num">${totalHoyGlobal}</div></div>
-              <div class="dash-card"><div class="dash-card-lbl">Últimos 7 días</div><div class="dash-card-num">${totalSemanaGlobal}</div></div>
+            <div class="seccion-header">
+              <div class="eyebrow">Resumen general</div>
+              <h2>Todas tus tarjetas Tapin</h2>
+              <p>Suma de actividad de todos los negocios activos.</p>
+            </div>
+            <div class="resumen-grid">
+              <div class="resumen-box"><div class="resumen-num">${totalNegocios}</div><div class="resumen-lbl">Tarjetas activas</div></div>
+              <div class="resumen-box"><div class="resumen-num">${totalToquesGlobal}</div><div class="resumen-lbl">Toques totales</div></div>
+              <div class="resumen-box"><div class="resumen-num">${totalHoyGlobal}</div><div class="resumen-lbl">Toques hoy</div></div>
+              <div class="resumen-box"><div class="resumen-num">${totalSemanaGlobal}</div><div class="resumen-lbl">Últimos 7 días</div></div>
             </div>
 
-            <div class="chart-card" style="margin-top:0;text-align:center;">
+            <div class="chart-card" style="margin-top:10px;text-align:center;">
               <div class="chart-card-titulo">Promedio de estrellas recibidas</div>
-              <div style="font-size:1.4rem;font-weight:700;color:${MARCA.oro};">${promedioEstrellas !== null ? promedioEstrellas + " / 5 ★" : "Sin calificaciones filtradas"}</div>
+              <div style="font-size:1.5rem;font-weight:800;color:${MARCA.oro};">${promedioEstrellas !== null ? promedioEstrellas + " / 5 ★" : "Sin calificaciones filtradas"}</div>
               <div class="suave" style="font-size:0.72rem;margin-top:4px;">Incluye calificaciones positivas y negativas que pasaron el filtro de Tapin${estrellasGlobales.length ? " · " + estrellasGlobales.length + " evaluaciones" : ""}. Las negativas se guardan privadas y no se publican en Google.</div>
             </div>
             <div class="chart-card">
@@ -3607,8 +2873,6 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
             ${seccionesPaises}
           </div>
 
-        </div>
-          </main>
         </div>
       </body>
     </html>
@@ -3681,7 +2945,7 @@ app.get("/quejas/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
+  if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
 
@@ -3780,7 +3044,7 @@ app.post("/quejas/:slug/estado", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
+  if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado.");
   }
   const i = parseInt(req.body.i, 10);
@@ -3801,7 +3065,7 @@ app.post("/quejas/:slug/nota", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
+  if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado.");
   }
   const i = parseInt(req.body.i, 10);
@@ -3835,13 +3099,11 @@ app.get("/contenido/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
+  if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
 
-  // El administrador puede previsualizar esta sección con su token aunque el
-  // negocio esté en Plan Básico; para el dueño real, sigue exclusiva de Pro.
-  if (!esPro(negocio) && !claveEsTokenAdmin(claveEfectiva(req, slug))) {
+  if (!esPro(negocio)) {
     return res.status(402).send(
       `Esta función (generador de contenido para redes) es exclusiva del Plan Pro. ` +
       `Súbele el plan a "${negocio.nombre}" desde /editar/${slug}?key=${req.query.key} para activarla.`
@@ -3934,7 +3196,7 @@ app.get("/contenido/:slug/caption", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).json({ caption: null });
-  if (!autorizadoProNegocio(req, negocio, slug) || !esPro(negocio)) {
+  if (!autorizadoProNegocio(req, negocio) || !esPro(negocio)) {
     return res.status(401).json({ caption: null });
   }
   const datos = leerDatos();
@@ -3959,7 +3221,7 @@ app.get("/contenido/:slug/tarjeta.svg", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
+  if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado.");
   }
   if (!esPro(negocio)) {
@@ -3985,7 +3247,7 @@ app.get("/contenido/:slug/tarjeta.svg", (req, res) => {
 app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
-  if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "Revisa que el enlace a tu panel esté completo y bien escrito.");
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
 
   // Acepta la clave completa, la clave de solo lectura (idea 5), o la cookie
   // de sesión que se guarda la primera vez. Usa el mismo verificador cifrado
@@ -3997,16 +3259,18 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   // cookie de sesión y no exponen esa clave.
   const adminAutorizado = adminSesionValida(req) || req.query.key === ADMIN_KEY;
   const claveUsada = adminAutorizado
-    ? generarLinkAccesoNegocio(slug, 1, true)
+    ? generarLinkAccesoNegocio(slug, 1)
     : claveEfectiva(req, slug);
   const autorizado = adminAutorizado || claveNegocioValida(negocio, slug, claveUsada) ||
     (negocio.claveSoloLectura && claveUsada === negocio.claveSoloLectura);
   if (!tieneClaveConfigurada(negocio) || !autorizado) {
-    return enviarError(res, 401, "No pudimos verificar tu acceso", "El enlace a tu panel debe incluir tu clave personal. Revisa el correo o mensaje donde Tapin te la envió, o pídesela de nuevo a tu proveedor.");
+    return res.status(401).send("No autorizado. Verifica el enlace que te dio Tapin, debe incluir tu clave personal (?key=...).");
   }
   // Los botones del panel necesitan conservar una autorización; para el
   // administrador usamos un token temporal por negocio, nunca su clave.
-  if (claveUsada && autorizado && claveUsada !== negocio.claveSoloLectura && !String(claveUsada).startsWith("tok_")) ponerCookieSesion(res, slug, claveUsada);
+  if (adminAutorizado) req.query.key = claveUsada;
+  if (req.query.key && autorizado && claveUsada !== negocio.claveSoloLectura && !String(claveUsada).startsWith("tok_")) ponerCookieSesion(res, slug, req.query.key);
+  req.query.key = claveUsada;
 
   const datos = leerDatos();
   const eventos = (datos[slug] && datos[slug].eventos) || [];
@@ -4053,28 +3317,19 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
       )
     : [];
 
-  const iconoActividad = `<svg viewBox="0 0 24 24" fill="none" stroke="${MARCA.verde}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><line x1="11" y1="18" x2="13" y2="18"/></svg>`;
-  const flechaActividad = `<svg viewBox="0 0 24 24" fill="none" stroke="${MARCA.textoSuave}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
   const actividadReciente = eventos
-    .slice(-6)
+    .slice(-8)
     .reverse()
-    .map((e) => `
-      <div class="actividad-item">
-        <div class="actividad-icono">${iconoActividad}</div>
-        <div class="actividad-texto">
-          <div class="actividad-titulo">Toque registrado</div>
-          <div class="actividad-sub">${escaparHtml(e.dispositivo)} · ${tiempoRelativo(e.fechaISO)}</div>
-        </div>
-        <div class="actividad-flecha">${flechaActividad}</div>
-      </div>`)
+    .map((e) => `<tr><td>${e.fechaLegible}</td><td>${e.dispositivo}</td></tr>`)
     .join("");
 
   const recomendacionesHtml = recomendaciones
     .map((texto) => `<div class="reco">${texto}</div>`)
     .join("");
 
-  const promSector = esPro(negocio) ? promedioSector(negocio.categoria, slug, datos) : null;
-  const radar = esPro(negocio) ? radarSector(negocio, slug, todosNegocios, datos) : null;
+  // El plan Gratis puede ver esta comparación como vista previa, pero sus
+  // controles permanecen desactivados hasta mejorar a Pro.
+  const promSector = promedioSector(negocio.categoria, slug, datos);
 
   // Ideas 5-9: solo tienen sentido para negocios Pro (van en esa sección del panel).
   const diaFlojo = esPro(negocio) ? diaMasFlojo(eventos, negocio) : null;
@@ -4100,7 +3355,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   const opcionesProyeccion = ["dia", "semana", "mes", "semestre", "anio"];
   const periodoProyeccion = opcionesProyeccion.includes(req.query.proyeccion) ? req.query.proyeccion : "mes";
   const proyeccion = proyeccionPeriodo(eventos, negocio, periodoProyeccion);
-  const soloLectura = claveUsada === negocio.claveSoloLectura && negocio.claveSoloLectura;
+  const soloLectura = req.query.key === negocio.claveSoloLectura && negocio.claveSoloLectura;
 
   res.send(`
     <html>
@@ -4112,24 +3367,16 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          .content{max-width:1120px;width:100%;}
+          .content{max-width:660px;}
           .seccion{margin-bottom:26px;}
           .seccion-header{text-align:center;margin-bottom:14px;}
           .seccion-header .eyebrow{justify-content:center;}
           .seccion-header h2{font-size:1.1rem;font-weight:700;margin:0 0 4px;}
           .seccion-header p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0;}
 
-          .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch;}
-          @media (max-width:640px){.grid-2{grid-template-columns:1fr;}}
-          .panel-analitica-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;margin-top:6px;margin-bottom:26px;}
-          .panel-analitica-grid>div{min-width:0;}
-          .panel-analitica-grid>.panel-analitica-full{grid-column:1 / -1;}
-          .seccion-datos .grid-3{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}.seccion-datos .grid-3 .reco{margin-bottom:0;min-height:64px;display:flex;align-items:center;line-height:1.4;}
-          @media (max-width:700px){.panel-analitica-grid{grid-template-columns:1fr;}.panel-analitica-grid>div{grid-column:1;}.seccion-datos .grid-3{grid-template-columns:1fr;}}
-          .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:stretch;}
+          .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;align-items:stretch;}
+          .grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;align-items:stretch;}
           .grid-3 .reco{margin-bottom:0;height:100%;box-sizing:border-box;}
-          @media (max-width:900px){.grid-3{grid-template-columns:1fr 1fr;}}
-          @media (max-width:560px){.grid-3{grid-template-columns:1fr;}}
           @media (max-width:480px){
             .fila-herramientas{flex-direction:column;}
             .btn-herramienta{min-width:0;}
@@ -4161,48 +3408,16 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .reco{background:${MARCA.verdeClaro};border-left:3px solid ${MARCA.verde};border-radius:8px;padding:12px 14px;
                 font-size:0.83rem;margin-bottom:8px;color:${MARCA.verdeOscuro};}
 
-          .horas-chart{display:flex;align-items:flex-end;gap:2px;height:60px;max-width:440px;margin:0 auto;}
-          .horas-labels{display:flex;justify-content:space-between;font-size:0.6rem;color:${MARCA.textoSuave};margin:6px auto 0;max-width:440px;}
+          .horas-chart{display:flex;align-items:flex-end;justify-content:center;gap:2px;height:60px;}
+          .horas-labels{display:flex;justify-content:space-between;font-size:0.6rem;color:${MARCA.textoSuave};margin-top:6px;}
           .horas-nota{text-align:center;font-size:0.76rem;color:${MARCA.textoSuave};margin-top:10px;}
           .horas-nota b{color:${MARCA.texto};}
-
-          .dia-flojo-nota{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid ${MARCA.borde};font-size:0.78rem;color:${MARCA.texto};}
-          .dia-flojo-nota b{color:${MARCA.oro};}
-          .dia-flojo-nota .suave{color:${MARCA.textoSuave};font-size:0.74rem;}
 
           .sentimiento-barra{display:flex;height:14px;border-radius:100px;overflow:hidden;background:${MARCA.borde};}
           .sentimiento-leyenda{display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:0.78rem;color:${MARCA.textoSuave};}
           .sentimiento-leyenda span{display:flex;align-items:center;gap:6px;}
           .sentimiento-leyenda i{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
           .sentimiento-vacio{text-align:center;font-size:0.8rem;color:${MARCA.textoSuave};padding:6px 0;}
-
-          .radar-sector{display:flex;flex-direction:column;}
-          .radar-fila{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid ${MARCA.borde};flex-wrap:wrap;}
-          .radar-fila:last-child{border-bottom:none;}
-          .radar-etiqueta{font-size:0.8rem;font-weight:600;color:${MARCA.texto};min-width:150px;}
-          .radar-valores{display:flex;align-items:center;gap:10px;font-size:0.78rem;color:${MARCA.textoSuave};}
-          .radar-valores b{color:${MARCA.texto};}
-          .radar-vs{font-size:0.9rem;font-weight:700;}
-          .radar-sin-dato{font-size:0.76rem;color:${MARCA.textoSuave};font-style:italic;}
-
-          .par-simetrico{display:flex;gap:16px;flex-wrap:wrap;align-items:stretch;}
-          .par-simetrico-item{flex:1;min-width:280px;display:flex;flex-direction:column;}
-          .par-simetrico-item .chart-card{flex:1;}
-          @media (max-width:700px){.par-simetrico{flex-direction:column;}}
-
-          .card-titulo a.ver-mas{font-size:0.72rem;font-weight:700;color:${MARCA.verde};text-decoration:none;}
-          .card-titulo a.ver-mas:hover{text-decoration:underline;}
-          .actividad-lista{padding:4px 18px;}
-          .actividad-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid ${MARCA.borde};}
-          .actividad-item:last-child{border-bottom:none;}
-          .actividad-icono{flex-shrink:0;width:34px;height:34px;border-radius:50%;background:${MARCA.verdeClaro};
-                           display:flex;align-items:center;justify-content:center;}
-          .actividad-icono svg{width:16px;height:16px;}
-          .actividad-texto{flex:1;min-width:0;}
-          .actividad-titulo{font-size:0.84rem;font-weight:600;color:${MARCA.texto};}
-          .actividad-sub{font-size:0.74rem;color:${MARCA.textoSuave};margin-top:2px;}
-          .actividad-flecha{flex-shrink:0;width:16px;height:16px;opacity:0.5;}
-          .actividad-flecha svg{width:100%;height:100%;}
 
           .tabla-actividad{width:100%;border-collapse:collapse;font-size:0.78rem;table-layout:fixed;}
           .tabla-actividad th:first-child, .tabla-actividad td:first-child{width:58%;}
@@ -4224,7 +3439,188 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           .btn-reporte-pdf span{font-size:0.76rem;color:#CFE3D6;display:block;margin-top:2px;}
           .btn-reporte-pdf .flecha{font-size:1.3rem;flex-shrink:0;}
 
-          ${ESTILO_DASHBOARD}
+          /* ---------- Layout tipo dashboard (sidebar + contenido) ---------- */
+          html,body{height:100%;}
+          body{background:${MARCA.crema};}
+          .dashboard-layout{display:flex;min-height:100vh;align-items:stretch;}
+          .sidebar{width:236px;flex-shrink:0;background:linear-gradient(180deg,${MARCA.verdeOscuro} 0%,#082c1c 100%);
+                   color:#fff;display:flex;flex-direction:column;padding:26px 18px;box-sizing:border-box;position:sticky;top:0;height:100vh;}
+          .sidebar-logo{padding:0 8px;margin-bottom:34px;}
+          .sidebar-nav{display:flex;flex-direction:column;gap:3px;flex:1;}
+          .sidebar-nav a{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;
+                         color:#CFE3D8;text-decoration:none;font-size:0.86rem;font-weight:600;transition:background .15s,color .15s;}
+          .sidebar-nav a:hover{background:rgba(255,255,255,0.08);color:#fff;}
+          .sidebar-nav a.activo{background:#fff;color:${MARCA.verdeOscuro};}
+          .sidebar-nav a svg{flex-shrink:0;width:17px;height:17px;}
+          .sidebar-nav a.deshabilitado{opacity:0.45;pointer-events:none;}
+          .sidebar-pie{border-top:1px solid rgba(255,255,255,0.14);padding-top:10px;margin-top:10px;}
+          .sidebar-pie a{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;
+                         color:#9FBBAE;text-decoration:none;font-size:0.74rem;font-weight:600;opacity:0.85;}
+          .sidebar-pie a svg{flex-shrink:0;width:13px;height:13px;}
+          .sidebar-pie a:hover{background:rgba(255,255,255,0.08);color:#fff;opacity:1;}
+          .dashboard-main{flex:1;min-width:0;padding:34px 40px 60px;box-sizing:border-box;}
+          @media (max-width:900px){
+            .dashboard-layout{flex-direction:column;}
+            .sidebar{width:100%;height:auto;position:relative;flex-direction:row;align-items:center;
+                     overflow-x:auto;padding:14px 16px;gap:8px;}
+            .sidebar-logo{margin-bottom:0;}
+            .sidebar-nav{flex-direction:row;flex:none;}
+            .sidebar-nav a{padding:8px 12px;white-space:nowrap;}
+            .sidebar-pie{border-top:none;margin-top:0;padding-top:0;}
+            .sidebar-pie a{padding:6px 10px;white-space:nowrap;}
+            .dashboard-main{padding:22px 16px 50px;}
+          }
+
+          .dash-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
+          .dash-header h1{font-family:'Playfair Display',Georgia,serif;font-size:1.7rem;margin:0;color:${MARCA.texto};letter-spacing:-.02em;}
+          .dash-header-chip{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid ${MARCA.borde};
+                            border-radius:100px;padding:8px 16px;font-size:0.78rem;font-weight:700;color:${MARCA.verdeOscuro};
+                            box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+
+          .dash-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px;}
+          @media (max-width:760px){.dash-cards{grid-template-columns:1fr;}}
+          .dash-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:20px 22px;
+                     box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .dash-card-lbl{font-size:0.74rem;color:${MARCA.textoSuave};font-weight:600;margin-bottom:10px;}
+          .dash-card-num{font-size:1.9rem;font-weight:800;color:${MARCA.texto};line-height:1;}
+          .dash-card-sub{font-size:0.76rem;color:${MARCA.textoSuave};margin-top:4px;}
+          .dash-card-delta{display:inline-flex;align-items:center;gap:3px;font-size:0.74rem;font-weight:700;margin-top:10px;}
+          .dash-card-delta.up{color:${MARCA.verde};}
+          .dash-card-delta.down{color:${MARCA.rojo};}
+          .dash-card-estrellas{color:${MARCA.oro};font-size:1rem;letter-spacing:2px;margin-top:6px;}
+
+          .dash-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+          @media (max-width:900px){.dash-charts{grid-template-columns:1fr;}}
+          .dash-panel{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:20px 22px;
+                      box-shadow:0 1px 2px rgba(11,61,44,0.04);}
+          .dash-panel-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:16px;}
+          .dash-panel-titulo{font-size:0.92rem;font-weight:700;color:${MARCA.texto};}
+          .dash-panel-sub{font-size:0.72rem;color:${MARCA.textoSuave};margin-top:2px;}
+          .dash-panel-num{font-size:1.5rem;font-weight:800;color:${MARCA.texto};text-align:right;}
+          .dash-panel-numlbl{font-size:0.7rem;color:${MARCA.textoSuave};text-align:right;}
+          .dash-actividad-bars{display:flex;align-items:flex-end;gap:10px;height:150px;}
+          .actividad-visual{padding:14px 14px 10px;border:1px solid ${MARCA.borde};border-radius:13px;
+                            background:repeating-linear-gradient(to bottom,#FBFCF9 0,#FBFCF9 36px,rgba(15,81,50,.07) 37px);}
+          .actividad-visual .dash-actividad-bars{border-bottom:1px solid ${MARCA.borde};}
+          .actividad-resumen{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:12px;}
+          .actividad-metrica{padding:9px 7px;border-radius:10px;background:${MARCA.crema};text-align:center;}
+          .actividad-metrica b{display:block;font-size:.84rem;color:${MARCA.texto};}
+          .actividad-metrica span{font-size:.59rem;color:${MARCA.textoSuave};text-transform:uppercase;letter-spacing:.02em;}
+          .actividad-leyenda{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:9px;
+                             color:${MARCA.textoSuave};font-size:.64rem;}
+          .actividad-leyenda i{width:8px;height:8px;border-radius:2px;background:${MARCA.oro};}
+          .proyeccion-panel{position:relative;overflow:hidden;}
+          .proyeccion-grafica{padding:14px 14px 8px;border:1px solid ${MARCA.borde};border-radius:13px;
+                              background:linear-gradient(180deg,#FBFCF9 0%,#F4F8F3 100%);}
+          .proyeccion-grafica svg{height:112px!important;filter:drop-shadow(0 4px 7px rgba(15,81,50,.10));}
+          .proyeccion-eje{display:flex;justify-content:space-between;margin-top:6px;font-size:.61rem;color:${MARCA.textoSuave};}
+          .proyeccion-periodos{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;}
+          .proyeccion-periodo{text-decoration:none;font-size:.68rem;font-weight:700;padding:7px 10px;border-radius:999px;
+                              border:1px solid ${MARCA.borde};background:#fff;color:${MARCA.verdeOscuro};}
+          .proyeccion-periodo.activo{border-color:${MARCA.verde};background:${MARCA.verdeClaro};box-shadow:inset 0 0 0 1px ${MARCA.verde};}
+          .proyeccion-metricas{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:12px;}
+          .proyeccion-metrica{padding:9px 7px;border-radius:10px;background:${MARCA.crema};text-align:center;}
+          .proyeccion-metrica b{display:block;color:${MARCA.texto};font-size:.82rem;}
+          .proyeccion-metrica span{font-size:.6rem;color:${MARCA.textoSuave};text-transform:uppercase;letter-spacing:.02em;}
+
+          /* Estructura del panel Pro basada en el boceto del negocio. */
+          .panel-boceto{display:flex;flex-direction:column;gap:26px;margin-top:26px;}
+          .boceto-fila-superior{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;}
+          .boceto-fila-media{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.95fr);gap:16px;align-items:stretch;}
+          .boceto-botones,.boceto-contenidos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start;}
+          .boceto-contenidos{margin-top:-14px;}
+          .boceto-bloque{min-width:0;display:flex;flex-direction:column;}
+          .boceto-bloque .chart-card{margin-top:0;flex:1;}
+          .boceto-fila-superior .chart-card{min-height:340px;display:flex;flex-direction:column;justify-content:center;}
+          .boceto-calendario{display:grid;grid-template-columns:repeat(7,minmax(34px,1fr));gap:7px;width:100%;max-width:390px;margin:0 auto;}
+          .boceto-calendario .cal-dia{font-size:.76rem!important;border-radius:8px!important;}
+          .boceto-boton{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;
+                        background:${MARCA.verdeOscuro};color:#fff;text-decoration:none;font-size:.84rem;font-weight:800;
+                        border-radius:12px;box-shadow:0 1px 2px rgba(11,61,44,.08);}
+          .boceto-boton span{font-size:1rem;}
+          .boceto-contenido{min-width:0;padding:4px 2px 0;}
+          .boceto-contenido-titulo{font-size:.92rem;font-weight:800;color:${MARCA.texto};margin:0 0 12px;padding-left:10px;border-left:3px solid ${MARCA.verde};}
+          .boceto-contenido .reco:last-child{margin-bottom:0;}
+          .boceto-alerta{font-size:.78rem;color:${MARCA.textoSuave};line-height:1.5;margin:0 0 10px;}
+          .grafica-vertical-marco{padding:16px 16px 10px;border:1px solid ${MARCA.borde};border-radius:13px;
+                                  background:repeating-linear-gradient(to bottom,#FBFCF9 0,#FBFCF9 52px,rgba(15,81,50,.07) 53px);}
+          .grafica-vertical{height:220px;display:flex;align-items:flex-end;justify-content:center;gap:42px;padding:0;
+                            border-bottom:1px solid ${MARCA.borde};}
+          .barra-vertical-grupo{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:64px;}
+          .barra-vertical-valor{font-size:.82rem;font-weight:900;margin-bottom:7px;}
+          .barra-vertical{width:58px;min-height:24px;border-radius:9px 9px 2px 2px;box-shadow:inset 0 1px rgba(255,255,255,.3);}
+          .barra-vertical-etiqueta{font-size:.7rem;color:${MARCA.textoSuave};text-align:center;margin-top:8px;line-height:1.25;}
+          .grafica-resumen{display:flex;justify-content:center;gap:7px;flex-wrap:wrap;margin-top:11px;}
+          .grafica-resumen span{padding:6px 9px;border-radius:999px;background:${MARCA.crema};color:${MARCA.textoSuave};font-size:.66rem;font-weight:700;}
+          .grafica-resumen span b{color:${MARCA.texto};}
+          .horas-visual{width:92%;max-width:760px;margin:0 auto;padding:15px 18px 12px;box-sizing:border-box;
+                        border:1px solid ${MARCA.borde};border-radius:13px;background:linear-gradient(180deg,#FBFCF9 0%,#F5F8F3 100%);}
+          .horas-visual-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;
+                            font-size:.7rem;font-weight:700;color:${MARCA.textoSuave};}
+          .hora-pico-badge{padding:5px 9px;border-radius:999px;background:#FBF1D8;color:#7A5A00;font-weight:800;}
+          .boceto-fila-media .horas-chart{position:relative;width:100%;max-width:none;height:118px;margin:0;gap:4px;
+                                         border-bottom:1px solid ${MARCA.borde};
+                                         background:repeating-linear-gradient(to bottom,transparent 0,transparent 28px,rgba(15,81,50,.08) 29px);}
+          .boceto-fila-media .horas-chart>div{min-width:3px;border-radius:3px 3px 0 0!important;}
+          .boceto-fila-media .horas-labels{width:100%;max-width:none;margin:8px 0 0;font-size:.64rem;}
+          .tarjeta-bloqueada{position:relative;overflow:hidden;min-height:170px;border-color:#B8BDBA!important;background:#F4F5F3!important;}
+          .tarjeta-bloqueada>*{filter:none;opacity:1;pointer-events:none;user-select:none;}
+          .tarjeta-bloqueada .barra-vertical{background:linear-gradient(180deg,#B9BEBA,#747C77)!important;}
+          .tarjeta-bloqueada .barra-vertical-valor{color:#5F6762!important;}
+          .tarjeta-bloqueada .horas-chart>div{background:#858D88!important;}
+          .tarjeta-bloqueada .hora-pico-badge{background:#D9DCDA!important;color:#5F6762!important;}
+          .tarjeta-bloqueada .cal-dia.cal-vacio{background:#E0E2E0!important;color:#7A817D!important;}
+          .tarjeta-bloqueada .cal-dia.cal-nivel-1{background:#C8CCC9!important;color:#505753!important;}
+          .tarjeta-bloqueada .cal-dia.cal-nivel-2{background:#A9AFAB!important;color:#303632!important;}
+          .tarjeta-bloqueada .cal-dia.cal-nivel-3{background:#858D88!important;color:#fff!important;}
+          .tarjeta-bloqueada .cal-dia.cal-nivel-4{background:#626A65!important;color:#fff!important;}
+          .tarjeta-bloqueada svg path{stroke:#727A75!important;}
+          .tarjeta-bloqueada svg path[fill]:not([fill="none"]){fill:#AEB3B0!important;}
+          .tarjeta-bloqueada::after{content:"Vista previa · PRO";position:absolute;right:12px;top:12px;
+                                    z-index:2;width:max-content;max-width:80%;padding:6px 9px;border-radius:999px;
+                                    background:#737B76;color:#fff;font-size:.6rem;font-weight:900;
+                                    letter-spacing:.03em;box-shadow:0 5px 14px rgba(44,50,46,.14);}
+          .boton-mejorar{display:inline-block;margin-top:8px;padding:10px 14px;border-radius:10px;background:${MARCA.verde};
+                         color:#fff!important;text-decoration:none;font-size:.78rem;font-weight:800;}
+          .panel-gratis .boceto-contenidos{align-items:stretch;}
+          .panel-gratis .boceto-contenido{display:flex;flex-direction:column;height:100%;box-sizing:border-box;background:#fff;
+                                         border:1px solid ${MARCA.borde};border-radius:14px;padding:18px;
+                                         box-shadow:0 1px 2px rgba(11,61,44,.04);}
+          .panel-gratis .boceto-contenido-titulo{margin-bottom:14px;}
+          .panel-gratis .boceto-contenido .reco{line-height:1.5;}
+          .panel-gratis .boton-mejorar{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
+                                      box-sizing:border-box;margin-top:auto;padding:14px 16px;border-radius:12px;
+                                      background:linear-gradient(135deg,${MARCA.oro},#F7D77D);color:${MARCA.verdeOscuro}!important;
+                                      font-size:.84rem;box-shadow:0 8px 18px rgba(232,173,50,.24);transition:transform .15s,box-shadow .15s;}
+          .panel-gratis .boton-mejorar:hover{transform:translateY(-2px);box-shadow:0 11px 22px rgba(232,173,50,.34);}
+          .panel-gratis .boton-mejorar b{font-size:1.05rem;}
+          .panel-gratis .boceto-boton{position:relative;padding-right:42px;}
+          .panel-gratis .boceto-boton::after{content:"PRO";position:absolute;right:13px;top:50%;transform:translateY(-50%);
+                                             padding:3px 6px;border-radius:999px;background:#737B76;color:#fff;
+                                             font-size:.56rem;font-weight:900;letter-spacing:.04em;}
+          .panel-gratis .boceto-boton>span{display:none;}
+          .panel-gratis .boceto-boton{background:#E7E9E6;color:#626A65;border:1px solid #BFC4C1;box-shadow:none;}
+          .panel-gratis .boceto-contenido:nth-child(2) .reco{background:#EFF0EE;border-left-color:#969D99;color:#5F6762;}
+          .preview-pro-aviso{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 15px;
+                             border:1px solid #E8C66F;border-radius:13px;background:#FFF9E9;color:#6B520F;
+                             font-size:.76rem;line-height:1.45;}
+          .preview-pro-aviso a{flex-shrink:0;padding:8px 11px;border-radius:9px;background:${MARCA.verdeOscuro};
+                               color:#fff;text-decoration:none;font-weight:800;}
+          .pro-original{display:none!important;}
+          @media (max-width:1100px){
+            .boceto-fila-superior{grid-template-columns:repeat(2,minmax(0,1fr));}
+            .boceto-fila-superior .boceto-bloque:last-child{grid-column:1/-1;}
+            .boceto-botones,.boceto-contenidos{grid-template-columns:1fr 1fr;}
+          }
+          @media (max-width:760px){
+            .boceto-fila-superior,.boceto-fila-media,.boceto-botones,.boceto-contenidos{grid-template-columns:1fr;}
+            .boceto-contenidos{margin-top:0;}
+            .boceto-fila-superior .boceto-bloque:last-child{grid-column:auto;}
+            .boceto-fila-superior .chart-card{min-height:300px;}
+            .boceto-calendario{grid-template-columns:repeat(7,minmax(30px,1fr));gap:6px;max-width:360px;}
+            .grafica-vertical{height:230px;}
+            .preview-pro-aviso{align-items:flex-start;flex-direction:column;}
+          }
         </style>
       </head>
       <body>
@@ -4232,24 +3628,24 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           <aside class="sidebar">
             <div class="sidebar-logo">${logoSvg("#FFFFFF", 26)}</div>
             <nav class="sidebar-nav">
-              <a href="/mi-panel/${slug}?key=${claveUsada}" class="activo">
+              <a href="/mi-panel/${slug}?key=${req.query.key}" class="activo">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
                 Resumen
               </a>
-              <a href="/mi-panel/${slug}?key=${claveUsada}#actividad">
+              <a href="/mi-panel/${slug}?key=${req.query.key}#actividad">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
                 Actividad
               </a>
               ${!soloLectura ? `
-              <a href="/mi-panel/${slug}/configuracion?key=${claveUsada}">
+              <a href="/mi-panel/${slug}/editar?key=${req.query.key}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3.5a2 2 0 010-4h.09A1.65 1.65 0 005 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09c0 .68.39 1.29 1 1.51.63.28 1.36.15 1.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06c-.48.46-.61 1.19-.33 1.82.22.61.83 1 1.51 1H21a2 2 0 010 4h-.09c-.68 0-1.29.39-1.51 1z"/></svg>
                 Opciones
               </a>
-              <a href="${esPro(negocio) ? `/suscripcion/${slug}?key=${claveUsada}` : `/mejorar-a-pro/${slug}?key=${claveUsada}`}">
+              <a href="${esPro(negocio) ? `/suscripcion/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                 ${esPro(negocio) ? "Mi suscripción" : "Plan de pago"}
               </a>
-              <a href="/mi-panel/${slug}/configuracion?key=${claveUsada}">
+              <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
                 Configuración
               </a>
@@ -4273,29 +3669,30 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               ${negocio.pausado ? `<span class="dash-header-chip" style="background:#FBEFE9;color:#993C1D;border-color:#F0D5C8;">Pausado</span>` : ""}
               ${soloLectura ? `<span class="dash-header-chip">Solo lectura</span>` : ""}
-              <span class="dash-header-chip" style="${esPro(negocio) ? "" : `color:${MARCA.textoSuave};`}">${esPro(negocio) ? "Plan Pro" : "Plan Básico"}</span>
+              <span class="dash-header-chip" style="${esPro(negocio) ? "" : `color:${MARCA.textoSuave};`}">${esPro(negocio) ? "Plan Pro" : "Plan Gratis"}</span>
               <span class="dash-header-chip" style="font-weight:500;color:${MARCA.textoSuave};">Actualizado al ${new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) })}</span>
             </div>
           </div>
 
           ${!soloLectura ? `
           <div style="margin:0 0 22px;display:flex;gap:10px;flex-wrap:wrap;">
-            <a href="/mi-panel/${slug}/editar?key=${claveUsada}"
-               style="font-size:0.76rem;font-weight:600;color:${MARCA.verdeOscuro};background:#fff;
-                      border:1px solid ${MARCA.borde};border-radius:8px;padding:8px 16px;text-decoration:none;">
+            <a href="/mi-panel/${slug}/editar?key=${req.query.key}"
+               style="font-size:0.76rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
+                      border:1.5px solid ${MARCA.borde};border-radius:100px;padding:8px 16px;text-decoration:none;">
               Editar mi negocio
             </a>
-            <a href="/mi-panel/${slug}/clave?key=${claveUsada}"
-               style="font-size:0.76rem;font-weight:600;color:${MARCA.verdeOscuro};background:#fff;
-                      border:1px solid ${MARCA.borde};border-radius:8px;padding:8px 16px;text-decoration:none;">
+            <a href="/mi-panel/${slug}/clave?key=${req.query.key}"
+               style="font-size:0.76rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
+                      border:1.5px solid ${MARCA.borde};border-radius:100px;padding:8px 16px;text-decoration:none;">
               Cambiar mi clave
             </a>
           </div>
           ` : ""}
 
-          ${otrasSedes.length > 0 ? `
+          ${!soloLectura ? `
           <div class="seccion">
-            <div class="card-titulo">Tus otras sedes <span class="suave">${otrasSedes.length + 1} en total</span></div>
+            <div class="card-titulo">${otrasSedes.length > 0 ? `Tus otras sedes <span class="suave">${otrasSedes.length + 1} en total</span>` : "Agrega otra sede"}</div>
+            ${otrasSedes.length > 0 ? `
             <div class="chart-card" style="margin-top:0;padding:8px;">
               ${otrasSedes
                 .map((s) => {
@@ -4309,6 +3706,19 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                           </a>`;
                 })
                 .join("")}
+            </div>
+            ` : ""}
+            <div class="chart-card" style="margin-top:${otrasSedes.length > 0 ? "10px" : "0"};">
+              <form action="/activar" method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                <input type="text" name="codigo" placeholder="Código de la tarjeta nueva"
+                       style="flex:1;min-width:180px;padding:10px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.86rem;font-family:inherit;" required>
+                <button type="submit"
+                        style="background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:10px 18px;
+                               font-size:0.84rem;font-weight:700;cursor:pointer;white-space:nowrap;">
+                  Activar tarjeta
+                </button>
+              </form>
+              <div class="suave" style="font-size:0.72rem;margin-top:8px;">¿Tienes una tarjeta Tapin nueva para otra sede? Escribe el código que llegó con ella para activarla.</div>
             </div>
           </div>
           ` : ""}
@@ -4348,15 +3758,23 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                   <div class="dash-panel-numlbl">interacciones</div>
                 </div>
               </div>
-              <div class="dash-actividad-bars sparkline">${barraSemana(r.dias7)}</div>
+              <div class="actividad-visual">
+                <div class="dash-actividad-bars">${barraSemana(r.dias7)}</div>
+                <div class="actividad-leyenda"><i></i><span>La barra dorada indica tu día con más actividad</span></div>
+              </div>
+              <div class="actividad-resumen">
+                <div class="actividad-metrica"><b>${r.semana}</b><span>Total semanal</span></div>
+                <div class="actividad-metrica"><b>${Math.round((r.semana / 7) * 10) / 10}</b><span>Promedio diario</span></div>
+                <div class="actividad-metrica"><b>${Math.max(0, ...r.dias7)}</b><span>Mejor día</span></div>
+              </div>
               <div class="ultimo-toque" style="margin-top:12px;">Total histórico: <b>${r.total}</b> · Último toque: <b>${ultimoTexto}</b></div>
             </div>
 
-            <div class="dash-panel">
+            <div class="dash-panel proyeccion-panel ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
               <div class="dash-panel-top">
                 <div>
                   <div class="dash-panel-titulo">Proyección</div>
-                  <div class="dash-panel-sub">Proyectas ${proyeccion.etiqueta}</div>
+                  <div class="dash-panel-sub">Estimación para ${proyeccion.etiqueta}</div>
                 </div>
                 <div>
                   <div class="dash-panel-num">${proyeccion.suficiente ? proyeccion.proyectado : "—"}</div>
@@ -4365,61 +3783,94 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                     : `<div class="dash-panel-numlbl">interacciones</div>`}
                 </div>
               </div>
-              ${calendario.dias.some((v) => v > 0)
-                ? graficaLinea(calendario.dias, { alto: 90, color: MARCA.verde })
-                : `<div style="text-align:center;color:${MARCA.textoSuave};font-size:0.8rem;padding:20px 0;">Todavía no hay suficientes datos este mes.</div>`}
-              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;">
-                ${[["dia","1 día"],["semana","1 semana"],["mes","1 mes"],["semestre","6 meses"],["anio","1 año"]].map(([valor, texto]) => `<a href="/mi-panel/${slug}?key=${encodeURIComponent(claveUsada)}&proyeccion=${valor}#actividad" style="text-decoration:none;font-size:0.68rem;font-weight:600;padding:6px 10px;border-radius:6px;border:1px solid ${periodoProyeccion === valor ? MARCA.verde : MARCA.borde};background:${periodoProyeccion === valor ? MARCA.verdeClaro : "#fff"};color:${MARCA.verdeOscuro};">${texto}</a>`).join("")}
+              <div class="proyeccion-grafica">
+                ${calendario.dias.some((v) => v > 0)
+                  ? graficaLinea(calendario.dias, { alto: 112, color: MARCA.verde })
+                  : `<div style="text-align:center;color:${MARCA.textoSuave};font-size:0.8rem;padding:35px 0;">Todavía no hay suficientes datos este mes.</div>`}
+                <div class="proyeccion-eje"><span>Inicio del mes</span><span>Hoy</span><span>Fin del mes</span></div>
+              </div>
+              <div class="proyeccion-periodos">
+                ${[["dia","1 día"],["semana","1 semana"],["mes","1 mes"],["semestre","6 meses"],["anio","1 año"]].map(([valor, texto]) => `<a class="proyeccion-periodo ${periodoProyeccion === valor ? "activo" : ""}" href="/mi-panel/${slug}?key=${encodeURIComponent(req.query.key)}&proyeccion=${valor}#actividad">${texto}</a>`).join("")}
               </div>
               ${proyeccion.suficiente
-                ? `<div class="ultimo-toque" style="margin-top:12px;">Rango orientativo: <b>${proyeccion.minimo}–${proyeccion.maximo}</b> toques · promedio actual <b>${proyeccion.promedio}/día</b> · ${proyeccion.restantes} días restantes</div>`
-                : `<div class="ultimo-toque" style="margin-top:12px;">Estamos reuniendo datos — cuando haya al menos 3 días y 3 toques registrados este período, aquí verás la estimación.</div>`}
+                ? `<div class="proyeccion-metricas"><div class="proyeccion-metrica"><b>${proyeccion.minimo}–${proyeccion.maximo}</b><span>Rango</span></div><div class="proyeccion-metrica"><b>${proyeccion.promedio}/día</b><span>Promedio</span></div><div class="proyeccion-metrica"><b>${proyeccion.restantes}</b><span>Días restantes</span></div></div>`
+                : `<div class="ultimo-toque" style="margin-top:12px;">Estamos reuniendo datos — necesitas al menos 3 días y 3 toques para calcular la estimación.</div>`}
             </div>
           </div>
 
-          ${comparativoMes.disponible ? `
-          <div class="seccion">
-            <div class="card-titulo">Este mes vs. el anterior</div>
-            <div class="chart-card" style="margin-top:0;display:flex;gap:20px;align-items:center;">
-              <div style="text-align:center;flex:1;">
-                <div style="font-size:1.4rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
-                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
-              </div>
-              <div style="text-align:center;flex:1;">
-                <div style="font-size:1.4rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
-                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
-              </div>
-              <div style="text-align:center;flex:1;">
-                <div style="font-size:1.1rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
-                  ${comparativoMes.cambioPct >= 0 ? "+" : ""}${comparativoMes.cambioPct}%
+          <div class="seccion grid-2">
+            ${meta ? `
+            <div>
+              <div class="card-titulo">Meta del mes</div>
+              <div class="chart-card" style="margin-top:0;">
+                <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:6px;">
+                  <span>${meta.toquesMes} de ${meta.metaMensual} toques</span><b>${meta.pct}%</b>
                 </div>
-                <div style="font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
+                <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                  <div style="height:100%;border-radius:100px;background:${meta.pct >= 100 ? MARCA.oro : MARCA.verde};width:${meta.pct}%;"></div>
+                </div>
               </div>
             </div>
-            ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:10px;">Vs. el mismo mes del año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
+            ` : ""}
+            ${comparativoMes.disponible ? `
+            <div>
+              <div class="card-titulo">Este mes vs. el anterior</div>
+              <div class="chart-card" style="margin-top:0;display:flex;gap:10px;align-items:center;">
+                <div style="text-align:center;flex:1;">
+                  <div style="font-size:1.2rem;font-weight:800;color:${MARCA.verdeOscuro};">${comparativoMes.mesActual}</div>
+                  <div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Este mes</div>
+                </div>
+                <div style="text-align:center;flex:1;">
+                  <div style="font-size:1.2rem;font-weight:800;color:${MARCA.textoSuave};">${comparativoMes.mesAnterior}</div>
+                  <div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Mes anterior</div>
+                </div>
+                <div style="text-align:center;flex:1;">
+                  <div style="font-size:1rem;font-weight:800;color:${comparativoMes.cambioPct >= 0 ? MARCA.verde : MARCA.rojo};">
+                    ${comparativoMes.cambioPct >= 0 ? "+" : ""}${comparativoMes.cambioPct}%
+                  </div>
+                  <div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Cambio</div>
+                </div>
+              </div>
+              ${comparativoAnio ? `<div class="ultimo-toque" style="margin-top:8px;font-size:0.72rem;">Vs. año pasado: <b>${comparativoAnio.cambioPct >= 0 ? "+" : ""}${comparativoAnio.cambioPct}%</b></div>` : ""}
+            </div>
+            ` : ""}
           </div>
-          ` : ""}
 
-
-          ${!esPro(negocio) ? `
-          <div class="seccion">
+          <div class="seccion pro-original">
             <div class="card-titulo">Calendario del mes</div>
             <div class="chart-card" style="margin-top:0;">
-              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:340px;margin:0 auto;">
-                ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
-                ${calendario.dias.map((v, i) => {
-                  const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
-                  const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
-                  return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;
-                          background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
-                          display:flex;align-items:center;justify-content:center;font-size:0.66rem;font-weight:600;
-                          color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
-                }).join("")}
+              <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+                <div style="flex-shrink:0;">
+                  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:260px;">
+                    ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
+                    ${calendario.dias.map((v, i) => {
+                      const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
+                      const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
+                      return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;
+                              background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
+                              display:flex;align-items:center;justify-content:center;font-size:0.66rem;font-weight:600;
+                              color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
+                    }).join("")}
+                  </div>
+                  <div class="cal-leyenda" style="text-align:left;font-size:0.7rem;color:${MARCA.textoSuave};margin-top:12px;">Más oscuro = más toques</div>
+                </div>
+                ${totalCalificado > 0 ? `
+                <div style="display:flex;gap:14px;align-items:flex-end;height:150px;flex-shrink:0;border-left:1px solid ${MARCA.borde};padding-left:24px;">
+                  <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">
+                    <div style="font-size:0.8rem;font-weight:800;color:${MARCA.verde};margin-bottom:6px;">${pctPositivas}%</div>
+                    <div style="width:38px;border-radius:7px 7px 3px 3px;background:${MARCA.verde};height:${Math.max(6, pctPositivas)}%;"></div>
+                    <div style="font-size:0.68rem;color:${MARCA.textoSuave};margin-top:8px;text-align:center;">Positivas<br><b style="color:${MARCA.texto};">${testimonios.length}</b></div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">
+                    <div style="font-size:0.8rem;font-weight:800;color:${MARCA.rojo};margin-bottom:6px;">${pctNegativas}%</div>
+                    <div style="width:38px;border-radius:7px 7px 3px 3px;background:${MARCA.rojo};height:${Math.max(6, pctNegativas)}%;"></div>
+                    <div style="font-size:0.68rem;color:${MARCA.textoSuave};margin-top:8px;text-align:center;">Quejas<br><b style="color:${MARCA.texto};">${quejas.length}</b></div>
+                  </div>
+                </div>
+                ` : ""}
               </div>
-              <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:14px;">Más oscuro = más toques</div>
             </div>
           </div>
-          ` : ""}
 
           ${r.total === 0 ? `
           <div class="seccion">
@@ -4429,7 +3880,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 Comparte el link de tu tarjeta con tus primeros clientes: <b>${req.protocol}://${req.get("host")}/r/${slug}</b>
               </div>
               <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
-                Verifica que tu <a href="/mi-panel/${slug}/editar?key=${claveUsada}" style="color:#7A5A00;">enlace de reseñas de Google</a> sea el correcto antes del primer toque.
+                Verifica que tu <a href="/mi-panel/${slug}/editar?key=${req.query.key}" style="color:#7A5A00;">enlace de reseñas de Google</a> sea el correcto antes del primer toque.
               </div>
               <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
                 Invita a un cliente frecuente a dejar tu primera reseña — así pruebas que todo el flujo funciona.
@@ -4438,9 +3889,83 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           </div>
           ` : ""}
 
-          ${esPro(negocio) ? `
+          ${true ? `
+          <section class="panel-boceto ${esPro(negocio) ? "panel-pro" : "panel-gratis"}" aria-label="Resumen detallado del negocio">
+            ${esPro(negocio) ? "" : `<div class="preview-pro-aviso"><span><b>Estás viendo una vista previa.</b> Puedes consultar las gráficas y la actividad; sus controles se activan al mejorar a Pro.</span><a href="/mejorar-a-pro/${slug}?key=${req.query.key}">Activar Pro</a></div>`}
+            <div class="boceto-fila-superior">
+              <div class="boceto-bloque">
+                <div class="card-titulo">Calendario del mes</div>
+                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
+                  <div class="boceto-calendario">
+                    ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
+                    ${calendario.dias.map((v, i) => {
+                      const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
+                      const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
+                      return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};display:flex;align-items:center;justify-content:center;font-size:.66rem;font-weight:600;color:${intensidad > .5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
+                    }).join("")}
+                  </div>
+                  <div class="cal-leyenda" style="text-align:center;font-size:.7rem;color:${MARCA.textoSuave};margin-top:12px;">Más oscuro = más toques</div>
+                </div>
+              </div>
+
+              <div class="boceto-bloque">
+                <div class="card-titulo">Cómo te calificaron</div>
+                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
+                  ${totalCalificado > 0 || !esPro(negocio)
+                    ? `<div class="grafica-vertical-marco"><div class="grafica-vertical">
+                         <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.verde};">${pctPositivas}%</div><div class="barra-vertical" style="height:${Math.max(6, pctPositivas)}%;background:linear-gradient(180deg,#2C9560,${MARCA.verde});"></div><div class="barra-vertical-etiqueta">Positivas<br><b>${testimonios.length}</b></div></div>
+                         <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.rojo};">${pctNegativas}%</div><div class="barra-vertical" style="height:${Math.max(6, pctNegativas)}%;background:linear-gradient(180deg,#E05243,${MARCA.rojo});"></div><div class="barra-vertical-etiqueta">Quejas<br><b>${quejas.length}</b></div></div>
+                       </div></div>
+                       <div class="grafica-resumen"><span><b>${totalCalificado}</b> respuestas</span>${tasaRecuperacion !== null ? `<span>Recuperación <b>${tasaRecuperacion}%</b></span>` : ""}<span>Balance <b>${pctPositivas - pctNegativas >= 0 ? "+" : ""}${pctPositivas - pctNegativas} pts</b></span></div>${totalCalificado === 0 ? `<div class="horas-nota">La gráfica empezará a crecer cuando recibas calificaciones.</div>` : ""}`
+                    : `<div class="sentimiento-vacio">Sin calificaciones todavía.</div>`}
+                </div>
+              </div>
+
+              <div class="boceto-bloque">
+                <div class="card-titulo">Tú vs. tu sector</div>
+                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
+                  ${promSector !== null ? `<div class="grafica-vertical-marco"><div class="grafica-vertical">
+                    <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.verde};">${r.semana}</div><div class="barra-vertical" style="height:${Math.max(6, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;background:linear-gradient(180deg,#2C9560,${MARCA.verde});"></div><div class="barra-vertical-etiqueta">Tu negocio<br><b>esta semana</b></div></div>
+                    <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:#A86E00;">${promSector}</div><div class="barra-vertical" style="height:${Math.max(6, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;background:linear-gradient(180deg,#F7D77D,${MARCA.oro});"></div><div class="barra-vertical-etiqueta">Tu sector<br><b>promedio</b></div></div>
+                  </div></div><div class="grafica-resumen"><span>Diferencia <b>${r.semana - promSector >= 0 ? "+" : ""}${r.semana - promSector}</b></span><span><b>${r.semana >= promSector ? "Por encima" : "Por debajo"}</b> del promedio</span></div>` : `<div class="sentimiento-vacio">Aún no hay negocios suficientes para comparar tu sector.</div>`}
+                </div>
+              </div>
+            </div>
+
+            <div class="boceto-fila-media" id="actividad">
+              <div class="boceto-bloque">
+                <div class="card-titulo">Tus horas pico <span class="suave">30 días</span></div>
+                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
+                  <div class="horas-visual">
+                    <div class="horas-visual-top"><span>Actividad por hora</span>${horas.totalMes > 0 ? `<span class="hora-pico-badge">Pico ${horas.picoHora}:00</span>` : `<span class="hora-pico-badge">Sin datos</span>`}</div>
+                    <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
+                    <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+                  </div>
+                  ${horas.totalMes > 0 ? `<div class="horas-nota">La barra dorada marca tu hora con mayor actividad · <b>${horas.maxToques} toques</b></div>` : `<div class="horas-nota">Aún no hay suficientes datos para identificar tu hora pico.</div>`}
+                </div>
+              </div>
+              <div class="boceto-bloque">
+                <div class="card-titulo">Actividad reciente</div>
+                <div class="chart-card ${esPro(negocio) ? "" : "tarjeta-bloqueada"}"><table class="tabla-actividad"><tr><th>Fecha</th><th>Dispositivo</th></tr>${actividadReciente || `<tr><td colspan="2" style="text-align:center;color:${MARCA.textoSuave};">Sin toques todavía</td></tr>`}</table></div>
+              </div>
+            </div>
+
+            <div class="boceto-botones" aria-label="Herramientas del plan Pro">
+              <a class="boceto-boton" href="${esPro(negocio) ? `/quejas/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">Retroalimentación privada <span>→</span></a>
+              <a class="boceto-boton" href="${esPro(negocio) ? `/contenido/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">Generador de contenido <span>→</span></a>
+              <a class="boceto-boton" href="${esPro(negocio) ? `/reportes-guardados/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">Reportes guardados <span>→</span></a>
+            </div>
+
+            <div class="boceto-contenidos">
+              <div class="boceto-contenido"><div class="boceto-contenido-titulo">Recomendaciones</div>${esPro(negocio) ? recomendacionesHtml : `<div class="reco">Sigue reuniendo toques para conocer el comportamiento general de tu negocio.</div><div class="reco">Con Pro recibirás recomendaciones automáticas basadas en tus resultados.</div>`}</div>
+              <div class="boceto-contenido"><div class="boceto-contenido-titulo">${esPro(negocio) ? "Más de tu plan Pro" : "Desbloquea con Pro"}</div>${esPro(negocio) ? `<div class="reco"><b>Alertas instantáneas activas</b> — recibirás un correo en <b>${negocio.email || "tu correo"}</b> cuando llegue una queja privada.</div><div class="reco"><b>Generador para redes</b> — convierte tus resultados en ideas de contenido listas para publicar.</div>` : `<div class="reco"><b>Todo el análisis:</b> calendario, proyecciones, horas pico, comparación con el sector, actividad detallada, alertas y contenido para redes.</div><div class="reco"><b>Reportes automáticos:</b> recibe cada mes un PDF con los resultados de tu negocio.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}"><span>Ver Plan Pro</span><b>→</b></a>`}</div>
+              <div class="boceto-contenido"><div class="boceto-contenido-titulo">${esPro(negocio) ? "Tu plan" : "Tu plan actual"}</div>${esPro(negocio) ? `<div class="reco"><b>Plan Pro activo</b> — tienes acceso a todas las estadísticas y herramientas avanzadas.</div><div class="reco"><b>Reporte PDF mensual</b> — al final de cada mes recibirás automáticamente el análisis completo de tu negocio.</div>` : `<div class="reco"><b>Plan Gratis activo</b> — conservas el resumen esencial de tus toques.</div><div class="reco"><b>Mejora cuando quieras:</b> el cambio se activa al instante y no pierdes tus datos actuales.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}"><span>Mejorar a Pro</span><b>→</b></a>`}</div>
+            </div>
+          </section>
+
+          <div class="pro-original" aria-hidden="true">
           ${resumenFrase || caida || diaFlojo || clientesRecurrentes > 0 || percentil !== null ? `
-          <div class="seccion seccion-datos">
+          <div class="seccion">
             <div class="card-titulo">Lo que dicen tus datos</div>
             <div class="grid-3">
               ${resumenFrase ? `<div class="reco" style="border-left-color:${MARCA.verde};"><b>Resumen (30 días):</b> ${resumenFrase}</div>` : ""}
@@ -4459,160 +3984,76 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
           </div>
           ` : ""}
-          <div class="panel-analitica-grid">
+          <div class="seccion grid-3">
             <div>
-              <div class="card-titulo">Calendario del mes</div>
-              <div class="chart-card" style="margin-top:0;">
-                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:290px;margin:0 auto;">
-                  ${Array.from({ length: calendario.primerDiaSemana }, () => `<div></div>`).join("")}
-                  ${calendario.dias.map((v, i) => {
-                    const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
-                    const nivel = v === 0 ? 0 : Math.max(1, Math.ceil(intensidad * 4));
-                    return `<div class="cal-dia ${v === 0 ? "cal-vacio" : `cal-activo cal-nivel-${nivel}`}" title="${i + 1}: ${v} toques" style="aspect-ratio:1;border-radius:6px;
-                            background:${v === 0 ? MARCA.borde : `rgba(15,81,50,${intensidad})`};
-                            display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:600;
-                            color:${intensidad > 0.5 ? "#fff" : MARCA.textoSuave};">${i + 1}</div>`;
-                  }).join("")}
-                </div>
-                <div class="cal-leyenda" style="text-align:center;font-size:0.72rem;color:${MARCA.textoSuave};margin-top:14px;">Más oscuro = más toques</div>
-              </div>
-            </div>
-            <div>
-              <div class="card-titulo">Tus horas pico <span class="suave">últimos 30 días</span></div>
+              <div class="card-titulo">Tus horas pico <span class="suave">30 días</span></div>
               <div class="chart-card" style="margin-top:0;">
                 <div class="horas-chart">${barraHoras(horas.porHora, horas.picoHora)}</div>
-                <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+                <div class="horas-labels"><span>12am</span><span>12pm</span><span>11pm</span></div>
                 ${horas.totalMes > 0
-                  ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques} toques)</div>`
-                  : `<div class="horas-nota">Todavía no hay suficientes toques este mes.</div>`}
-                ${diaFlojo ? `<div class="dia-flojo-nota">
-                  <span>Tu día más flojo es el <b>${diaFlojo.dia}</b></span>
-                  <span class="suave">${diaFlojo.toques} toques acumulados</span>
-                </div>` : esPro(negocio) ? `<div class="dia-flojo-nota">
-                  <span class="suave">Verás tu día más flojo en cuanto tengas actividad en al menos 3 días distintos.</span>
-                </div>` : ""}
+                  ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques})</div>`
+                  : `<div class="horas-nota">Sin suficientes datos.</div>`}
               </div>
             </div>
-
+            <div>
+              <div class="card-titulo">Cómo te calificaron</div>
+              <div class="chart-card" style="margin-top:0;">
+                ${totalCalificado > 0
+                  ? `<div class="sentimiento-barra">
+                       <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
+                       <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
+                     </div>
+                     <div class="sentimiento-leyenda">
+                       <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
+                       <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
+                     </div>
+                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Recuperación: <b>${tasaRecuperacion}%</b></div>` : ""}`
+                  : `<div class="sentimiento-vacio">Sin calificaciones todavía.</div>`}
+              </div>
+            </div>
             ${promSector !== null ? `
-            ${meta ? `
-            <div class="panel-analitica-full">
-              <div class="par-simetrico">
-                <div class="par-simetrico-item">
-                  <div class="card-titulo">Cómo te calificaron</div>
-                  <div class="chart-card" style="margin-top:0;">
-                    ${totalCalificado > 0
-                      ? `<div class="sentimiento-barra">
-                           <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
-                           <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
-                         </div>
-                         <div class="sentimiento-leyenda">
-                           <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                           <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-                         </div>
-                         ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
-                      : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
-                  </div>
-                </div>
-                <div class="par-simetrico-item">
-                  <div class="card-titulo">Meta del mes</div>
-                  <div class="chart-card" style="margin-top:0;">
-                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:6px;">
-                      <span>${meta.toquesMes} de ${meta.metaMensual} toques</span><b>${meta.pct}%</b>
-                    </div>
-                    <div style="height:10px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
-                      <div style="height:100%;border-radius:100px;background:${meta.pct >= 100 ? MARCA.oro : MARCA.verde};width:${meta.pct}%;"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            ` : `
-            <div class="panel-analitica-full">
-              <div class="card-titulo">Cómo te calificaron</div>
-              <div class="chart-card" style="margin-top:0;">
-                ${totalCalificado > 0
-                  ? `<div class="sentimiento-barra">
-                       <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
-                       <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
-                     </div>
-                     <div class="sentimiento-leyenda">
-                       <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                       <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-                     </div>
-                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
-                  : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
-              </div>
-            </div>
-            `}
-
-            <div class="panel-analitica-full">
-              <div class="card-titulo">Tú vs. tu sector <span class="suave">${radar ? `· ${radar.negociosComparados} negocios parecidos` : ""}</span></div>
-              <div class="chart-card" style="margin-top:0;">
-                ${radar ? `<div class="radar-sector">
-                  ${[
-                    { etiqueta: "Tráfico semanal", propio: radar.trafico.propio, sector: radar.trafico.sector, fmt: (v) => `${Math.round(v)} toques` },
-                    { etiqueta: "Calificación", propio: radar.calificacion.propio, sector: radar.calificacion.sector, fmt: (v) => `${v.toFixed(1)}★` },
-                    { etiqueta: "Toque → reseña", propio: radar.conversion.propio, sector: radar.conversion.sector, fmt: (v) => `${Math.round(v * 100)}%` },
-                    { etiqueta: "Quejas resueltas", propio: radar.resolucion.propio, sector: radar.resolucion.sector, fmt: (v) => `${Math.round(v * 100)}%` },
-                  ].map((fila) => {
-                    if (fila.propio === null || fila.sector === null) {
-                      return `<div class="radar-fila">
-                        <div class="radar-etiqueta">${fila.etiqueta}</div>
-                        <div class="radar-sin-dato">Todavía no hay suficientes datos tuyos para este cruce.</div>
-                      </div>`;
-                    }
-                    const mejor = fila.propio >= fila.sector;
-                    return `<div class="radar-fila">
-                      <div class="radar-etiqueta">${fila.etiqueta}</div>
-                      <div class="radar-valores">
-                        <span class="radar-propio">Tú: <b>${fila.fmt(fila.propio)}</b></span>
-                        <span class="radar-vs" style="color:${mejor ? MARCA.verde : MARCA.rojo};">${mejor ? "▲" : "▼"}</span>
-                        <span class="radar-sectorval">Sector: <b>${fila.fmt(fila.sector)}</b></span>
-                      </div>
-                    </div>`;
-                  }).join("")}
-                </div>` : `<div class="sentimiento-vacio">Todavía no hay suficientes negocios parecidos en tu categoría para comparar.</div>`}
-              </div>
-            </div>
-            ` : `
-            <div class="panel-analitica-full">
-              <div class="card-titulo">Cómo te calificaron</div>
-              <div class="chart-card" style="margin-top:0;">
-                ${totalCalificado > 0
-                  ? `<div class="sentimiento-barra">
-                       <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
-                       <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
-                     </div>
-                     <div class="sentimiento-leyenda">
-                       <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                       <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-                     </div>
-                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
-                  : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
-              </div>
-            </div>
-            ${esPro(negocio) ? `
-            <div class="panel-analitica-full">
+            <div>
               <div class="card-titulo">Tú vs. tu sector</div>
               <div class="chart-card" style="margin-top:0;">
-                <div class="sentimiento-vacio">Vas a poder comparar tu negocio con los de tu categoría en cuanto haya al menos 2 negocios más como el tuyo en Tapin. Por ahora no hay suficientes para hacerlo sin señalar a nadie en particular.</div>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.76rem;margin-bottom:4px;">
+                      <span>Tú</span><b>${r.semana}</b>
+                    </div>
+                    <div style="height:8px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                      <div style="height:100%;border-radius:100px;background:${MARCA.verde};
+                                  width:${Math.min(100, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.76rem;margin-bottom:4px;color:${MARCA.textoSuave};">
+                      <span>Sector</span><b>${promSector}</b>
+                    </div>
+                    <div style="height:8px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                      <div style="height:100%;border-radius:100px;background:${MARCA.oro};
+                                  width:${Math.min(100, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="horas-nota" style="margin-top:8px;">
+                  ${r.semana >= promSector ? `Por encima del promedio.` : `${promSector - r.semana} bajo el promedio.`}
+                </div>
               </div>
             </div>
             ` : ""}
-            `}
+          </div>
 
-            <div class="panel-analitica-full">
-              <div class="card-titulo">
-                <span>Actividad reciente</span>
-              </div>
-              <div class="chart-card actividad-lista" style="margin-top:0;">
-                ${actividadReciente || `<div style="text-align:center;color:${MARCA.textoSuave};padding:22px 0;">Sin toques todavía</div>`}
-              </div>
+          <div class="seccion seccion-actividad">
+            <div class="card-titulo">Actividad reciente</div>
+            <div class="chart-card" style="margin-top:0;">
+              <table class="tabla-actividad">
+                <tr><th>Fecha</th><th>Dispositivo</th></tr>
+                ${actividadReciente || `<tr><td colspan="2" style="text-align:center;color:${MARCA.textoSuave};">Sin toques todavía</td></tr>`}
+              </table>
             </div>
           </div>
 
-          <div class="seccion grid-2 analitica-reputacion">
+          <div class="seccion grid-2">
             <div>
               <div class="card-titulo">Más de tu plan Pro</div>
               <div class="reco" style="border-left-color:${MARCA.verde};">
@@ -4622,15 +4063,16 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 <b>Reporte PDF mensual</b> — a fin de mes te llega por correo el análisis completo de tu negocio, automáticamente.
               </div>
               <div class="fila-herramientas">
-                <a href="/quejas/${slug}?key=${claveUsada}" class="btn-herramienta">Retroalimentación privada</a>
-                <a href="/contenido/${slug}?key=${claveUsada}" class="btn-herramienta">Generador de contenido</a>
-                <a href="/reportes-guardados/${slug}?key=${claveUsada}" class="btn-herramienta">Reportes guardados</a>
+                <a href="/quejas/${slug}?key=${req.query.key}" class="btn-herramienta">Retroalimentación privada</a>
+                <a href="/contenido/${slug}?key=${req.query.key}" class="btn-herramienta">Generador de contenido</a>
+                <a href="/reportes-guardados/${slug}?key=${req.query.key}" class="btn-herramienta">Reportes guardados</a>
               </div>
             </div>
             <div>
               <div class="card-titulo">Recomendaciones para ti</div>
               ${recomendacionesHtml}
             </div>
+          </div>
           </div>
           ` : `
           <div class="seccion">
@@ -4671,7 +4113,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               </ul>
             </div>
             <div style="text-align:center;margin-top:18px;">
-              <a href="/mejorar-a-pro/${slug}?key=${claveUsada}"
+              <a href="/mejorar-a-pro/${slug}?key=${req.query.key}"
                  style="display:inline-block;background:${MARCA.verde};color:#fff;text-decoration:none;
                         padding:13px 26px;border-radius:10px;font-weight:700;font-size:0.9rem;">
                 Pagar y activar Plan Pro
@@ -4704,6 +4146,7 @@ app.get("/mi-panel/:slug/editar", (req, res) => {
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
     return res.status(401).send("No autorizado.");
   }
+  req.query.key = claveUsada;
 
   res.send(`
     <html>
@@ -4729,7 +4172,7 @@ app.get("/mi-panel/:slug/editar", (req, res) => {
           <div class="eyebrow">Tu negocio</div>
           <h1 class="titulo-pagina">Editar información</h1>
           <div class="form-card">
-            <form method="POST" action="/mi-panel/${slug}/editar?key=${claveUsada}">
+            <form method="POST" action="/mi-panel/${slug}/editar?key=${req.query.key}">
               <label>Nombre del negocio</label>
               <input type="text" name="nombre" required value="${negocio.nombre || ""}">
 
@@ -4755,7 +4198,7 @@ app.get("/mi-panel/:slug/editar", (req, res) => {
               <button type="submit">Guardar cambios</button>
             </form>
           </div>
-          <a class="volver" href="/mi-panel/${slug}?key=${claveUsada}">&larr; Volver a mi panel</a>
+          <a class="volver" href="/mi-panel/${slug}?key=${req.query.key}">&larr; Volver a mi panel</a>
         </div>
       </body>
     </html>
@@ -4788,11 +4231,12 @@ app.post("/mi-panel/:slug/editar", (req, res) => {
 app.get("/mi-panel/:slug/clave", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
-  if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "Revisa que el enlace esté completo y bien escrito.");
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
-    return enviarError(res, 401, "No pudimos verificar tu acceso", "El enlace debe incluir tu clave personal (?key=...).");
+    return res.status(401).send("No autorizado.");
   }
+  req.query.key = claveUsada;
 
   res.send(`
     <html>
@@ -4818,7 +4262,7 @@ app.get("/mi-panel/:slug/clave", (req, res) => {
           <div class="eyebrow">Seguridad</div>
           <h1 class="titulo-pagina">Cambiar mi clave de acceso</h1>
           <div class="form-card">
-            <form method="POST" action="/mi-panel/${slug}/clave?key=${claveUsada}">
+            <form method="POST" action="/mi-panel/${slug}/clave?key=${req.query.key}">
               <label>Nueva clave (mínimo 6 caracteres)</label>
               <input type="text" name="claveNueva" required minlength="6">
               <button type="submit">Guardar nueva clave</button>
@@ -4828,9 +4272,8 @@ app.get("/mi-panel/:slug/clave", (req, res) => {
             Ojo: en cuanto la cambies, el link que tenías guardado con la clave vieja deja de funcionar —
             guarda el nuevo link que te va a salir aquí mismo.
           </p>
-          <a class="volver" href="/mi-panel/${slug}?key=${claveUsada}">&larr; Volver a mi panel</a>
+          <a class="volver" href="/mi-panel/${slug}?key=${req.query.key}">&larr; Volver a mi panel</a>
         </div>
-        <script>${SCRIPT_ENVIO_FORMULARIO}</script>
       </body>
     </html>
   `);
@@ -4878,19 +4321,18 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
 // Un solo lugar para todos los ajustes, para no llenar el panel principal
 // de botones — mantiene lo del día a día simple, y lo de configurar aparte.
 app.get("/mi-panel/:slug/configuracion", (req, res) => {
-  const slug = resolverSlug(req.params.slug);
+  const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
-  if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "Revisa que el enlace esté completo y bien escrito.");
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
   const claveUsada = claveEfectiva(req, slug);
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
-    return enviarError(res, 401, "No pudimos verificar tu acceso", "La configuración solo la puede abrir la clave completa del negocio, no un link de solo lectura.");
+    return res.status(401).send("No autorizado. La configuración solo la puede tocar la clave completa, no la de solo lectura.");
   }
+  req.query.key = claveUsada;
 
   const alertas = negocio.alertas || { quejas: true, reporteMensual: true };
   const datos = leerDatos();
   const auditoria = ((datos[slug] && datos[slug].auditoria) || []).slice().reverse().slice(0, 15);
-  const eventosParaTarjetas = (datos[slug] && datos[slug].eventos) || [];
-  const resumenTarjetas = resumenPorTarjeta(slug, eventosParaTarjetas);
 
   res.send(`
     <html>
@@ -4898,248 +4340,133 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Configuración — ${negocio.nombre}</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           ${ESTILO_BASE}
-          ${ESTILO_DASHBOARD}
-          .content{max-width:640px;padding:0;}
-          .config-seccion{margin-bottom:30px;}
-          .config-seccion-titulo{font-size:0.72rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;
-                                 color:${MARCA.textoSuave};margin:0 0 12px;padding-left:2px;}
-          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:20px 22px;margin-bottom:14px;}
-          .form-card:last-child{margin-bottom:0;}
-          .form-card h3{margin:0 0 4px;font-size:0.92rem;font-weight:700;}
-          .form-card p.nota{color:${MARCA.textoSuave};font-size:0.78rem;margin:0 0 14px;line-height:1.5;}
-          input[type=number], input[type=text]{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:8px;
-                font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;font-family:inherit;}
+          .content{max-width:1120px;}
+          .config-header{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:24px;}
+          .config-header .titulo-pagina{margin-bottom:0;}
+          .config-subtitulo{max-width:480px;color:${MARCA.textoSuave};font-size:.82rem;line-height:1.5;text-align:right;}
+          .config-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start;}
+          .config-grid.config-pro{grid-template-areas:"sus alert" "meta alert" "pause read" "audit audit";}
+          .config-grid.config-gratis{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:"meta read pause" "audit audit audit";align-items:stretch;}
+          .config-grid.config-gratis>.form-card:not(.config-auditoria){display:flex;flex-direction:column;height:100%;}
+          .config-grid.config-gratis>.form-card:not(.config-auditoria)>form{margin-top:auto;}
+          .config-suscripcion{grid-area:sus}.config-meta{grid-area:meta}.config-alertas{grid-area:alert}
+          .config-pausar{grid-area:pause}.config-lectura{grid-area:read}.config-auditoria{grid-area:audit}
+          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:22px;max-width:none;margin:0;
+                     box-shadow:0 1px 3px rgba(11,61,44,.05);box-sizing:border-box;min-width:0;}
+          .form-card h3{margin:0 0 5px;font-size:0.98rem;color:${MARCA.texto};}
+          .form-card p.nota{color:${MARCA.textoSuave};font-size:0.78rem;line-height:1.5;margin:0 0 16px;}
+          .form-card form{margin:0;}
+          input[type=number], input[type=text]{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;
+                font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;}
           label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin-bottom:6px;}
           .fila-check{display:flex;align-items:center;gap:10px;margin-bottom:12px;cursor:pointer;}
           .fila-check input{width:auto;margin:0;}
-          button{background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:8px;padding:11px 18px;font-weight:700;cursor:pointer;font-size:0.88rem;font-family:inherit;}
+          button{background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:11px 18px;font-weight:700;cursor:pointer;font-size:0.88rem;}
           button.secundario{background:#fff;color:${MARCA.texto};border:1px solid ${MARCA.borde};}
           button.peligro{background:#fff;color:${MARCA.rojo};border:1px solid #F0D0C8;}
           .codigo-caja{background:${MARCA.crema};border-radius:8px;padding:10px 12px;font-size:0.82rem;word-break:break-all;margin:10px 0;}
-          .linea-audit{display:flex;justify-content:space-between;gap:10px;font-size:0.8rem;padding:9px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.textoSuave};}
-          .linea-audit:last-child{border-bottom:none;}
+          .linea-audit{display:flex;justify-content:space-between;font-size:0.8rem;padding:8px 0;border-bottom:1px solid ${MARCA.borde};color:${MARCA.textoSuave};}
           .linea-audit b{color:${MARCA.texto};font-weight:600;}
+          .config-auditoria .linea-audit:last-child{border-bottom:none;}
+          @media(max-width:980px){
+            .config-grid.config-gratis{grid-template-columns:1fr 1fr;grid-template-areas:"meta read" "pause pause" "audit audit";}
+          }
+          @media(max-width:760px){
+            .config-header{align-items:flex-start;flex-direction:column;}
+            .config-subtitulo{text-align:left;}
+            .config-grid,.config-grid.config-pro,.config-grid.config-gratis{grid-template-columns:1fr;grid-template-areas:none;}
+            .config-grid>*{grid-area:auto!important;}
+            .linea-audit{align-items:flex-start;flex-direction:column;gap:3px;}
+          }
         </style>
       </head>
       <body>
-        <div class="dashboard-layout">
-          <aside class="sidebar">
-            <div class="sidebar-logo">${logoSvg("#FFFFFF", 26)}</div>
-            <nav class="sidebar-nav">
-              <a href="/mi-panel/${slug}?key=${claveUsada}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
-                Resumen
-              </a>
-              <a href="/mi-panel/${slug}?key=${claveUsada}#actividad">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
-                Actividad
-              </a>
-              <a href="${esPro(negocio) ? `/suscripcion/${slug}?key=${claveUsada}` : `/mejorar-a-pro/${slug}?key=${claveUsada}`}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                ${esPro(negocio) ? "Mi suscripción" : "Plan de pago"}
-              </a>
-              <a href="/mi-panel/${slug}/configuracion?key=${claveUsada}" class="activo">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
-                Configuración
-              </a>
-            </nav>
-            <div class="sidebar-pie">
-              <a href="/">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                Cerrar sesión
-              </a>
-            </div>
-          </aside>
-          <main class="dashboard-main">
-        <div class="content" style="padding:0;max-width:640px;">
-
-          <div class="dash-header">
-            <div>
-              <div class="eyebrow" style="margin-bottom:2px;">${escaparHtml(negocio.nombre)}</div>
-              <h1>Configuración</h1>
-            </div>
-            <a href="/mi-panel/${slug}?key=${claveUsada}" class="dash-header-chip" style="text-decoration:none;">← Volver al panel</a>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/mi-panel/${slug}?key=${claveUsada}" style="color:#CFE3D8;">&larr; Volver al panel</a></div>
+        <div class="content">
+          <div class="config-header">
+            <div><div class="eyebrow">Ajustes · ${negocio.nombre}</div><h1 class="titulo-pagina">Configuración</h1></div>
+            <div class="config-subtitulo">Administra tus metas, alertas, accesos y el estado del negocio desde un solo lugar.</div>
           </div>
 
+          <div class="config-grid ${esPro(negocio) ? "config-pro" : "config-gratis"}">
+
           ${esPro(negocio) ? `
-          <div class="config-seccion">
-            <div class="config-seccion-titulo">Cuenta y suscripción</div>
-            <div class="form-card">
-              <h3>Mi suscripción</h3>
-              <p class="nota">Ver el estado de tu pago, cambiar de tarjeta, o cancelar el Plan Pro.</p>
-              <a href="/suscripcion/${slug}?key=${claveUsada}" style="display:inline-block;background:${MARCA.verdeOscuro};color:#fff;
-                 border-radius:8px;padding:11px 18px;font-weight:700;font-size:0.88rem;text-decoration:none;">
-                Gestionar mi suscripción →
-              </a>
-            </div>
+          <div class="form-card config-suscripcion">
+            <h3>Mi suscripción</h3>
+            <p class="nota">Ver el estado de tu pago, cambiar de tarjeta, o cancelar el Plan Pro.</p>
+            <a href="/suscripcion/${slug}?key=${claveUsada}" style="display:inline-block;background:${MARCA.verdeOscuro};color:#fff;
+               border-radius:9px;padding:11px 18px;font-weight:700;font-size:0.88rem;text-decoration:none;">
+              Gestionar mi suscripción →
+            </a>
           </div>
           ` : ""}
 
-          <div class="config-seccion">
-            <div class="config-seccion-titulo">Objetivos del negocio</div>
-            <div class="form-card">
-              <h3>Meta mensual</h3>
-              <p class="nota">Te ponemos una barra de progreso en el panel hacia esta meta.</p>
-              <form method="POST" action="/mi-panel/${slug}/configuracion/meta?key=${claveUsada}">
-                <label>¿Cuántos toques quieres este mes?</label>
-                <input type="number" name="metaMensual" min="1" value="${negocio.metaMensual || ""}" placeholder="Ej: 150">
-                <button type="submit">Guardar meta</button>
-              </form>
-            </div>
-            <div class="form-card">
-              <h3>Pausar negocio</h3>
-              <p class="nota">${negocio.pausado
-                ? "Tu negocio está pausado — no vamos a marcar caídas raras en tus estadísticas mientras tanto."
-                : "Útil para vacaciones o remodelación, sin desactivar la tarjeta ni perder tu historial."}</p>
-              <form method="POST" action="/mi-panel/${slug}/configuracion/pausar?key=${claveUsada}" ${negocio.pausado ? "" : `onsubmit="return confirm('¿Pausar ${escaparHtml(negocio.nombre)}? Mientras esté pausado, las calificaciones no se marcarán como caídas raras en tus estadísticas. Puedes reanudarlo cuando quieras.');"`}>
-                <input type="hidden" name="pausar" value="${negocio.pausado ? "no" : "si"}">
-                <button type="submit" class="${negocio.pausado ? "secundario" : "peligro"}">${negocio.pausado ? "Reanudar negocio" : "Pausar negocio"}</button>
-              </form>
-            </div>
+          <div class="form-card config-meta">
+            <h3>Meta mensual</h3>
+            <p class="nota">Te ponemos una barra de progreso en el panel hacia esta meta.</p>
+            <form method="POST" action="/mi-panel/${slug}/configuracion/meta?key=${claveUsada}">
+              <label>¿Cuántos toques quieres este mes?</label>
+              <input type="number" name="metaMensual" min="1" value="${negocio.metaMensual || ""}" placeholder="Ej: 150">
+              <button type="submit">Guardar meta</button>
+            </form>
           </div>
 
           ${esPro(negocio) ? `
-          <div class="config-seccion">
-            <div class="config-seccion-titulo">Notificaciones</div>
-            <div class="form-card">
-              <h3>Alertas por correo</h3>
-              <p class="nota">Elige cuáles quieres recibir — todas están activadas por defecto.</p>
-              <form method="POST" action="/mi-panel/${slug}/configuracion/alertas?key=${claveUsada}">
-                <label class="fila-check"><input type="checkbox" name="quejas" ${alertas.quejas !== false ? "checked" : ""}> Avisarme cuando llega una queja</label>
-                <label>¿Con qué frecuencia?</label>
-                <select name="frecuenciaQuejas" style="width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:8px;font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;font-family:inherit;">
-                  <option value="instantanea" ${(alertas.frecuenciaQuejas || "instantanea") === "instantanea" ? "selected" : ""}>Al instante — apenas llega cada una</option>
-                  <option value="diario" ${alertas.frecuenciaQuejas === "diario" ? "selected" : ""}>Resumen diario — un correo con todas las del día</option>
-                  <option value="semanal" ${alertas.frecuenciaQuejas === "semanal" ? "selected" : ""}>Resumen semanal — un correo con todas de la semana</option>
-                </select>
-                <label class="fila-check"><input type="checkbox" name="reporteMensual" ${alertas.reporteMensual !== false ? "checked" : ""}> Reporte mensual automático</label>
-                <label>WhatsApp para alertas (opcional)</label>
-                <input type="text" name="whatsapp" value="${negocio.whatsappAlertas || ""}" placeholder="Ej: 3001234567">
-                <p class="nota" style="margin:-6px 0 12px;">Por ahora solo guardamos el número — el envío automático por WhatsApp llega en una próxima actualización.</p>
-                <button type="submit">Guardar preferencias</button>
-              </form>
-            </div>
+          <div class="form-card config-alertas">
+            <h3>Alertas por correo</h3>
+            <p class="nota">Elige cuáles quieres recibir — todas están activadas por defecto.</p>
+            <form method="POST" action="/mi-panel/${slug}/configuracion/alertas?key=${claveUsada}">
+              <label class="fila-check"><input type="checkbox" name="quejas" ${alertas.quejas !== false ? "checked" : ""}> Avisarme cuando llega una queja</label>
+              <label>¿Con qué frecuencia?</label>
+              <select name="frecuenciaQuejas" style="width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;">
+                <option value="instantanea" ${(alertas.frecuenciaQuejas || "instantanea") === "instantanea" ? "selected" : ""}>Al instante — apenas llega cada una</option>
+                <option value="diario" ${alertas.frecuenciaQuejas === "diario" ? "selected" : ""}>Resumen diario — un correo con todas las del día</option>
+                <option value="semanal" ${alertas.frecuenciaQuejas === "semanal" ? "selected" : ""}>Resumen semanal — un correo con todas de la semana</option>
+              </select>
+              <label class="fila-check"><input type="checkbox" name="reporteMensual" ${alertas.reporteMensual !== false ? "checked" : ""}> Reporte mensual automático</label>
+              <label>WhatsApp para alertas (opcional)</label>
+              <input type="text" name="whatsapp" value="${negocio.whatsappAlertas || ""}" placeholder="Ej: 3001234567">
+              <p class="nota" style="margin:-6px 0 12px;">Por ahora solo guardamos el número — el envío automático por WhatsApp llega en una próxima actualización.</p>
+              <button type="submit">Guardar preferencias</button>
+            </form>
           </div>
           ` : ""}
 
-          <div class="config-seccion">
-            <div class="config-seccion-titulo">Seguridad y acceso</div>
-            <div class="form-card">
-              <h3>Cambiar mi clave</h3>
-              <p class="nota">Actualiza la clave con la que entras a este panel.</p>
-              <a href="/mi-panel/${slug}/clave?key=${claveUsada}" style="display:inline-block;background:#fff;color:${MARCA.verdeOscuro};
-                 border:1px solid ${MARCA.borde};border-radius:8px;padding:10px 16px;font-weight:700;font-size:0.85rem;text-decoration:none;">
-                Cambiar mi clave →
-              </a>
-            </div>
-            <div class="form-card">
-              <h3>Acceso de solo lectura</h3>
-              <p class="nota">Comparte este link con un encargado — puede ver el panel, pero no cambiar nada (ni clave, ni configuración, ni negocio).</p>
-              ${negocio.claveSoloLectura
-                ? `<div class="codigo-caja">${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${negocio.claveSoloLectura}</div>
-                   <form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}" onsubmit="return confirm('¿Generar un nuevo link de solo lectura? El link anterior deja de funcionar de inmediato — si alguien lo tenía guardado, tendrás que compartirle el nuevo.');">
-                     <button type="submit" class="secundario">Generar uno nuevo (invalida el anterior)</button>
-                   </form>`
-                : `<form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
-                     <button type="submit">Generar acceso de solo lectura</button>
-                   </form>`}
-            </div>
+          <div class="form-card config-pausar">
+            <h3>Pausar negocio</h3>
+            <p class="nota">${negocio.pausado
+              ? "Tu negocio está pausado — no vamos a marcar caídas raras en tus estadísticas mientras tanto."
+              : "Útil para vacaciones o remodelación, sin desactivar la tarjeta ni perder tu historial."}</p>
+            <form method="POST" action="/mi-panel/${slug}/configuracion/pausar?key=${claveUsada}">
+              <input type="hidden" name="pausar" value="${negocio.pausado ? "no" : "si"}">
+              <button type="submit" class="${negocio.pausado ? "secundario" : "peligro"}">${negocio.pausado ? "Reanudar negocio" : "Pausar negocio"}</button>
+            </form>
           </div>
 
-          <div class="config-seccion">
-            <div class="config-seccion-titulo">Facturación</div>
-            <div class="form-card">
-              <h3>Datos para factura electrónica</h3>
-              <p class="nota">Si dejas tu NIT aquí, generamos factura electrónica automática cada vez que se cobre tu Plan Pro (mejora o mensualidad). Déjalo vacío si no necesitas factura.</p>
-              <form method="POST" action="/mi-panel/${slug}/configuracion/facturacion?key=${claveUsada}">
-                <label>NIT o cédula</label>
-                <input type="text" name="nit" value="${escaparHtml((negocio.datosFactura && negocio.datosFactura.nit) || "")}" placeholder="Ej: 900123456">
-                <label>Razón social</label>
-                <input type="text" name="razonSocial" value="${escaparHtml((negocio.datosFactura && negocio.datosFactura.razonSocial) || "")}" placeholder="Ej: Mi Negocio S.A.S.">
-                <button type="submit">Guardar datos de facturación</button>
-              </form>
-            </div>
+          <div class="form-card config-lectura">
+            <h3>Acceso de solo lectura</h3>
+            <p class="nota">Comparte este link con un encargado — puede ver el panel, pero no cambiar nada (ni clave, ni configuración, ni negocio).</p>
+            ${negocio.claveSoloLectura
+              ? `<div class="codigo-caja">${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${negocio.claveSoloLectura}</div>
+                 <form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
+                   <button type="submit" class="secundario">Generar uno nuevo (invalida el anterior)</button>
+                 </form>`
+              : `<form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
+                   <button type="submit">Generar acceso de solo lectura</button>
+                 </form>`}
           </div>
 
-          <div class="config-seccion">
-            <div class="config-seccion-titulo">Tarjetas vinculadas</div>
-            <div class="form-card">
-              <h3>Tarjetas de este negocio</h3>
-              <p class="nota">
-                ¿Tienes más de una mesa, caja o entrada? Pide tarjetas Tapin adicionales y vincúlalas a este
-                mismo negocio (no crean uno nuevo) — así les pones nombre y ves cuál recibe más toques.
-              </p>
-              <p class="nota" style="margin-bottom:6px;"><b>Identificador de este negocio</b> (pídelo al activar una tarjeta nueva, junto con tu clave de acceso):</p>
-              <div class="codigo-caja">${slug}</div>
-
-              <details style="margin-top:14px;">
-                <summary style="cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px;background:${MARCA.verde};color:#fff;border-radius:8px;padding:10px 16px;font-weight:700;font-size:0.8rem;">+ Agregar tarjeta</summary>
-                <div style="margin-top:12px;padding:14px 16px;background:${MARCA.verdeClaro};border-radius:10px;font-size:0.82rem;line-height:1.55;">
-                  <p style="margin:0 0 8px;"><b>¿Es una tarjeta más para ESTE mismo negocio</b> (otra mesa, caja o entrada)?</p>
-                  <ol style="margin:0 0 14px;padding-left:18px;">
-                    <li>Abre la página de activación de la tarjeta física nueva (viene impresa o en el NFC).</li>
-                    <li>Elige la opción <b>"Ya tengo un negocio en Tapin"</b>.</li>
-                    <li>Ingresa el identificador <code>${slug}</code> y tu clave de acceso.</li>
-                  </ol>
-                  <p style="margin:0 0 8px;"><b>¿Es la primera tarjeta de un negocio nuevo</b> (no de este)?</p>
-                  <ol style="margin:0;padding-left:18px;">
-                    <li>Abre la página de activación de esa tarjeta física.</li>
-                    <li>Elige la opción <b>"Es un negocio nuevo"</b>.</li>
-                    <li>Completa el nombre del negocio, el link de reseñas de Google, ciudad, categoría y crea una clave de acceso propia para ese negocio.</li>
-                  </ol>
-                  <p style="margin:12px 0 0;color:${MARCA.textoSuave};">¿No tienes tarjetas físicas adicionales todavía? Escríbeme para pedir más.</p>
-                </div>
-              </details>
-
-              <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
-                ${resumenTarjetas.map((t, i) => `
-                  <div style="border:1px solid ${MARCA.borde};border-radius:10px;padding:12px 14px;">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
-                      <div>
-                        <div style="font-weight:700;font-size:0.88rem;">${escaparHtml(t.etiqueta || (t.esPrincipal ? "Tarjeta principal" : "Sin nombre"))}
-                          ${i === 0 && resumenTarjetas.length > 1 && t.total > 0 ? `<span style="background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};font-size:0.66rem;font-weight:800;padding:2px 8px;border-radius:100px;margin-left:8px;vertical-align:middle;letter-spacing:0.03em;">MÁS ACTIVA</span>` : ""}
-                        </div>
-                        <code style="font-size:0.74rem;color:${MARCA.textoSuave};">${t.codigo}</code>
-                      </div>
-                      <div style="text-align:right;font-size:0.78rem;color:${MARCA.textoSuave};white-space:nowrap;">
-                        <b style="color:${MARCA.texto};font-size:0.95rem;">${t.total}</b> toques totales<br>
-                        ${t.hoy} hoy · ${t.semana} esta semana
-                      </div>
-                    </div>
-                    <form method="POST" action="/mi-panel/${slug}/configuracion/tarjetas/${t.codigo}/nombre?key=${claveUsada}" style="display:flex;gap:8px;margin-top:10px;">
-                      <input type="text" name="nombre" value="${escaparHtml(t.etiqueta || "")}" placeholder="Ej: Mesa 3, Caja, Entrada..." maxlength="40" style="flex:1;margin:0;padding:8px 10px;font-size:0.82rem;">
-                      <button type="submit" class="secundario" style="margin:0;padding:8px 14px;font-size:0.78rem;">Guardar nombre</button>
-                    </form>
-                    ${t.codigo !== slug ? `
-                    <form method="POST" action="/mi-panel/${slug}/configuracion/tarjetas/${t.codigo}/desvincular?key=${claveUsada}" style="margin-top:8px;" onsubmit="return confirm('¿Desvincular la tarjeta ${t.codigo}? Deja de sumar toques a este negocio y vuelve a quedar sin activar — se puede activar de nuevo después, como negocio nuevo o vinculada a otro.');">
-                      <button type="submit" style="margin:0;background:#fff;color:${MARCA.rojo};border:1px solid #F0D0C8;padding:6px 12px;font-size:0.76rem;border-radius:7px;">Desvincular esta tarjeta</button>
-                    </form>
-                    ` : ""}
-                  </div>
-                `).join("")}
-              </div>
-            </div>
+          <div class="form-card config-auditoria">
+            <h3>Historial de cambios de tu cuenta</h3>
+            <p class="nota">Solo tuyo, para tener orden — no es visible para nadie más.</p>
+            ${auditoria.length
+              ? auditoria.map((a) => `<div class="linea-audit"><b>${a.texto}</b><span>${a.fechaLegible}</span></div>`).join("")
+              : `<p class="nota" style="margin:0;">Todavía no hay cambios registrados.</p>`}
           </div>
-
-          <div class="config-seccion">
-            <div class="config-seccion-titulo">Actividad de la cuenta</div>
-            <div class="form-card">
-              <h3>Historial de cambios</h3>
-              <p class="nota">Solo tuyo, para tener orden — no es visible para nadie más.</p>
-              ${auditoria.length
-                ? auditoria.map((a) => `<div class="linea-audit"><b>${a.texto}</b><span>${a.fechaLegible}</span></div>`).join("")
-                : `<p class="nota" style="margin:0;">Todavía no hay cambios registrados.</p>`}
-            </div>
           </div>
-
         </div>
-          </main>
-        </div>
-        <script>${SCRIPT_ENVIO_FORMULARIO}</script>
       </body>
     </html>
   `);
@@ -5153,20 +4480,6 @@ app.post("/mi-panel/:slug/configuracion/meta", (req, res) => {
   const metaMensual = parseInt(req.body.metaMensual, 10) || null;
   guardarCambiosNegocio(slug, negocio, { metaMensual });
   registrarAuditoria(slug, negocio, metaMensual ? `Configuraste una meta mensual de ${metaMensual} toques` : "Quitaste tu meta mensual");
-  res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
-});
-
-app.post("/mi-panel/:slug/configuracion/facturacion", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
-  const nit = (req.body.nit || "").trim();
-  const razonSocial = (req.body.razonSocial || "").trim();
-  guardarCambiosNegocio(slug, negocio, {
-    datosFactura: nit ? { nit, razonSocial } : null,
-  });
-  registrarAuditoria(slug, negocio, nit ? "Actualizaste tus datos de facturación" : "Quitaste tus datos de facturación");
   res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
 });
 
@@ -5202,54 +4515,6 @@ app.post("/mi-panel/:slug/configuracion/solo-lectura", (req, res) => {
   const claveSoloLectura = generarToken();
   guardarCambiosNegocio(slug, negocio, { claveSoloLectura });
   registrarAuditoria(slug, negocio, "Generaste un nuevo acceso de solo lectura");
-  res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
-});
-
-// Ponerle nombre a una tarjeta física (la principal o una vinculada) — ej:
-// "Mesa 3", "Caja", "Entrada" — para que el dueño identifique cuál es cuál
-// en vez de tener que recordar códigos como "7K9P2M".
-app.post("/mi-panel/:slug/configuracion/tarjetas/:codigo/nombre", (req, res) => {
-  const { slug, codigo } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
-
-  const codigos = leerCodigos();
-  // Solo se puede renombrar una tarjeta que de verdad es de este negocio —
-  // o la principal (codigo === slug), o una vinculada a él.
-  const esPropia = codigo === slug || (codigos[codigo] && codigos[codigo].vinculadoA === slug);
-  if (!esPropia || !codigos[codigo]) {
-    return res.status(404).send("Esa tarjeta no pertenece a este negocio.");
-  }
-  const nombreTarjeta = (req.body.nombre || "").trim().slice(0, 40);
-  codigos[codigo].etiqueta = nombreTarjeta || null;
-  guardarCodigos(codigos);
-  registrarAuditoria(slug, negocio, nombreTarjeta ? `Renombraste la tarjeta ${codigo} a "${nombreTarjeta}"` : `Quitaste el nombre de la tarjeta ${codigo}`);
-  res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
-});
-
-// Desvincula una tarjeta adicional del negocio -- versión para el propio
-// dueño, con su clave normal (la versión de /editar/:slug es solo para
-// administración con ADMIN_KEY). La tarjeta deja de sumar toques a este
-// negocio y vuelve a quedar "sin activar", lista para activarse de nuevo
-// (como negocio nuevo, o vinculada a otro).
-app.post("/mi-panel/:slug/configuracion/tarjetas/:codigo/desvincular", (req, res) => {
-  const { slug, codigo } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
-
-  if (codigo === slug) {
-    return res.status(400).send("No puedes desvincular la tarjeta principal de un negocio.");
-  }
-  const codigos = leerCodigos();
-  const entrada = codigos[codigo];
-  if (!entrada || entrada.vinculadoA !== slug) {
-    return res.status(404).send("Esa tarjeta no está vinculada a este negocio.");
-  }
-  codigos[codigo] = { creado: entrada.creado || new Date().toISOString() };
-  guardarCodigos(codigos);
-  registrarAuditoria(slug, negocio, `Desvinculaste la tarjeta ${codigo} de este negocio`);
   res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
 });
 
@@ -5294,6 +4559,7 @@ app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
       `Súbele el plan a "${negocio.nombre}" desde /mejorar-a-pro/${slug}?key=${claveUsada} para activarla.`
     );
   }
+  req.query.key = claveUsada;
 
   const fid = negocio.fidelizacion || { metaSellos: 10, premio: "" };
   const datos = leerDatos();
@@ -5628,7 +4894,7 @@ app.get("/export/:slug.pdf", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
+  if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   // La exportación de reportes (CSV/PDF/Word) es exclusiva de Plan Pro.
@@ -5654,643 +4920,205 @@ async function generarInformePDF(negocio, slug) {
 
   const datos = leerDatos();
   const eventos = (datos[slug] && datos[slug].eventos) || [];
-  const testimonios = (datos[slug] && datos[slug].testimonios) || [];
-  const quejas = (datos[slug] && datos[slug].quejas) || [];
   const r = calcularResumen(eventos);
   const recomendaciones = generarRecomendaciones(eventos, r, negocio);
   const promSector = promedioSector(negocio.categoria, slug, datos);
   const horas = analizarHoras(eventos, negocio);
-  const todosNegocios = todosLosNegocios();
-  const percentil = percentilCategoria(negocio, slug, todosNegocios, datos);
-  const diaFlojo = diaMasFlojo(eventos, negocio);
-  const caidaPropia = !negocio.pausado ? alertaCaidaPropia(eventos, r.semana) : null;
-  const clientesRecurrentes = contarClientesRecurrentes(slug);
-  const comparativoMes = compararMesAnterior(eventos, negocio);
-  const comparativoAnio = compararAnioAnterior(eventos, negocio);
-  const calendario = calendarioMes(eventos, negocio);
-  const proyeccion = proyeccionMes(eventos, negocio);
   const fechaGenerado = new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" });
-
-  // ---------- Metricas estadísticas adicionales (analista de datos) ----------
-  const totalCalificado = testimonios.length + quejas.length;
-  const promedioEstrellas = promedioEstrellasFiltradas(testimonios, quejas);
-  const pctPositivas = totalCalificado ? Math.round((testimonios.length / totalCalificado) * 100) : 0;
-  const pctNegativas = totalCalificado ? 100 - pctPositivas : 0;
-  const quejasResueltas = quejas.filter((q) => q.estado === "resuelto").length;
-  const tasaRecuperacion = quejas.length ? Math.round((quejasResueltas / quejas.length) * 100) : null;
-
-  const inicioHoyCmp = new Date();
-  inicioHoyCmp.setHours(0, 0, 0, 0);
-  const inicioSemanaAnteriorCmp = new Date(inicioHoyCmp);
-  inicioSemanaAnteriorCmp.setDate(inicioSemanaAnteriorCmp.getDate() - 13);
-  const finSemanaAnteriorCmp = new Date(inicioHoyCmp);
-  finSemanaAnteriorCmp.setDate(finSemanaAnteriorCmp.getDate() - 6);
-  const semanaAnteriorToques = eventos.filter((e) => {
-    const f = new Date(e.fechaISO);
-    return f >= inicioSemanaAnteriorCmp && f < finSemanaAnteriorCmp;
-  }).length;
-  const cambioSemanal = semanaAnteriorToques > 0 ? Math.round(((r.semana - semanaAnteriorToques) / semanaAnteriorToques) * 100) : null;
-
-  const primerEvento = eventos.length ? new Date(eventos[0].fechaISO) : null;
-  const diasActivo = primerEvento ? Math.max(1, Math.round((Date.now() - primerEvento.getTime()) / 86400000)) : 1;
-  const promedioDiarioHistorico = Math.round((r.total / diasActivo) * 10) / 10;
-
-  const nombresDiaCorto = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"];
-  const mapaDiaSemana = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  const porDiaSemana = new Array(7).fill(0);
-  for (const e of eventos) {
-    const corto = new Date(e.fechaISO).toLocaleString("en-US", { timeZone: zonaDe(negocio), weekday: "short" });
-    porDiaSemana[mapaDiaSemana[corto]]++;
-  }
-  const totalDiaSemana = porDiaSemana.reduce((a, b) => a + b, 0);
-  const diaMasFuerte = totalDiaSemana > 0
-    ? nombresDiaCorto[porDiaSemana.indexOf(Math.max(...porDiaSemana))]
-    : null;
-
-  // Desglose por tipo de dispositivo -- dato que ya se capturaba en cada
-  // toque pero nunca se analizaba en conjunto, solo se listaba toque por
-  // toque en el anexo. Agregarlo dice algo real del negocio: si casi todo
-  // es iPhone/Android, confirma que el toque NFC funciona bien desde
-  // celular (lo esperado); si aparece mucho Windows/Mac/Desconocido, casi
-  // siempre es personal probando la tarjeta desde un computador, no
-  // clientes reales, y vale la pena que el negocio lo sepa.
-  const conteoDispositivo = {};
-  for (const e of eventos) {
-    const d = e.dispositivo || "Desconocido";
-    conteoDispositivo[d] = (conteoDispositivo[d] || 0) + 1;
-  }
-  const totalConDispositivo = eventos.length;
-  const rankingDispositivo = Object.entries(conteoDispositivo).sort((a, b) => b[1] - a[1]);
-  const toquesMovil = (conteoDispositivo["iPhone/iPad"] || 0) + (conteoDispositivo["Android"] || 0);
-  const toquesSospechosos = totalConDispositivo - toquesMovil;
-  const pctMovil = totalConDispositivo ? Math.round((toquesMovil / totalConDispositivo) * 100) : 0;
-  const pctSospechoso = totalConDispositivo ? Math.round((toquesSospechosos / totalConDispositivo) * 100) : 0;
 
   const pdfDoc = await PDFDocument.create();
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
-  const verdeOscuro = rgb(0.043, 0.239, 0.173);
-  const verde = rgb(0.059, 0.318, 0.196);
-  const verdeClaro = rgb(0.906, 0.941, 0.918);
-  const oro = rgb(0.788, 0.635, 0.294);
-  const oroClaro = rgb(0.984, 0.965, 0.910);
-  const rojo = rgb(0.753, 0.224, 0.169);
-  const rojoClaro = rgb(0.984, 0.937, 0.910);
-  const crema = rgb(0.980, 0.980, 0.973);
-  const oscuro = rgb(0.086, 0.125, 0.109);
+  const verdeOscuro = rgb(0.043, 0.239, 0.173); // #0B3D2C
+  const verde = rgb(0.059, 0.318, 0.196);       // #0F5132
+  const verdeClaro = rgb(0.906, 0.941, 0.918);  // #E7F0EA
+  const oro = rgb(0.788, 0.635, 0.294);         // #C9A24B
+  const rojo = rgb(0.753, 0.224, 0.169);        // similar a MARCA.rojo
+  const crema = rgb(0.980, 0.980, 0.973);       // #FAFAF8
+  const oscuro = rgb(0.086, 0.125, 0.109);      // #16201C
   const gris = rgb(0.42, 0.46, 0.44);
-  const grisClaro = rgb(0.85, 0.86, 0.83);
   const blanco = rgb(1, 1, 1);
 
-  const ANCHO = 595, ALTO = 842;
-  const MARGEN = 50;
+  const ANCHO = 595, ALTO = 842; // A4
   let numeroPagina = 0;
 
   function piePagina(page) {
     numeroPagina++;
-    page.drawLine({ start: { x: MARGEN, y: 56 }, end: { x: ANCHO - MARGEN, y: 56 }, thickness: 0.5, color: verdeClaro });
-    page.drawText("Tapin", { x: MARGEN, y: 38, size: 9, font: fontBold, color: verde });
-    page.drawText("Informe analítico de desempeño - " + negocio.nombre, { x: 90, y: 38, size: 8, font, color: gris });
-    page.drawText(String(numeroPagina), { x: ANCHO - 60, y: 38, size: 8, font, color: gris });
+    page.drawLine({ start: { x: 50, y: 56 }, end: { x: ANCHO - 50, y: 56 }, thickness: 0.5, color: verdeClaro });
+    page.drawText("Tapin", { x: 50, y: 38, size: 9, font: fontBold, color: verde });
+    page.drawText(`Informe de desempeño · ${negocio.nombre}`, { x: 90, y: 38, size: 8, font, color: gris });
+    page.drawText(`${numeroPagina}`, { x: ANCHO - 60, y: 38, size: 8, font, color: gris });
   }
 
-  function encabezadoSeccion(page, titulo, subtitulo) {
+  function encabezadoSeccion(page, titulo) {
     page.drawRectangle({ x: 0, y: ALTO - 70, width: ANCHO, height: 70, color: verdeOscuro });
-    page.drawText(titulo, { x: MARGEN, y: ALTO - 44, size: 16, font: fontBold, color: blanco });
-    page.drawText(subtitulo || negocio.nombre, { x: MARGEN, y: ALTO - 60, size: 9, font, color: rgb(0.81, 0.89, 0.85) });
+    page.drawText(titulo, { x: 50, y: ALTO - 44, size: 16, font: fontBold, color: blanco });
+    page.drawText(negocio.nombre, { x: 50, y: ALTO - 60, size: 9, font, color: rgb(0.81, 0.89, 0.85) });
   }
 
-  function envolverTexto(fontObj, texto, size, maxWidth) {
-    const palabras = String(texto).split(/\s+/).filter(Boolean);
-    const lineas = [];
-    let actual = "";
-    for (const palabra of palabras) {
-      const prueba = actual ? actual + " " + palabra : palabra;
-      if (fontObj.widthOfTextAtSize(prueba, size) > maxWidth && actual) {
-        lineas.push(actual);
-        actual = palabra;
-      } else {
-        actual = prueba;
-      }
-    }
-    if (actual) lineas.push(actual);
-    return lineas;
-  }
-
-  function dibujarCaja(page, x, y, width, texto, opts) {
-    opts = opts || {};
-    const color = opts.color || verde;
-    const fondo = opts.fondo || crema;
-    const size = opts.size || 8.5;
-    const fontObj = opts.fontObj || font;
-    const lineHeight = opts.lineHeight || 11.5;
-    const paddingV = opts.paddingV || 10;
-    const paddingH = opts.paddingH || 13;
-    const etiqueta = opts.etiqueta || null;
-    const maxWidth = width - paddingH * 2;
-    const lineas = envolverTexto(fontObj, texto, size, maxWidth);
-    let alto = lineas.length * lineHeight + paddingV * 2;
-    let offsetEtiqueta = 0;
-    if (etiqueta) offsetEtiqueta = 12;
-    alto += offsetEtiqueta;
-    page.drawRectangle({ x, y: y - alto, width, height: alto, color: fondo });
-    page.drawRectangle({ x, y: y - alto, width: 3, height: alto, color });
-    let ly = y - paddingV - 7;
-    if (etiqueta) {
-      page.drawText(etiqueta.toUpperCase(), { x: x + paddingH, y: ly, size: 6.8, font: fontBold, color });
-      ly -= offsetEtiqueta;
-    }
-    lineas.forEach((linea) => {
-      page.drawText(linea, { x: x + paddingH, y: ly, size, font: fontObj, color: oscuro });
-      ly -= lineHeight;
-    });
-    return alto;
-  }
-
-  function dibujarKpi(page, x, y, width, height, label, valor, opts) {
-    opts = opts || {};
-    const sub = opts.sub || null;
-    const delta = opts.delta === undefined ? null : opts.delta;
-    const color = opts.color || verde;
-    page.drawRectangle({ x, y: y - height, width, height, color: crema });
-    page.drawRectangle({ x, y: y - height, width: 4, height, color });
-    page.drawText(String(valor), { x: x + 16, y: y - 30, size: 21, font: fontBold, color });
-    page.drawText(label, { x: x + 16, y: y - 46, size: 8, font, color: gris });
-    if (sub) page.drawText(sub, { x: x + 16, y: y - 58, size: 7.5, font, color: gris });
-    if (delta !== null) {
-      const positivo = delta >= 0;
-      const texto = (positivo ? "+" : "") + delta + "%";
-      // Nada de flechas ▲/▼ aqui -- la fuente estandar de pdf-lib (WinAnsi)
-      // no las puede codificar y hacia fallar la generacion del PDF entero
-      // (bug real, no relacionado con lo que se pidio, encontrado al
-      // probar el informe). El signo +/- y el color ya distinguen subida/bajada.
-      page.drawText(texto, { x: x + 16, y: y - 58, size: 8, font: fontBold, color: positivo ? verde : rojo });
-    }
-  }
-
-  function dibujarBarras(page, x, yTop, width, alturaGrafico, valores, etiquetas, opts) {
-    opts = opts || {};
-    const colorBase = opts.colorBase || verde;
-    const colorPico = opts.colorPico || oro;
-    const indicePico = opts.indicePico === undefined ? null : opts.indicePico;
-    const mostrarValor = opts.mostrarValor === undefined ? true : opts.mostrarValor;
-    const tamEtiqueta = opts.tamEtiqueta || 8;
-    const max = Math.max(1, ...valores);
-    const anchoBarra = width / valores.length;
-    valores.forEach((v, i) => {
-      const alturaBarra = (v / max) * alturaGrafico;
-      const bx = x + i * anchoBarra;
-      const color = i === indicePico ? colorPico : colorBase;
-      page.drawRectangle({ x: bx + anchoBarra * 0.15, y: yTop - alturaGrafico, width: anchoBarra * 0.7, height: alturaBarra || 1, color });
-      if (mostrarValor) {
-        page.drawText(String(v), { x: bx + anchoBarra * 0.5 - 5, y: yTop - alturaGrafico + (alturaBarra || 1) + 4, size: 7.5, font, color: gris });
-      }
-      if (etiquetas && etiquetas[i] !== undefined) {
-        page.drawText(String(etiquetas[i]), { x: bx + anchoBarra * 0.5 - (String(etiquetas[i]).length * 2.6), y: yTop - alturaGrafico - 13, size: tamEtiqueta, font, color: oscuro });
-      }
-    });
-    page.drawLine({ start: { x, y: yTop - alturaGrafico }, end: { x: x + width, y: yTop - alturaGrafico }, thickness: 0.5, color: grisClaro });
-  }
-
-  function dibujarGauge(page, x, y, width, pct, opts) {
-    opts = opts || {};
-    const alto = opts.alto || 10;
-    const color = opts.color || verde;
-    page.drawRectangle({ x, y, width, height: alto, color: grisClaro });
-    page.drawRectangle({ x, y, width: (Math.max(0, Math.min(100, pct)) / 100) * width, height: alto, color });
-  }
-
-  function tituloSeccionInterna(page, texto, x, y) {
-    page.drawText(texto, { x, y, size: 11, font: fontBold, color: oscuro });
-  }
-
+  // ---------- Página 1: Portada ----------
   const portada = pdfDoc.addPage([ANCHO, ALTO]);
   portada.drawRectangle({ x: 0, y: 0, width: ANCHO, height: ALTO, color: verdeOscuro });
   portada.drawRectangle({ x: 0, y: ALTO - 8, width: ANCHO, height: 8, color: oro });
   portada.drawText("TAPIN", { x: 50, y: ALTO - 120, size: 34, font: fontBold, color: blanco });
-  portada.drawText("Informe analítico de desempeño", { x: 50, y: ALTO - 150, size: 14, font, color: rgb(0.81, 0.89, 0.85) });
+  portada.drawText("Informe de desempeño", { x: 50, y: ALTO - 150, size: 14, font, color: rgb(0.81, 0.89, 0.85) });
 
   portada.drawLine({ start: { x: 50, y: ALTO - 200 }, end: { x: 250, y: ALTO - 200 }, thickness: 1.5, color: oro });
   portada.drawText(negocio.nombre, { x: 50, y: ALTO - 240, size: 26, font: fontBold, color: blanco });
-  portada.drawText("Categoría: " + (negocio.categoria || "-"), { x: 50, y: ALTO - 264, size: 11, font, color: rgb(0.81, 0.89, 0.85) });
-  portada.drawText("Generado el " + fechaGenerado, { x: 50, y: ALTO - 282, size: 11, font, color: rgb(0.81, 0.89, 0.85) });
-
-  const fichaTecnica = [
-    ["Interacciones analizadas", String(r.total)],
-    ["Días con historial", String(diasActivo)],
-    ["Calificaciones recibidas", String(totalCalificado)],
-    ["Cobertura horaria (30 días)", horas.horasConDatos + "/24 horas"],
-  ];
-  let fy = ALTO - 340;
-  portada.drawText("Ficha técnica del informe", { x: 50, y: fy, size: 9.5, font: fontBold, color: oro });
-  fy -= 18;
-  fichaTecnica.forEach((par) => {
-    portada.drawText(par[0], { x: 50, y: fy, size: 9, font, color: rgb(0.81, 0.89, 0.85) });
-    portada.drawText(par[1], { x: 300, y: fy, size: 9, font: fontBold, color: blanco });
-    fy -= 16;
-  });
+  portada.drawText(`Categoría: ${negocio.categoria || "—"}`, { x: 50, y: ALTO - 264, size: 11, font, color: rgb(0.81, 0.89, 0.85) });
+  portada.drawText(`Generado el ${fechaGenerado}`, { x: 50, y: ALTO - 282, size: 11, font, color: rgb(0.81, 0.89, 0.85) });
 
   portada.drawRectangle({ x: 50, y: 120, width: ANCHO - 100, height: 1, color: rgb(0.3, 0.45, 0.38) });
-  portada.drawText(
-    "Preparado automáticamente a partir de la actividad real registrada en la tarjeta Tapin de este negocio. " +
-    "Incluye análisis de tendencia, estacionalidad horaria y semanal, reputación y comparación sectorial.",
-    { x: 50, y: 95, size: 9, font, color: rgb(0.7, 0.8, 0.75), maxWidth: ANCHO - 100, lineHeight: 13 }
-  );
+  portada.drawText("Preparado automáticamente a partir de la actividad real registrada en la tarjeta Tapin de este negocio.", {
+    x: 50, y: 95, size: 9, font, color: rgb(0.7, 0.8, 0.75), maxWidth: ANCHO - 100, lineHeight: 13,
+  });
   portada.drawText("Tapin", { x: 50, y: 50, size: 9, font: fontBold, color: oro });
 
+  // ---------- Página 2: Resumen ejecutivo ----------
   const resumen = pdfDoc.addPage([ANCHO, ALTO]);
   encabezadoSeccion(resumen, "Resumen ejecutivo");
 
-  let y = ALTO - 106;
-  tituloSeccionInterna(resumen, "Métricas clave", MARGEN, y);
-  y -= 18;
+  let y = ALTO - 110;
+  resumen.drawText("Métricas clave", { x: 50, y, size: 11, font: fontBold, color: oscuro });
+  y -= 16;
 
-  const kpiW = (ANCHO - 100 - 3 * 12) / 4;
-  const kpis = [
-    ["Total histórico", r.total, null, null],
-    ["Hoy", r.hoy, null, null],
-    ["Últimos 7 días", r.semana, null, cambioSemanal],
-    ["Promedio diario", promedioDiarioHistorico, "toques/día histórico", null],
+  const metrics = [
+    ["Toques totales", r.total],
+    ["Toques hoy", r.hoy],
+    ["Últimos 7 días", r.semana],
   ];
-  let kx = MARGEN;
-  kpis.forEach((k) => {
-    dibujarKpi(resumen, kx, y, kpiW, 64, k[0], k[1], { sub: k[2], delta: k[3], color: verde });
-    kx += kpiW + 12;
+  let x = 50;
+  metrics.forEach(([label, val]) => {
+    resumen.drawRectangle({ x, y: y - 58, width: 158, height: 58, color: crema });
+    resumen.drawRectangle({ x, y: y - 58, width: 4, height: 58, color: verde });
+    resumen.drawText(String(val), { x: x + 16, y: y - 24, size: 22, font: fontBold, color: verde });
+    resumen.drawText(label, { x: x + 16, y: y - 42, size: 8.5, font, color: gris });
+    x += 168;
   });
-  y -= 84;
+  y -= 90;
 
-  const piezasResumen = [];
-  if (cambioSemanal !== null) {
-    piezasResumen.push(
-      cambioSemanal >= 0
-        ? "la actividad subio " + cambioSemanal + "% esta semana frente a la anterior"
-        : "la actividad bajo " + Math.abs(cambioSemanal) + "% esta semana frente a la anterior"
-    );
+  if (esPro(negocio) && promSector !== null) {
+    const diferencia = r.semana - promSector;
+    const texto = diferencia >= 0
+      ? `Por encima del promedio de tu categoría (+${diferencia} toques/semana vs. ${promSector})`
+      : `Por debajo del promedio de tu categoría (${diferencia} toques/semana vs. ${promSector})`;
+    resumen.drawRectangle({ x: 50, y: y - 26, width: ANCHO - 100, height: 26, color: verdeClaro });
+    resumen.drawText(texto, { x: 60, y: y - 17, size: 9, font: fontBold, color: verdeOscuro });
+    y -= 46;
   }
-  if (percentil !== null) piezasResumen.push("el negocio se ubica en el percentil " + percentil + " de su categoría");
-  if (promedioEstrellas !== null) piezasResumen.push("el promedio de calificación filtrada es " + promedioEstrellas + "/5");
-  const fraseResumen = piezasResumen.length
-    ? "En síntesis: " + piezasResumen.join("; ") + "."
-    : "Todavía no hay suficiente historial para generar una síntesis estadística confiable - vuelve a revisar este informe cuando haya más actividad acumulada.";
 
-  y -= dibujarCaja(resumen, MARGEN, y, ANCHO - 100, fraseResumen, {
-    color: verde, fondo: verdeClaro, size: 9, etiqueta: "Lectura del periodo",
-  });
-  y -= 18;
+  resumen.drawText("Toques por día (últimos 7 días)", { x: 50, y, size: 11, font: fontBold, color: oscuro });
+  y -= 16;
 
-  tituloSeccionInterna(resumen, "Toques por día - últimos 7 días", MARGEN, y);
-  y -= 14;
-  const nombresDias7 = [];
+  const max = Math.max(1, ...r.dias7);
+  const nombresDias = [];
   const ahoraD = new Date();
   for (let i = 6; i >= 0; i--) {
     const d = new Date(ahoraD);
     d.setDate(d.getDate() - i);
-    nombresDias7.push(d.toLocaleDateString("es-CO", { weekday: "short", timeZone: zonaDe(negocio) }));
+    nombresDias.push(d.toLocaleDateString("es-CO", { weekday: "short" }));
   }
-  dibujarBarras(resumen, MARGEN, y, ANCHO - 100, 92, r.dias7, nombresDias7, { indicePico: r.dias7.indexOf(Math.max(...r.dias7)) });
-  y -= 92 + 34;
+  const barAreaTop = y;
+  const barAreaHeight = 90;
+  r.dias7.forEach((v, i) => {
+    const barHeight = (v / max) * barAreaHeight;
+    const bx = 50 + i * 70;
+    resumen.drawRectangle({ x: bx, y: barAreaTop - barAreaHeight, width: 36, height: barHeight || 1, color: verde });
+    resumen.drawText(String(v), { x: bx + 12, y: barAreaTop - barAreaHeight - 14, size: 9, font, color: gris });
+    resumen.drawText(nombresDias[i], { x: bx, y: barAreaTop - barAreaHeight - 28, size: 9, font, color: oscuro });
+  });
 
-  if (comparativoMes.disponible) {
-    tituloSeccionInterna(resumen, "Este mes vs. el anterior", MARGEN, y);
-    y -= 16;
-    const compW = (ANCHO - 100 - 2 * 12) / 3;
-    let cx = MARGEN;
-    dibujarKpi(resumen, cx, y, compW, 54, "Este mes", comparativoMes.mesActual, { color: verde });
-    cx += compW + 12;
-    dibujarKpi(resumen, cx, y, compW, 54, "Mes anterior", comparativoMes.mesAnterior, { color: gris });
-    cx += compW + 12;
-    dibujarKpi(resumen, cx, y, compW, 54, "Cambio", (comparativoMes.cambioPct >= 0 ? "+" : "") + comparativoMes.cambioPct + "%", {
-      color: comparativoMes.cambioPct >= 0 ? verde : rojo,
-    });
-    y -= 70;
-  }
+  y = barAreaTop - barAreaHeight - 60;
+  resumen.drawText("Recomendaciones", { x: 50, y, size: 11, font: fontBold, color: oscuro });
+  y -= 18;
+  recomendaciones.forEach((texto) => {
+    if (y < 90) return;
+    resumen.drawRectangle({ x: 50, y: y - 28, width: ANCHO - 100, height: 28, color: crema });
+    resumen.drawRectangle({ x: 50, y: y - 28, width: 3, height: 28, color: oro });
+    resumen.drawText(texto, { x: 62, y: y - 18, size: 8.5, font, color: oscuro, maxWidth: ANCHO - 130, lineHeight: 11 });
+    y -= 36;
+  });
   piePagina(resumen);
 
-  const pTendencia = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(pTendencia, "Tendencia y proyección", negocio.nombre + " - basado en el ritmo real de actividad");
-
-  y = ALTO - 108;
-  tituloSeccionInterna(pTendencia, "Mapa de calor del mes en curso", MARGEN, y);
-  y -= 16;
-  {
-    const cols = 7;
-    const cellGap = 4;
-    const cellSize = (ANCHO - 100 - cellGap * (cols - 1)) / cols;
-    const diasSemanaLbl = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"];
-    diasSemanaLbl.forEach((lbl, i) => {
-      pTendencia.drawText(lbl, { x: MARGEN + i * (cellSize + cellGap) + cellSize / 2 - 8, y, size: 7, font, color: gris });
-    });
-    y -= 14;
-    let col = calendario.primerDiaSemana;
-    let fila = 0;
-    let cy = y;
-    calendario.dias.forEach((v, i) => {
-      const intensidad = v === 0 ? 0 : Math.max(0.15, v / calendario.max);
-      const cx2 = MARGEN + col * (cellSize + cellGap);
-      const cyPos = cy - fila * (cellSize + cellGap);
-      pTendencia.drawRectangle({
-        x: cx2, y: cyPos - cellSize, width: cellSize, height: cellSize,
-        color: v === 0 ? grisClaro : rgb(0.059 + (1 - intensidad) * 0.3, 0.318 + (1 - intensidad) * 0.3, 0.196 + (1 - intensidad) * 0.3),
-      });
-      pTendencia.drawText(String(i + 1), {
-        x: cx2 + 4, y: cyPos - cellSize + 5, size: 6.5, font,
-        color: intensidad > 0.5 ? blanco : oscuro,
-      });
-      col++;
-      if (col >= cols) { col = 0; fila++; }
-    });
-    const filasTotales = Math.ceil((calendario.primerDiaSemana + calendario.dias.length) / cols);
-    y = cy - filasTotales * (cellSize + cellGap) - 10;
-    pTendencia.drawText("Mas oscuro = más interacciones ese día.", { x: MARGEN, y, size: 7.5, font: fontItalic, color: gris });
-    y -= 26;
-  }
-
-  tituloSeccionInterna(pTendencia, "Proyección de cierre de mes", MARGEN, y);
-  y -= 16;
-  if (proyeccion.suficiente) {
-    const projW = (ANCHO - 100 - 2 * 12) / 3;
-    let px = MARGEN;
-    dibujarKpi(pTendencia, px, y, projW, 58, "Acumulado del mes", proyeccion.toquesMes, { color: verde });
-    px += projW + 12;
-    dibujarKpi(pTendencia, px, y, projW, 58, "Proyección al cierre", proyeccion.proyectado, { sub: "rango " + proyeccion.minimo + "-" + proyeccion.maximo, color: oro });
-    px += projW + 12;
-    dibujarKpi(pTendencia, px, y, projW, 58, "Ritmo diario", proyeccion.promedio, { sub: proyeccion.restantes + " días restantes", color: verde });
-    y -= 78;
-  } else {
-    y -= dibujarCaja(pTendencia, MARGEN, y, ANCHO - 100,
-      "Todavía no hay suficientes días acumulados este mes para calcular una proyección confiable (se necesitan al menos 3 días con actividad).",
-      { color: gris, fondo: crema, size: 8.5 });
-    y -= 14;
-  }
-
-  if (comparativoAnio) {
-    y -= dibujarCaja(pTendencia, MARGEN, y, ANCHO - 100,
-      "Comparado con el mismo mes del año pasado (" + comparativoAnio.mesAnioPasado + " toques), este mes registra " + comparativoAnio.mesActual + " - un cambio de " + (comparativoAnio.cambioPct >= 0 ? "+" : "") + comparativoAnio.cambioPct + "% interanual.",
-      { color: verde, fondo: verdeClaro, size: 8.5, etiqueta: "Comparación interanual" });
-    y -= 14;
-  }
-
-  if (caidaPropia) {
-    y -= dibujarCaja(pTendencia, MARGEN, y, ANCHO - 100,
-      "La semana actual está " + caidaPropia.pctCaida + "% por debajo del promedio histórico del propio negocio (~" + caidaPropia.promedioSemanal + " toques/semana). Vale la pena revisar si algo cambio (ubicacion de la tarjeta, horario, personal).",
-      { color: rojo, fondo: rojoClaro, size: 8.5, etiqueta: "Anomalía detectada" });
-  }
-  piePagina(pTendencia);
-
+  // ---------- Página 3: Análisis por horas — picos y caídas ----------
   const paginaHoras = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(paginaHoras, "Patrones horarios", negocio.nombre + " - últimos 30 días");
+  encabezadoSeccion(paginaHoras, "Picos y caídas por hora");
 
   y = ALTO - 108;
-  paginaHoras.drawText("Distribución de la actividad a lo largo del día", { x: MARGEN, y, size: 9, font, color: gris });
+  paginaHoras.drawText("Basado en los últimos 30 días de actividad", { x: 50, y, size: 9, font, color: gris });
   y -= 24;
 
-  const horaTexto = function (h) { return h + ":00-" + ((h + 1) % 24) + ":00"; };
-  const pctPico = horas.totalMes > 0 ? Math.round((horas.maxToques / horas.totalMes) * 100) : 0;
-  const kpiHorasW = (ANCHO - 100 - 2 * 12) / 3;
-  let hx = MARGEN;
-  dibujarKpi(paginaHoras, hx, y, kpiHorasW, 62, "Hora pico", horaTexto(horas.picoHora), { sub: horas.maxToques + " toques (" + pctPico + "% del total)", color: oro });
-  hx += kpiHorasW + 12;
-  dibujarKpi(paginaHoras, hx, y, kpiHorasW, 62, "Hora más floja", horas.horaCaida != null ? horaTexto(horas.horaCaida) : "-", { sub: horas.minToques + " toques", color: rojo });
-  hx += kpiHorasW + 12;
-  dibujarKpi(paginaHoras, hx, y, kpiHorasW, 62, "Cobertura horaria", horas.horasConDatos + "/24", { sub: "horas del día con al menos 1 toque", color: verde });
-  y -= 86;
+  // Tarjetas de pico y caída
+  const horaTexto = (h) => `${h}:00 - ${(h + 1) % 24}:00`;
+  const tarjetasHora = [
+    ["Hora pico", horaTexto(horas.picoHora), `${horas.maxToques} toques`, verde],
+    ["Hora más floja", horas.horaCaida != null ? horaTexto(horas.horaCaida) : "—", `${horas.minToques} toques`, rojo],
+  ];
+  x = 50;
+  tarjetasHora.forEach(([label, hora, sub, color]) => {
+    paginaHoras.drawRectangle({ x, y: y - 66, width: 246, height: 66, color: crema });
+    paginaHoras.drawRectangle({ x, y: y - 66, width: 4, height: 66, color });
+    paginaHoras.drawText(label, { x: x + 16, y: y - 20, size: 8.5, font, color: gris });
+    paginaHoras.drawText(hora, { x: x + 16, y: y - 42, size: 18, font: fontBold, color: oscuro });
+    paginaHoras.drawText(sub, { x: x + 16, y: y - 56, size: 8.5, font, color: gris });
+    x += 256;
+  });
+  y -= 90;
 
   if (horas.totalMes > 0) {
     let textoTendencia;
     if (horas.tendenciaPico > 0) {
-      textoTendencia = "La hora pico (" + horaTexto(horas.picoHora) + ") tuvo " + horas.tendenciaPico + " toques más esta semana que la anterior - la concentración de actividad en ese horario está subiendo.";
+      textoTendencia = `La hora pico (${horaTexto(horas.picoHora)}) tuvo ${horas.tendenciaPico} toques más esta semana que la anterior — la actividad está subiendo.`;
     } else if (horas.tendenciaPico < 0) {
-      textoTendencia = "La hora pico (" + horaTexto(horas.picoHora) + ") tuvo " + Math.abs(horas.tendenciaPico) + " toques menos esta semana que la anterior - vale la pena revisar qué cambió en ese horario.";
+      textoTendencia = `La hora pico (${horaTexto(horas.picoHora)}) tuvo ${Math.abs(horas.tendenciaPico)} toques menos esta semana que la anterior — vale la pena revisar qué cambió.`;
     } else {
-      textoTendencia = "La hora pico (" + horaTexto(horas.picoHora) + ") se mantuvo estable esta semana comparada con la anterior.";
+      textoTendencia = `La hora pico (${horaTexto(horas.picoHora)}) se mantuvo estable esta semana comparada con la anterior.`;
     }
-    y -= dibujarCaja(paginaHoras, MARGEN, y, ANCHO - 100, textoTendencia, { color: verde, fondo: verdeClaro, size: 8.5, etiqueta: "Lectura de la tendencia horaria" });
-    y -= 14;
+    paginaHoras.drawRectangle({ x: 50, y: y - 30, width: ANCHO - 100, height: 30, color: verdeClaro });
+    paginaHoras.drawText(textoTendencia, { x: 60, y: y - 20, size: 8.5, font: fontBold, color: verdeOscuro, maxWidth: ANCHO - 120, lineHeight: 11 });
+    y -= 50;
   }
 
-  tituloSeccionInterna(paginaHoras, "Toques por hora del día (0-23h)", MARGEN, y);
+  paginaHoras.drawText("Distribución de toques por hora del día", { x: 50, y, size: 11, font: fontBold, color: oscuro });
   y -= 14;
 
   if (horas.totalMes === 0) {
-    paginaHoras.drawText("Todavía no hay suficientes datos este mes para este análisis.", { x: MARGEN, y: y - 20, size: 9, font, color: gris });
+    paginaHoras.drawText("Todavía no hay suficientes datos este mes para este análisis.", { x: 50, y: y - 20, size: 9, font, color: gris });
   } else {
-    const graficoAltura = 160;
+    const graficoTop = y - 10;
+    const graficoAltura = 180;
+    const maxHora = Math.max(1, horas.maxToques);
     const anchoBarra = (ANCHO - 100) / 24;
     horas.porHora.forEach((v, h) => {
-      const alturaBarra = (v / Math.max(1, horas.maxToques)) * graficoAltura;
-      const bx = MARGEN + h * anchoBarra;
+      const alturaBarra = (v / maxHora) * graficoAltura;
+      const bx = 50 + h * anchoBarra;
       const esPico = h === horas.picoHora && v > 0;
       paginaHoras.drawRectangle({
-        x: bx + 1, y: y - graficoAltura, width: anchoBarra - 2, height: alturaBarra || 0.5,
+        x: bx + 1, y: graficoTop - graficoAltura, width: anchoBarra - 2, height: alturaBarra || 0.5,
         color: esPico ? oro : verde,
       });
+      // Etiqueta de hora cada 3 horas para no saturar
       if (h % 3 === 0) {
-        paginaHoras.drawText(String(h), { x: bx + 1, y: y - graficoAltura - 12, size: 6.5, font, color: gris });
+        paginaHoras.drawText(String(h), { x: bx + 1, y: graficoTop - graficoAltura - 12, size: 6.5, font, color: gris });
       }
     });
-    paginaHoras.drawLine({ start: { x: MARGEN, y: y - graficoAltura }, end: { x: ANCHO - MARGEN, y: y - graficoAltura }, thickness: 0.5, color: grisClaro });
+    paginaHoras.drawLine({
+      start: { x: 50, y: graficoTop - graficoAltura }, end: { x: ANCHO - 50, y: graficoTop - graficoAltura },
+      thickness: 0.5, color: gris,
+    });
   }
   piePagina(paginaHoras);
 
-  const pSemana = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(pSemana, "Patrones semanales", negocio.nombre + " - historial completo");
-
-  y = ALTO - 108;
-  pSemana.drawText("Distribución histórica de la actividad por día de la semana", { x: MARGEN, y, size: 9, font, color: gris });
-  y -= 26;
-
-  if (totalDiaSemana > 0) {
-    dibujarBarras(pSemana, MARGEN, y, ANCHO - 100, 140, porDiaSemana, nombresDiaCorto, {
-      indicePico: porDiaSemana.indexOf(Math.max(...porDiaSemana)),
-    });
-    y -= 140 + 34;
-
-    if (diaFlojo) {
-      y -= dibujarCaja(pSemana, MARGEN, y, ANCHO - 100,
-        "El " + diaFlojo.dia + " es historicamente el día con menos actividad (" + diaFlojo.toques + " toques acumulados). " + (diaMasFuerte ? "El día con mejor desempeño es " + diaMasFuerte + "." : "") + " Considera una promoción o recordatorio a clientes frecuentes ese día.",
-        { color: oro, fondo: oroClaro, size: 8.5, etiqueta: "Estacionalidad semanal" });
-      y -= 14;
-    }
-  } else {
-    pSemana.drawText("Todavía no hay suficiente historial para identificar un patrón por día de la semana.", { x: MARGEN, y: y - 10, size: 9, font, color: gris });
-    y -= 40;
-  }
-
-  tituloSeccionInterna(pSemana, "Clientes recurrentes", MARGEN, y);
-  y -= 16;
-  dibujarKpi(pSemana, MARGEN, y, (ANCHO - 100 - 12) / 2, 60, "Clientes con 3+ calificaciones", clientesRecurrentes, { sub: "señal de fidelización real, no solo tráfico nuevo", color: verde });
-  y -= 80;
-  piePagina(pSemana);
-
-  const pReputacion = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(pReputacion, "Reputación y satisfacción", negocio.nombre + " - calificaciones filtradas por Tapin");
-
-  y = ALTO - 108;
-  const repW = (ANCHO - 100 - 2 * 12) / 3;
-  let rx = MARGEN;
-  dibujarKpi(pReputacion, rx, y, repW, 62, "Calificación promedio", promedioEstrellas !== null ? promedioEstrellas + "/5" : "-", { sub: totalCalificado + " evaluaciones", color: oro });
-  rx += repW + 12;
-  dibujarKpi(pReputacion, rx, y, repW, 62, "Reseñas positivas", pctPositivas + "%", { sub: testimonios.length + " enviadas a Google", color: verde });
-  rx += repW + 12;
-  dibujarKpi(pReputacion, rx, y, repW, 62, "Quejas privadas", pctNegativas + "%", { sub: tasaRecuperacion !== null ? tasaRecuperacion + "% resueltas" : quejas.length + " recibidas", color: rojo });
-  y -= 86;
-
-  tituloSeccionInterna(pReputacion, "Distribución de calificaciones filtradas", MARGEN, y);
-  y -= 16;
-  if (totalCalificado > 0) {
-    const barraAncho = ANCHO - 100;
-    const wPos = (pctPositivas / 100) * barraAncho;
-    pReputacion.drawRectangle({ x: MARGEN, y: y - 16, width: barraAncho, height: 16, color: rojoClaro });
-    pReputacion.drawRectangle({ x: MARGEN, y: y - 16, width: wPos, height: 16, color: verde });
-    y -= 30;
-    pReputacion.drawRectangle({ x: MARGEN, y: y - 10, width: 9, height: 9, color: verde });
-    pReputacion.drawText("Positivas - enviadas a Google (" + testimonios.length + ", " + pctPositivas + "%)", { x: MARGEN + 15, y: y - 9, size: 8.5, font, color: oscuro });
-    y -= 16;
-    pReputacion.drawRectangle({ x: MARGEN, y: y - 10, width: 9, height: 9, color: rojo });
-    pReputacion.drawText("Quejas - privadas, nunca públicas (" + quejas.length + ", " + pctNegativas + "%)", { x: MARGEN + 15, y: y - 9, size: 8.5, font, color: oscuro });
-    y -= 26;
-
-    if (tasaRecuperacion !== null) {
-      y -= dibujarCaja(pReputacion, MARGEN, y, ANCHO - 100,
-        "De las " + quejas.length + " quejas privadas recibidas, " + quejasResueltas + " ya fueron marcadas como resueltas - una tasa de recuperación del " + tasaRecuperacion + "%. Cada queja resuelta es una reseña negativa pública que se evitó.",
-        { color: verde, fondo: verdeClaro, size: 8.5, etiqueta: "Gestión de reputación" });
-    }
-  } else {
-    pReputacion.drawText("Todavía no hay calificaciones registradas en este periodo.", { x: MARGEN, y: y - 10, size: 9, font, color: gris });
-  }
-  piePagina(pReputacion);
-
-  const pSector = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(pSector, "Comparación sectorial", negocio.nombre + " - categoría: " + (negocio.categoria || "-"));
-
-  y = ALTO - 108;
-  if (promSector !== null) {
-    tituloSeccionInterna(pSector, "Toques de la última semana vs. el promedio del sector", MARGEN, y);
-    y -= 20;
-    const base = Math.max(1, r.semana, promSector);
-    pSector.drawText("Tu", { x: MARGEN, y, size: 9, font: fontBold, color: oscuro });
-    pSector.drawText(String(r.semana), { x: ANCHO - MARGEN - 24, y, size: 9, font: fontBold, color: verde });
-    y -= 12;
-    dibujarGauge(pSector, MARGEN, y - 10, ANCHO - 100, (r.semana / base) * 100, { color: verde });
-    y -= 30;
-    pSector.drawText("Promedio del sector", { x: MARGEN, y, size: 9, font: fontBold, color: oscuro });
-    pSector.drawText(String(promSector), { x: ANCHO - MARGEN - 24, y, size: 9, font: fontBold, color: oro });
-    y -= 12;
-    dibujarGauge(pSector, MARGEN, y - 10, ANCHO - 100, (promSector / base) * 100, { color: oro });
-    y -= 40;
-
-    const diferenciaSector = r.semana - promSector;
-    y -= dibujarCaja(pSector, MARGEN, y, ANCHO - 100,
-      diferenciaSector >= 0
-        ? "El negocio está " + diferenciaSector + " toques por encima del promedio de su categoría esta semana."
-        : "El negocio está " + Math.abs(diferenciaSector) + " toques por debajo del promedio de su categoría esta semana - es la principal palanca de mejora a corto plazo.",
-      { color: diferenciaSector >= 0 ? verde : rojo, fondo: diferenciaSector >= 0 ? verdeClaro : rojoClaro, size: 8.5, etiqueta: "Brecha vs. sector" });
-    y -= 18;
-  } else {
-    y -= dibujarCaja(pSector, MARGEN, y, ANCHO - 100,
-      "Todavía no hay suficientes negocios de la misma categoría y país en Tapin para calcular un promedio sectorial confiable.",
-      { color: gris, fondo: crema, size: 8.5 });
-    y -= 18;
-  }
-
-  if (percentil !== null) {
-    tituloSeccionInterna(pSector, "Posición relativa dentro de la categoría", MARGEN, y);
-    y -= 20;
-    dibujarGauge(pSector, MARGEN, y - 10, ANCHO - 100, percentil, { color: verde, alto: 14 });
-    pSector.drawText("Percentil " + percentil, { x: MARGEN, y: y - 30, size: 10, font: fontBold, color: verde });
-    pSector.drawText(
-      percentil >= 50
-        ? "El negocio está en el " + (100 - percentil + 1) + "% superior de su categoría en toques de la última semana."
-        : "El negocio está por debajo de la mediana de su categoría en toques de la última semana.",
-      { x: MARGEN, y: y - 46, size: 8.5, font, color: gris, maxWidth: ANCHO - 100, lineHeight: 11 }
-    );
-    y -= 70;
-  }
-  piePagina(pSector);
-
-  const pReco = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(pReco, "Recomendaciones basadas en datos", negocio.nombre);
-
-  y = ALTO - 108;
-  pReco.drawText("Generadas automáticamente a partir de los patrones detectados en este informe.", { x: MARGEN, y, size: 9, font: fontItalic, color: gris });
-  y -= 24;
-
-  const todasLasRecos = recomendaciones.slice();
-  if (diaFlojo) todasLasRecos.push("Refuerza la promoción o el personal el " + diaFlojo.dia + ", tu día historicamente más flojo.");
-  if (caidaPropia) todasLasRecos.push("La semana actual está " + caidaPropia.pctCaida + "% por debajo de tu propio promedio - revisa si algo cambio operativamente.");
-  if (percentil !== null && percentil < 50) todasLasRecos.push("Estas por debajo de la mediana de tu categoría - revisa la ubicacion de la tarjeta y la frecuencia con que el personal la ofrece.");
-  if (tasaRecuperacion !== null && tasaRecuperacion < 50) todasLasRecos.push("Solo el " + tasaRecuperacion + "% de las quejas privadas están resueltas - cerrar ese ciclo mejora la retención de clientes insatisfechos.");
-
-  todasLasRecos.forEach((texto) => {
-    if (y < 100) return;
-    y -= dibujarCaja(pReco, MARGEN, y, ANCHO - 100, texto, { color: oro, fondo: oroClaro, size: 8.8 });
-    y -= 10;
-  });
-  piePagina(pReco);
-
-  // ---------- Cómo llegan tus clientes (desglose por dispositivo) ----------
-  const pDispositivos = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(pDispositivos, "Cómo llegan tus clientes", negocio.nombre);
-
-  y = ALTO - 108;
-  pDispositivos.drawText(
-    "De qué tipo de celular o equipo vienen los toques registrados en tu tarjeta.",
-    { x: MARGEN, y, size: 9, font: fontItalic, color: gris }
-  );
-  y -= 34;
-
-  if (totalConDispositivo === 0) {
-    pDispositivos.drawText("Todavía no hay toques suficientes para este análisis.", { x: MARGEN, y, size: 9.5, font, color: gris });
-    y -= 20;
-  } else {
-    // Estadística principal: % desde celular, en grande.
-    pDispositivos.drawText(String(pctMovil) + "%", { x: MARGEN, y: y - 6, size: 30, font: fontBold, color: verde });
-    pDispositivos.drawText("de tus toques vienen de un celular (iPhone o Android)", { x: MARGEN + 92, y: y - 2, size: 9.5, font, color: oscuro, maxWidth: 300 });
-    y -= 46;
-
-    // Barras horizontales por tipo de dispositivo, de mayor a menor.
-    const anchoBarraMax = ANCHO - 100 - 150;
-    rankingDispositivo.forEach(([nombreDisp, cuenta]) => {
-      const pct = Math.round((cuenta / totalConDispositivo) * 100);
-      pDispositivos.drawText(nombreDisp, { x: MARGEN, y: y - 10, size: 9, font, color: oscuro });
-      pDispositivos.drawRectangle({ x: MARGEN + 130, y: y - 13, width: anchoBarraMax, height: 12, color: verdeClaro });
-      pDispositivos.drawRectangle({ x: MARGEN + 130, y: y - 13, width: Math.max(3, (anchoBarraMax * pct) / 100), height: 12, color: verde });
-      pDispositivos.drawText(pct + "% (" + cuenta + ")", { x: MARGEN + 130 + anchoBarraMax + 10, y: y - 11, size: 8.5, font: fontBold, color: verdeOscuro });
-      y -= 26;
-    });
-    y -= 14;
-
-    // Aviso automático si hay una proporción alta de dispositivos que no
-    // son un celular normal de cliente -- casi siempre es personal
-    // probando la tarjeta desde un computador de la caja o el mostrador.
-    if (pctSospechoso >= 15 && totalConDispositivo >= 5) {
-      y -= dibujarCaja(
-        pDispositivos, MARGEN, y, ANCHO - 100,
-        "El " + pctSospechoso + "% de los toques no vienen de un celular (Windows, Mac o sin identificar). " +
-        "Casi siempre es señal de que alguien probó la tarjeta desde un computador, no de un cliente real -- " +
-        "vale la pena confirmarlo con tu equipo para que las cifras reflejen solo visitas reales.",
-        { color: oro, fondo: oroClaro, size: 8.5, etiqueta: "A revisar" }
-      );
-    } else {
-      y -= dibujarCaja(
-        pDispositivos, MARGEN, y, ANCHO - 100,
-        "La gran mayoría de tus toques vienen de un celular, como se espera de una tarjeta NFC -- es una buena señal de que las cifras de este informe reflejan clientes reales.",
-        { color: verde, fondo: verdeClaro, size: 8.5, etiqueta: "Confirmado" }
-      );
-    }
-  }
-  piePagina(pDispositivos);
-
+  // ---------- Página 4: Detalle de interacciones ----------
   const detalle = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(detalle, "Anexo - detalle de interacciones", negocio.nombre);
+  encabezadoSeccion(detalle, "Detalle de interacciones");
 
   y = ALTO - 110;
-  detalle.drawText("Últimas interacciones registradas (max. 30)", { x: MARGEN, y, size: 11, font: fontBold, color: oscuro });
+  detalle.drawText("Últimas interacciones registradas", { x: 50, y, size: 11, font: fontBold, color: oscuro });
   y -= 22;
 
-  detalle.drawRectangle({ x: MARGEN, y: y - 18, width: ANCHO - 100, height: 18, color: verdeOscuro });
+  detalle.drawRectangle({ x: 50, y: y - 18, width: ANCHO - 100, height: 18, color: verdeOscuro });
   detalle.drawText("Fecha y hora", { x: 58, y: y - 13, size: 8.5, font: fontBold, color: blanco });
   detalle.drawText("Dispositivo", { x: 320, y: y - 13, size: 8.5, font: fontBold, color: blanco });
   y -= 18;
@@ -6298,26 +5126,13 @@ async function generarInformePDF(negocio, slug) {
   const recientes = eventos.slice(-30).reverse();
   recientes.forEach((e, i) => {
     if (y < 90) return;
-    if (i % 2 === 0) detalle.drawRectangle({ x: MARGEN, y: y - 16, width: ANCHO - 100, height: 16, color: crema });
+    if (i % 2 === 0) detalle.drawRectangle({ x: 50, y: y - 16, width: ANCHO - 100, height: 16, color: crema });
     detalle.drawText(e.fechaLegible, { x: 58, y: y - 12, size: 8.5, font, color: oscuro });
     detalle.drawText(e.dispositivo, { x: 320, y: y - 12, size: 8.5, font, color: oscuro });
     y -= 16;
   });
   if (recientes.length === 0) {
     detalle.drawText("Sin interacciones registradas todavía.", { x: 58, y: y - 12, size: 9, font, color: gris });
-    y -= 20;
-  }
-
-  y -= 24;
-  if (y > 130) {
-    detalle.drawText("Metodología", { x: MARGEN, y, size: 10, font: fontBold, color: oscuro });
-    y -= 16;
-    const notaMetodologica =
-      "Todas las cifras de este informe provienen exclusivamente de los toques NFC y calificaciones registrados en la tarjeta Tapin de este negocio. " +
-      "Las proyecciones se calculan a partir del ritmo diario observado en el periodo, con un rango de +-15% para reflejar la incertidumbre natural. " +
-      "Los promedios y percentiles sectoriales solo se muestran cuando hay al menos 3 negocios comparables de la misma categoría y país. " +
-      "Las calificaciones negativas nunca se publican en Google; se gestionan como retroalimentación privada.";
-    detalle.drawText(notaMetodologica, { x: MARGEN, y, size: 7.8, font: fontItalic, color: gris, maxWidth: ANCHO - 100, lineHeight: 11 });
   }
   piePagina(detalle);
 
@@ -6331,7 +5146,7 @@ app.get("/export/:slug.docx", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
+  if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   if (!esPro(negocio)) {
@@ -6557,7 +5372,7 @@ app.get("/export/:slug.csv", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
+  if (!autorizadoProNegocio(req, negocio)) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   if (!esPro(negocio)) {
@@ -9288,10 +8103,6 @@ app.get("/pedido", (req, res) => {
               </label>
             </div>
 
-            <label style="margin-top:2px;">¿Necesitas factura a nombre de una empresa? (opcional)</label>
-            <input type="text" name="razonSocial" placeholder="Razón social (déjalo vacío si no aplica)">
-            <input type="text" name="nit" placeholder="NIT o cédula (opcional)">
-
             <button type="submit">Continuar al pago</button>
           </form>
         </div>
@@ -9361,7 +8172,7 @@ app.get("/pedido", (req, res) => {
 });
 
 app.post("/pedido", (req, res) => {
-  const { nombreNegocio, email, telefono, direccion, ciudad, departamento, incluirPro, planProTipo, cantidad, nit, razonSocial } = req.body;
+  const { nombreNegocio, email, telefono, direccion, ciudad, departamento, incluirPro, planProTipo, cantidad } = req.body;
   if (!nombreNegocio || !email || !telefono || !direccion || !ciudad || !departamento) {
     return res.status(400).send("Faltan datos del pedido.");
   }
@@ -9377,20 +8188,11 @@ app.post("/pedido", (req, res) => {
   const id = generarToken();
   pedidos[id] = {
     nombreNegocio, email, telefono, direccion, ciudad, departamento,
-    // Opcional — solo si el comprador necesita factura a nombre de una
-    // empresa. Queda guardado en el pedido y en cada tarjeta generada, listo
-    // para cuando se conecte un proveedor de facturación electrónica.
-    nit: (nit || "").trim(),
-    razonSocial: (razonSocial || "").trim(),
     cantidad: cantidadLimpia,
     precioUnidad: escalon.precio,
     descuentoAplicado: escalon.descuento,
     proIncluido,
     planProTipo: proIncluido ? tipoProElegido : null,
-    // Solo aplica al Plan Pro MENSUAL (el anual es pago único, no necesita
-    // tarjeta guardada). Marcado por defecto — el cliente lo puede
-    // destildar en la pantalla de pago si no quiere que se renueve solo.
-    renovarAutomatico: proIncluido && tipoProElegido === "mensual",
     monto,
     estado: "pendiente", // pendiente | aprobado | rechazado
     creado: new Date().toISOString(),
@@ -9400,22 +8202,8 @@ app.post("/pedido", (req, res) => {
   res.redirect(`/pagar/${id}`);
 });
 
-// Página de pago — embebe el Web Checkout de Wompi con la firma de
-// integridad calculada en el servidor (nunca se expone el secreto al
-// navegador). Actualiza en caliente si el cliente quiere que su Plan Pro
-// mensual se renueve solo — se llama desde la casilla en /pagar/:id, ANTES
-// de que le dé clic al botón de Wompi (que lo saca de nuestro sitio).
-app.post("/pedido/:id/renovar-automatico", (req, res) => {
-  const pedidos = leerPedidos();
-  const pedido = pedidos[req.params.id];
-  if (!pedido) return res.status(404).json({ ok: false });
-  if (!pedido.proIncluido || pedido.planProTipo !== "mensual") return res.status(400).json({ ok: false });
-  pedido.renovarAutomatico = !!(req.body && req.body.renovar);
-  pedidos[req.params.id] = pedido;
-  guardarPedidos(pedidos);
-  res.json({ ok: true });
-});
-
+// Página de pago — embebe el widget oficial de Wompi con la firma de integridad
+// calculada en el servidor (nunca se expone el secreto al navegador).
 app.get("/pagar/:id", (req, res) => {
   const pedidos = leerPedidos();
   const pedido = pedidos[req.params.id];
@@ -9470,23 +8258,6 @@ app.get("/pagar/:id", (req, res) => {
           </div>
           <div class="monto">$${pedido.monto.toLocaleString("es-CO")} COP</div>
 
-          ${pedido.proIncluido && pedido.planProTipo === "mensual" ? `
-          <label style="display:flex;align-items:flex-start;gap:9px;text-align:left;font-size:0.82rem;color:${MARCA.textoSuave};
-                        background:${MARCA.crema};border-radius:10px;padding:12px 14px;margin:14px 0;cursor:pointer;">
-            <input type="checkbox" id="check-renovar" checked style="margin-top:2px;flex-shrink:0;">
-            <span>Renovar mi Plan Pro automáticamente cada mes. Al activar la tarjeta te vamos a pedir registrar una tarjeta para el cobro — puedes cancelar cuando quieras desde tu panel.</span>
-          </label>
-          <script>
-            document.getElementById("check-renovar").addEventListener("change", function () {
-              fetch("/pedido/${req.params.id}/renovar-automatico", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ renovar: this.checked }),
-              }).catch(function () {});
-            });
-          </script>
-          ` : ""}
-
           <form action="https://checkout.wompi.co/p/" method="GET">
             <input type="hidden" name="public-key" value="${process.env.WOMPI_PUBLIC_KEY}" />
             <input type="hidden" name="currency" value="${moneda}" />
@@ -9494,13 +8265,11 @@ app.get("/pagar/:id", (req, res) => {
             <input type="hidden" name="reference" value="${referencia}" />
             <input type="hidden" name="signature:integrity" value="${firma}" />
             <input type="hidden" name="redirect-url" value="${redirectUrl}" />
-            <input type="hidden" name="shipping-address:address-line-1" value="${escaparHtml(pedido.direccion || "")}" />
-            <input type="hidden" name="shipping-address:city" value="${escaparHtml(pedido.ciudad || "")}" />
-            <input type="hidden" name="shipping-address:region" value="${escaparHtml(pedido.departamento || "")}" />
-            <input type="hidden" name="shipping-address:phone-number" value="${escaparHtml((pedido.telefono || "").replace(/\D/g, ""))}" />
+            <input type="hidden" name="shipping-address:address-line-1" value="${pedido.direccion}" />
+            <input type="hidden" name="shipping-address:city" value="${pedido.ciudad}" />
+            <input type="hidden" name="shipping-address:region" value="${pedido.departamento}" />
+            <input type="hidden" name="shipping-address:phone-number" value="${pedido.telefono}" />
             <input type="hidden" name="shipping-address:country" value="CO" />
-            <input type="hidden" name="customer-data:email" value="${escaparHtml(pedido.email || "")}" />
-            <input type="hidden" name="customer-data:full-name" value="${escaparHtml(pedido.nombreNegocio || "")}" />
             <button type="submit">Pagar con Wompi</button>
           </form>
         </div>
@@ -9510,235 +8279,68 @@ app.get("/pagar/:id", (req, res) => {
 });
 
 // Wompi redirige aquí después del pago, con ?id=TRANSACTION_ID en la URL.
-// Consultamos el estado real de la transacción contra la API de Wompi
-// (nunca confiamos solo en lo que diga la URL, porque se podría manipular).
-// La verificación de firma del webhook (verificarChecksumWompi) ya está
-// definida más arriba, junto al resto de helpers de Wompi.
+// Consultamos el estado real de la transacción contra la API de Wompi (nunca
+// confiamos solo en lo que diga la URL, porque se podría manipular).
+// Verifica que un aviso de webhook realmente venga de Wompi (y no de cualquiera
+// que le pegue a la URL). Compara un checksum SHA256 calculado con el "Secreto
+// de Eventos" (distinto del Secreto de Integridad) que Wompi te da en su panel.
+// Basado en el algoritmo documentado por Wompi — si algo no cuadra, revisa su
+// documentación oficial de eventos antes de confiar ciegamente en producción.
+function verificarChecksumWompi(payload) {
+  if (!process.env.WOMPI_EVENTS_SECRET) return false;
+  if (!payload || !payload.signature || !payload.signature.properties) return false;
 
-// Registro de referencias de pago ya facturadas en Alegra, guardado en el
-// propio negocio. Existe porque el mismo pago puede llegar por DOS caminos
-// casi al tiempo (el webhook de Wompi y la página de confirmación cuando el
-// cliente vuelve del pago), y el webhook además puede reintentarse — sin
-// esta marca, cada camino generaría su propia factura ante la DIAN.
-function yaSeFacturo(negocio, referencia) {
-  return Array.isArray(negocio.facturasEmitidas) && negocio.facturasEmitidas.includes(referencia);
-}
-// Devuelve el objeto de cambios a incluir en guardarCambiosNegocio para
-// marcar la referencia como facturada (con tope para que no crezca infinito).
-function marcaFacturaEmitida(negocio, referencia) {
-  const lista = Array.isArray(negocio.facturasEmitidas) ? negocio.facturasEmitidas : [];
-  return { facturasEmitidas: [...lista, referencia].slice(-100) };
-}
-
-// Activa (o renueva) el Plan Pro de un negocio tras un pago aprobado desde
-// /mejorar-a-pro. Reutilizable desde la página de confirmación (cuando el
-// cliente vuelve del pago) y desde el webhook de Wompi — volver a llamarla
-// para el mismo pago no causa ningún problema: los cambios de plan solo se
-// reescriben iguales, y la factura se genera una única vez gracias a la
-// marca por referencia.
-function activarUpgradePro(slug, esAnual, referencia) {
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return;
-  const referenciaFactura = referencia || `tapin-upgrade-${esAnual ? "anual-" : ""}${slug}`;
-  const yaFacturado = yaSeFacturo(negocio, referenciaFactura);
-  const marcaFactura = yaFacturado ? {} : marcaFacturaEmitida(negocio, referenciaFactura);
-  const precioPagado = esAnual ? PRECIO_PRO_ANUAL_COP : precioProSegunLocales(negocio.email, todosLosNegocios());
-  if (esAnual) {
-    const unAnioDespues = new Date();
-    unAnioDespues.setFullYear(unAnioDespues.getFullYear() + 1);
-    guardarCambiosNegocio(slug, negocio, {
-      plan: "pro",
-      billingType: "anual",
-      proAnualHasta: unAnioDespues.toISOString(),
-      ...marcaFactura,
+  try {
+    const valores = payload.signature.properties.map((ruta) => {
+      // Cada "ruta" es algo como "transaction.id" o "transaction.status" —
+      // navegamos el objeto payload.data siguiendo esos nombres.
+      return ruta.split(".").reduce((obj, key) => (obj ? obj[key] : undefined), payload.data);
     });
-    registrarAuditoria(slug, negocio, `Mejoraste a Plan Pro anual (vence ${unAnioDespues.toLocaleDateString("es-CO")})`);
-  } else {
-    // Pro mensual: este primer pago ya cubre el ciclo actual. Todavía no
-    // hay tarjeta tokenizada (paymentSourceId) — por eso, aunque quede
-    // "activa: true" aquí, la página /suscripcion/:slug lo trata como
-    // "falta registrar tarjeta" hasta que el dueño complete ese paso en
-    // /suscripcion/:slug/registrar. Cuando la registre, se sobreescribe
-    // este mismo objeto con su paymentSourceId real.
-    guardarCambiosNegocio(slug, negocio, {
-      plan: "pro",
-      billingType: "mensual",
-      suscripcion: {
-        activa: true,
-        proximoCobro: sumarUnMes(),
-        ultimoPagoConfirmado: new Date().toISOString(),
-      },
-      ...marcaFactura,
-    });
-    registrarAuditoria(slug, negocio, "Mejoraste a Plan Pro");
-  }
-
-  // Factura electronica: solo la primera vez que llega esta referencia.
-  // Si el negocio no dejo NIT en Configuracion, sale a consumidor final.
-  // No bloquea el resto del flujo si Alegra falla o no esta configurado.
-  if (!yaFacturado) {
-    crearFacturaAlegra({
-      nit: negocio.datosFactura && negocio.datosFactura.nit,
-      razonSocial: negocio.datosFactura && negocio.datosFactura.razonSocial,
-      email: negocio.email,
-      items: [{ nombreItem: ALEGRA_NOMBRE_ITEM_PRO, cantidad: 1, precioUnitario: precioPagado }],
-      referencia: referenciaFactura,
-    }).catch((err) => console.error("[Alegra] Error inesperado facturando upgrade:", err.message));
+    const cadena = valores.join("") + payload.timestamp + process.env.WOMPI_EVENTS_SECRET;
+    const checksumCalculado = crypto.createHash("sha256").update(cadena).digest("hex").toUpperCase();
+    return checksumCalculado === String(payload.signature.checksum).toUpperCase();
+  } catch (err) {
+    console.error("Error verificando checksum de Wompi:", err.message);
+    return false;
   }
 }
 
-// Wompi le pega a esta URL automáticamente cada vez que cambia el estado de
-// una transacción — así el pedido/suscripción queda al día aunque el
-// cliente cierre el navegador antes de volver a tu sitio. Regístrala en
-// Wompi desde comercios.wompi.co → Desarrolladores → "URL de eventos", con
-// esta URL completa: https://tu-dominio.com/webhook/wompi
-app.post("/webhook/wompi", async (req, res) => {
+// Wompi le pega a esta URL automáticamente cada vez que cambia el estado de una
+// transacción — así el pedido se marca como pagado aunque el cliente cierre el
+// navegador antes de volver a /pago-confirmado.
+// Configúrala en Wompi: Desarrollo → "URL de Eventos" → pega esta URL completa:
+// https://tu-dominio.com/webhook/wompi
+app.post("/webhook/wompi", (req, res) => {
   const payload = req.body;
+
   if (!verificarChecksumWompi(payload)) {
-    console.error("[webhook Wompi] checksum inválido o WOMPI_EVENTS_SECRET no configurado — aviso ignorado.");
+    console.error("[webhook Wompi] checksum inválido o secreto no configurado — aviso ignorado.");
     return res.status(400).json({ ok: false, motivo: "Checksum inválido." });
   }
 
   const transaccion = payload?.data?.transaction;
-  // Solo las transacciones aprobadas requieren una acción automática de
-  // nuestra parte — rechazos y pendientes no necesitan que hagamos nada aquí.
-  if (!transaccion || transaccion.status !== "APPROVED") {
-    return res.status(200).json({ ok: true, ignorado: true });
-  }
+  if (!transaccion) return res.status(400).json({ ok: false, motivo: "Sin datos de transacción." });
 
+  // La referencia que generamos al crear el pedido tiene el formato "tapin-ID".
   const referencia = transaccion.reference || "";
+  const pedidoId = referencia.startsWith("tapin-") ? referencia.slice("tapin-".length) : null;
 
-  try {
-    if (referencia.startsWith("tapin-upgrade-anual-")) {
-      // Formato: tapin-upgrade-anual-{slug}-{timestamp}. El timestamp
-      // (Date.now(), solo dígitos) siempre es el último tramo, así que se
-      // puede recortar sin ambigüedad aunque el slug tenga guiones.
-      const partes = referencia.slice("tapin-upgrade-anual-".length).split("-");
-      activarUpgradePro(partes.slice(0, -1).join("-"), true, referencia);
-    } else if (referencia.startsWith("tapin-upgrade-")) {
-      const partes = referencia.slice("tapin-upgrade-".length).split("-");
-      activarUpgradePro(partes.slice(0, -1).join("-"), false, referencia);
-    } else if (referencia.startsWith("tapin-pro-")) {
-      // Formato: tapin-pro-{AAAAMM}-{slug} — el año-mes son siempre 6
-      // dígitos en una posición fija, así que el slug se recorta sin
-      // ambigüedad aunque tenga guiones.
-      const resto = referencia.slice("tapin-pro-".length);
-      const slug = resto.slice(7); // 6 dígitos del AAAAMM + 1 guion
-      const negocio = obtenerNegocio(slug);
-      if (negocio && negocio.suscripcion) {
-        // La referencia trae el año-mes, asi que es unica por ciclo: si
-        // Wompi reenvia este mismo aviso, la marca evita facturar dos veces.
-        const yaFacturado = yaSeFacturo(negocio, referencia);
-        guardarCambiosNegocio(slug, negocio, {
-          suscripcion: { ...negocio.suscripcion, ultimoPagoConfirmado: new Date().toISOString() },
-          ...(yaFacturado ? {} : marcaFacturaEmitida(negocio, referencia)),
-        });
-        registrarAuditoria(slug, negocio, "Pago mensual del Plan Pro confirmado");
-
-        // Factura electronica de este ciclo. Si el negocio no dejo NIT en
-        // Configuracion, sale a consumidor final. No bloquea el resto del
-        // flujo si Alegra falla.
-        if (!yaFacturado) {
-          const precioPagado = precioProSegunLocales(negocio.email, todosLosNegocios());
-          crearFacturaAlegra({
-            nit: negocio.datosFactura && negocio.datosFactura.nit,
-            razonSocial: negocio.datosFactura && negocio.datosFactura.razonSocial,
-            email: negocio.email,
-            items: [{ nombreItem: ALEGRA_NOMBRE_ITEM_PRO, cantidad: 1, precioUnitario: precioPagado }],
-            referencia,
-          }).catch((err) => console.error("[Alegra] Error inesperado facturando mensualidad:", err.message));
-        }
+  if (pedidoId) {
+    const pedidos = leerPedidos();
+    if (pedidos[pedidoId]) {
+      if (transaccion.status === "APPROVED") {
+        pedidos[pedidoId].estado = "aprobado";
+      } else if (transaccion.status === "DECLINED" || transaccion.status === "ERROR") {
+        pedidos[pedidoId].estado = "rechazado";
       }
-    } else if (referencia.startsWith("tapin-")) {
-      const pedidoId = referencia.slice("tapin-".length);
-      await activarPedidoAprobado(pedidoId, req);
+      guardarPedidos(pedidos);
+      console.log(`[webhook Wompi] pedido ${pedidoId} actualizado a "${pedidos[pedidoId].estado}"`);
     }
-  } catch (err) {
-    console.error("[webhook Wompi] Error procesando el evento:", err.message);
   }
 
   // Wompi solo necesita un 200 OK para saber que el aviso llegó bien.
   res.status(200).json({ ok: true });
 });
-
-// Genera los códigos de activación de un pedido ya aprobado y manda el
-// correo con los links de activación. Reutilizable desde /pago-confirmado
-// (cuando el cliente vuelve a la página tras pagar) y desde el webhook de
-// Wompi (que puede avisar primero, o si el cliente cierra el navegador antes
-// de volver). Es seguro llamarla más de una vez para el mismo pedido: si ya
-// se generaron códigos antes, no hace nada — evita duplicar tarjetas o correos.
-async function activarPedidoAprobado(pedidoId, req) {
-  const pedidos = leerPedidos();
-  const pedido = pedidos[pedidoId];
-  if (!pedido) return;
-  const yaGenerado = pedido.estado === "aprobado" && pedido.codigosGenerados;
-  pedido.estado = "aprobado";
-
-  if (!yaGenerado) {
-    const cantidadComprada = pedido.cantidad || 1;
-    const codigos = leerCodigos();
-    const nuevosCodigos = [];
-    for (let i = 0; i < cantidadComprada; i++) {
-      let nuevo;
-      do {
-        nuevo = generarCodigo();
-      } while (codigos[nuevo]);
-      codigos[nuevo] = {
-        activado: false,
-        creado: new Date().toISOString(),
-        proIncluido: pedido.proIncluido || false,
-        planProTipo: pedido.planProTipo || null,
-        renovarAutomatico: pedido.proIncluido && pedido.planProTipo === "mensual" && pedido.renovarAutomatico !== false,
-        datosFactura: (pedido.nit || pedido.razonSocial) ? { nit: pedido.nit || "", razonSocial: pedido.razonSocial || "" } : null,
-      };
-      nuevosCodigos.push(nuevo);
-    }
-    guardarCodigos(codigos);
-    pedido.codigosGenerados = nuevosCodigos;
-    pedidos[pedidoId] = pedido;
-    guardarPedidos(pedidos);
-
-    // Factura electronica -- se dispara aqui, una sola vez por pedido,
-    // junto con la generacion de codigos (el flag yaGenerado de arriba
-    // evita duplicados si el webhook y /pago-confirmado llegan a la vez).
-    // Si el comprador no dejo NIT, sale a nombre del consumidor final. No
-    // bloquea el resto del flujo si Alegra falla o no esta configurado.
-    {
-      const itemsFactura = [
-        { nombreItem: ALEGRA_NOMBRE_ITEM_BASICO, cantidad: cantidadComprada, precioUnitario: pedido.precioUnidad },
-      ];
-      if (pedido.proIncluido) {
-        const precioPro = pedido.planProTipo === "anual" ? PRECIO_PRO_ANUAL_COP : PRECIO_PRO_COP;
-        itemsFactura.push({ nombreItem: ALEGRA_NOMBRE_ITEM_PRO, cantidad: 1, precioUnitario: precioPro });
-      }
-      crearFacturaAlegra({
-        nit: pedido.nit,
-        razonSocial: pedido.razonSocial,
-        email: pedido.email,
-        items: itemsFactura,
-        referencia: `tapin-${pedidoId}`,
-      }).catch((err) => console.error("[Alegra] Error inesperado facturando pedido:", err.message));
-    }
-
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
-    const filasCodigos = nuevosCodigos
-      .map((c) => `<li style="margin-bottom:8px;"><b style="letter-spacing:0.05em;">${c}</b> — <a href="${baseUrl}/activar/${c}">Activar esta tarjeta</a></li>`)
-      .join("");
-    enviarEmail(
-      pedido.email,
-      nuevosCodigos.length === 1 ? "Tu código de activación Tapin" : `Tus ${nuevosCodigos.length} códigos de activación Tapin`,
-      `<div style="font-family:-apple-system,Arial,sans-serif;max-width:460px;">
-         <h2 style="color:${MARCA.verdeOscuro};">¡Gracias por tu compra, ${pedido.nombreNegocio}!</h2>
-         <p>Tu pago fue aprobado. Cuando te llegue${nuevosCodigos.length > 1 ? "n" : ""} la${nuevosCodigos.length > 1 ? "s" : ""} tarjeta${nuevosCodigos.length > 1 ? "s" : ""} física${nuevosCodigos.length > 1 ? "s" : ""}, activa cada una con su link:</p>
-         <ul style="padding-left:18px;">${filasCodigos}</ul>
-         <p style="font-size:0.8rem;color:#888;">Si tienes más de una tarjeta, usa el mismo correo al activarlas para verlas todas juntas en <a href="${baseUrl}/mis-negocios">tu panel</a>.</p>
-       </div>`
-    ).catch((err) => console.error("[pago-confirmado] Error enviando códigos:", err.message));
-  } else {
-    pedidos[pedidoId] = pedido;
-    guardarPedidos(pedidos);
-  }
-}
 
 app.get("/pago-confirmado", async (req, res) => {
   const pedidoId = req.query.pedido;
@@ -9751,28 +8353,72 @@ app.get("/pago-confirmado", async (req, res) => {
 
   if (transaccionId && process.env.WOMPI_PUBLIC_KEY) {
     try {
-      const resp = await fetch(`${baseWompi()}/transactions/${transaccionId}`);
+      const base = process.env.WOMPI_PUBLIC_KEY.startsWith("pub_prod_")
+        ? "https://production.wompi.co/v1"
+        : "https://sandbox.wompi.co/v1";
+      const resp = await fetch(`${base}/transactions/${transaccionId}`);
       const data = await resp.json();
       estado = data?.data?.status || "desconocido";
     } catch (err) {
-      console.error("Error consultando la transacción en Wompi:", err.message);
+      console.error("Error consultando transacción Wompi:", err.message);
     }
   }
 
   if (pedido) {
     if (estado === "APPROVED") {
+      const yaGenerado = pedido.estado === "aprobado" && pedido.codigosGenerados;
+      pedido.estado = "aprobado";
       mensaje = pedido.proIncluido
         ? "¡Pago aprobado! Tu tarjeta Tapin va en camino, con tu primer mes de Plan Pro ya incluido."
         : "¡Pago aprobado! Tu tarjeta Tapin va en camino.";
-      await activarPedidoAprobado(pedidoId, req);
-    } else if (estado === "DECLINED" || estado === "ERROR" || estado === "VOIDED") {
+
+      // Generamos un código de activación por cada tarjeta comprada, y se los
+      // mandamos por correo de una vez — no dependemos de que Samuel los
+      // genere a mano después. Solo se hace la primera vez que se confirma
+      // (si alguien recarga esta página, no se duplican códigos ni correos).
+      if (!yaGenerado) {
+        const cantidadComprada = pedido.cantidad || 1;
+        const codigos = leerCodigos();
+        const nuevosCodigos = [];
+        for (let i = 0; i < cantidadComprada; i++) {
+          let nuevo;
+          do {
+            nuevo = generarCodigo();
+          } while (codigos[nuevo]);
+          codigos[nuevo] = {
+            activado: false,
+            creado: new Date().toISOString(),
+            proIncluido: pedido.proIncluido || false,
+            planProTipo: pedido.planProTipo || null,
+          };
+          nuevosCodigos.push(nuevo);
+        }
+        guardarCodigos(codigos);
+        pedido.codigosGenerados = nuevosCodigos;
+
+        const baseUrl = `${req.protocol}://${req.get("host")}`;
+        const filasCodigos = nuevosCodigos
+          .map((c) => `<li style="margin-bottom:8px;"><b style="letter-spacing:0.05em;">${c}</b> — <a href="${baseUrl}/activar/${c}">Activar esta tarjeta</a></li>`)
+          .join("");
+        enviarEmail(
+          pedido.email,
+          nuevosCodigos.length === 1 ? "Tu código de activación Tapin" : `Tus ${nuevosCodigos.length} códigos de activación Tapin`,
+          `<div style="font-family:-apple-system,Arial,sans-serif;max-width:460px;">
+             <h2 style="color:${MARCA.verdeOscuro};">¡Gracias por tu compra, ${pedido.nombreNegocio}!</h2>
+             <p>Tu pago fue aprobado. Cuando te llegue${nuevosCodigos.length > 1 ? "n" : ""} la${nuevosCodigos.length > 1 ? "s" : ""} tarjeta${nuevosCodigos.length > 1 ? "s" : ""} física${nuevosCodigos.length > 1 ? "s" : ""}, activa cada una con su link:</p>
+             <ul style="padding-left:18px;">${filasCodigos}</ul>
+             <p style="font-size:0.8rem;color:#888;">Si tienes más de una tarjeta, usa el mismo correo al activarlas para verlas todas juntas en <a href="${baseUrl}/mis-negocios">tu panel</a>.</p>
+           </div>`
+        ).catch((err) => console.error("[pago-confirmado] Error enviando códigos:", err.message));
+      }
+    } else if (estado === "DECLINED" || estado === "ERROR") {
       pedido.estado = "rechazado";
       mensaje = "El pago no pudo procesarse. Puedes intentar de nuevo.";
-      pedidos[pedidoId] = pedido;
-      guardarPedidos(pedidos);
     } else if (estado === "PENDING") {
       mensaje = "Tu pago está siendo procesado. Te avisamos por correo cuando se confirme.";
     }
+    pedidos[pedidoId] = pedido;
+    guardarPedidos(pedidos);
   }
 
   res.send(`
@@ -9818,7 +8464,7 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
   if (esPro(negocio) && req.query.plan !== "anual") {
     return res.redirect(`/mi-panel/${slug}?key=${req.query.key}`);
   }
-  if (!process.env.WOMPI_PUBLIC_KEY || !process.env.WOMPI_INTEGRITY_SECRET) {
+  if (!process.env.WOMPI_PUBLIC_KEY) {
     return res.status(500).send("Los pagos todavía no están configurados. Contacta a Tapin.");
   }
 
@@ -9901,8 +8547,7 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
             <input type="hidden" name="reference" value="${referencia}" />
             <input type="hidden" name="signature:integrity" value="${firma}" />
             <input type="hidden" name="redirect-url" value="${redirectUrl}" />
-            <input type="hidden" name="customer-data:email" value="${escaparHtml(negocio.email || "")}" />
-            <input type="hidden" name="customer-data:full-name" value="${escaparHtml(negocio.nombre || "")}" />
+            <input type="hidden" name="customer-data:email" value="${negocio.email || ""}" />
             <button type="submit">Pagar y activar Pro</button>
           </form>
           <a class="volver" href="/mi-panel/${slug}?key=${req.query.key}">&larr; Volver a mi panel</a>
@@ -9928,7 +8573,8 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
 
   if (transaccionId && process.env.WOMPI_PUBLIC_KEY) {
     try {
-      const resp = await fetch(`${baseWompi()}/transactions/${transaccionId}`);
+      const base = baseWompi();
+      const resp = await fetch(`${base}/transactions/${transaccionId}`);
       const data = await resp.json();
       estado = data?.data?.status || "desconocido";
       const referenciaRecibida = data?.data?.reference || "";
@@ -9938,10 +8584,22 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
         ? data?.data?.amount_in_cents === PRECIO_PRO_ANUAL_COP * 100
         : ESCALONES_PRO.some((e) => data?.data?.amount_in_cents === e.precio * 100);
       if (estado === "APPROVED" && referenciaOk && montoOk) {
-        activarUpgradePro(slug, esAnual, referenciaRecibida);
+        if (esAnual) {
+          const unAnioDespues = new Date();
+          unAnioDespues.setFullYear(unAnioDespues.getFullYear() + 1);
+          guardarCambiosNegocio(slug, negocio, {
+            plan: "pro",
+            billingType: "anual",
+            proAnualHasta: unAnioDespues.toISOString(),
+          });
+          registrarAuditoria(slug, negocio, `Mejoraste a Plan Pro anual (vence ${unAnioDespues.toLocaleDateString("es-CO")})`);
+        } else {
+          guardarCambiosNegocio(slug, negocio, { plan: "pro", billingType: "mensual" });
+          registrarAuditoria(slug, negocio, "Mejoraste a Plan Pro");
+        }
       }
     } catch (err) {
-      console.error("[mejorar-a-pro] Error consultando la transacción en Wompi:", err.message);
+      console.error("[mejorar-a-pro] Error consultando transacción:", err.message);
     }
   }
 
@@ -9988,14 +8646,20 @@ app.get("/mejorar-a-pro/:slug/confirmar", async (req, res) => {
 });
 
 
-// El Plan Pro mensual se renueva con cobro automático silencioso de
-// verdad: el dueño registra su tarjeta UNA vez (se tokeniza con Wompi,
-// Tapin nunca ve ni guarda el número real), y cada mes el servidor le
-// cobra directamente a esa "fuente de pago" vía la API de Wompi — sin que
-// nadie tenga que volver a hacer nada. Si el cobro falla (tarjeta vencida,
-// fondos insuficientes, etc.) no reintentamos solos ni bajamos el plan de
-// inmediato: se avisa por correo y queda visible en el panel para decidir
-// a mano. Ver /cobrar-suscripciones más abajo para el cron mensual.
+// Wompi maneja suscripciones así: el dueño del negocio registra su tarjeta UNA
+// sola vez (se tokeniza, nunca guardamos el número real), Wompi nos da un
+// "payment_source_id" reutilizable, y luego cada mes el SERVIDOR le cobra a esa
+// fuente de pago directamente vía API — sin que el dueño tenga que volver a
+// ingresar nada. Necesitas UNA variable de entorno nueva en Render:
+//   WOMPI_PRIVATE_KEY → tu "Llave privada" (prv_test_... o prv_prod_...),
+//   distinta de la pública y de los secretos de integridad/eventos. Se usa
+//   SOLO aquí en el servidor — nunca se envía al navegador.
+
+function baseWompi() {
+  return (process.env.WOMPI_PUBLIC_KEY || "").startsWith("pub_prod_")
+    ? "https://production.wompi.co/v1"
+    : "https://sandbox.wompi.co/v1";
+}
 function sumarUnMes(fechaISO) {
   const f = fechaISO ? new Date(fechaISO) : new Date();
   f.setMonth(f.getMonth() + 1);
@@ -10048,18 +8712,17 @@ function registrarAuditoriaGlobal(accion, detalle, req) {
   fs.writeFileSync(AUDITORIA_GLOBAL_FILE, JSON.stringify(registros, null, 2));
 }
 
-// Página donde el dueño de un negocio Pro registra su tarjeta (tokenizada
-// con el widget de Wompi) para el cobro automático mensual, o ve el estado
-// de la que ya tiene registrada, la cancela, o la reemplaza por otra.
+// Página donde el dueño de un negocio Pro registra su tarjeta una sola vez,
+// usando el Widget de Wompi en modo "tokenize" (no cobra nada en este paso).
 app.get("/suscripcion/:slug", (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
-  if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "Revisa que el enlace esté completo y bien escrito.");
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) {
-    return enviarError(res, 401, "No pudimos verificar tu acceso", "El enlace debe incluir tu clave personal (?key=...).");
+    return res.status(401).send("No autorizado.");
   }
   if (!esPro(negocio)) {
-    return enviarError(res, 402, "Esto es exclusivo del Plan Pro", "Esta página de suscripción solo aplica para negocios en Plan Pro.", { texto: "Ver planes", href: `/mejorar-a-pro/${slug}?key=${req.query.key}` });
+    return res.status(402).send("Esta página es solo para negocios en Plan Pro.");
   }
 
   const sus = negocio.suscripcion;
@@ -10139,10 +8802,9 @@ app.get("/suscripcion/:slug", (req, res) => {
   `);
 });
 
-// Recibe el token de la tarjeta (nunca el número real) desde el widget de
-// Wompi y crea una "fuente de pago" (payment source): un identificador
-// reutilizable que el servidor usa cada mes para cobrar esa tarjeta
-// directamente vía API, sin que el dueño del negocio vuelva a intervenir.
+// Recibe el token de la tarjeta (nunca el número en sí) y crea una "fuente de
+// pago" (payment source) en Wompi: un identificador reutilizable para cobrar
+// esa tarjeta después, sin volver a pedirle los datos al dueño del negocio.
 app.post("/suscripcion/:slug/registrar", async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
@@ -10188,7 +8850,6 @@ app.post("/suscripcion/:slug/registrar", async (req, res) => {
     guardarCambiosNegocio(slug, negocio, {
       suscripcion: { paymentSourceId, activa: true, proximoCobro: sumarUnMes(), ultimoCobro: null, ultimoError: null },
     });
-    registrarAuditoria(slug, negocio, "Registraste tu tarjeta para el cobro automático del Plan Pro");
 
     res.redirect(`/suscripcion/${slug}?key=${req.query.key}`);
   } catch (err) {
@@ -10238,6 +8899,11 @@ app.post("/suscripcion/:slug/bajar-anticipado", (req, res) => {
   res.redirect(`/mi-panel/${slug}?key=${req.query.key}`);
 });
 
+
+// próximo cobro ya llegó. Visítala con un cron diario o mensual (igual que
+// /notificar/:slug) — solo cobra a quien realmente le toque ese día:
+// https://tu-dominio.com/cobrar-suscripciones?key=TU_CLAVE
+// Cuenta cuántos negocios Pro activos tiene el mismo correo, y devuelve el
 // precio que le corresponde a CADA local, según la tabla de escalones.
 function precioProSegunLocales(email, todosNegocios) {
   if (!email) return PRECIO_PRO_COP;
@@ -10249,29 +8915,6 @@ function precioProSegunLocales(email, todosNegocios) {
   return (escalon || ESCALONES_PRO[ESCALONES_PRO.length - 1]).precio;
 }
 
-// Arma la referencia de pago de un ciclo mensual del Plan Pro. Formato:
-// tapin-pro-{AAAAMM}-{slug} — el año-mes SIEMPRE ocupa 6 dígitos justo
-// después del prefijo, así que el webhook puede recortar el slug sin
-// ambigüedad aunque el slug tenga guiones.
-// Arma la referencia de pago de un ciclo mensual del Plan Pro. Formato:
-// tapin-pro-{AAAAMM}-{slug} — el año-mes SIEMPRE ocupa 6 dígitos justo
-// después del prefijo, así que el webhook de Wompi puede recortar el slug
-// sin ambigüedad aunque el slug tenga guiones (ver /webhook/wompi).
-function referenciaCicloProMensual(slug, fecha = new Date()) {
-  const aaaamm = `${fecha.getFullYear()}${String(fecha.getMonth() + 1).padStart(2, "0")}`;
-  return `tapin-pro-${aaaamm}-${slug}`;
-}
-
-// Cobro automático mensual de verdad: cobra directamente a la tarjeta
-// tokenizada (payment_source_id) de cada negocio Pro mensual al que ya le
-// toca el próximo ciclo — sin correos, sin links, sin que el dueño tenga
-// que hacer nada. Visítala con un cron diario (por ejemplo con
-// cron-job.org o el propio "Cron Jobs" de Render) — solo cobra a quien
-// realmente le toque ese día:
-// https://tu-dominio.com/cobrar-suscripciones?key=TU_CLAVE_ADMIN
-// Si el cobro falla (tarjeta vencida, fondos insuficientes, etc.) no
-// reintentamos solos ni bajamos el plan de inmediato — solo se avisa por
-// correo y queda registrado el error, para decidir a mano si dar un plazo.
 app.get("/cobrar-suscripciones", limitarIntentosAdmin, async (req, res) => {
   if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
   if (!process.env.WOMPI_PRIVATE_KEY) {
@@ -10291,7 +8934,7 @@ app.get("/cobrar-suscripciones", limitarIntentosAdmin, async (req, res) => {
     if (sus.proximoCobro && new Date(sus.proximoCobro) > hoy) continue; // todavía no toca
 
     const precioAplicable = precioProSegunLocales(negocio.email, negocios);
-    const referencia = referenciaCicloProMensual(slug, hoy);
+    const referencia = `tapin-sub-${slug}-${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, "0")}`;
     const montoCentavos = precioAplicable * 100;
     const firma = firmaIntegridadWompi(referencia, montoCentavos, "COP");
 
@@ -10427,7 +9070,7 @@ app.get("/privacidad", (req, res) => {
 
           <h2>1. ¿Qué datos recogemos?</h2>
           <ul>
-            <li><b>De los negocios:</b> nombre del negocio, correo electrónico, dirección, categoría, enlace de reseñas de Google, y datos de facturación procesados por nuestro proveedor de pagos (Wompi) y, si el negocio solicita factura electrónica, por nuestro proveedor tecnológico autorizado por la DIAN (Alegra).</li>
+            <li><b>De los negocios:</b> nombre del negocio, correo electrónico, dirección, categoría, enlace de reseñas de Google, y datos de facturación procesados por nuestro proveedor de pagos (Wompi).</li>
             <li><b>De los clientes finales que califican con la tarjeta:</b> calificación (1-5), comentario opcional (si la calificación es negativa), teléfono (opcional), fecha, hora, y tipo de dispositivo. No pedimos ni guardamos nombres de clientes finales salvo que decidan crear una cuenta de usuario.</li>
             <li><b>De usuarios registrados (clientes con cuenta):</b> nombre, correo, y contraseña (guardada de forma cifrada, nunca en texto plano).</li>
           </ul>
@@ -10437,12 +9080,12 @@ app.get("/privacidad", (req, res) => {
             <li>Operar el servicio: redirigir calificaciones positivas a Google, mostrar retroalimentación privada al negocio correspondiente.</li>
             <li>Generar estadísticas y reportes para el negocio (horas pico, tendencias, comparación con su categoría).</li>
             <li>Enviar alertas y reportes por correo a los negocios.</li>
-            <li>Procesar pagos y suscripciones a través de Wompi, y generar facturas electrónicas ante la DIAN a través de Alegra cuando el negocio lo solicita.</li>
+            <li>Procesar pagos y suscripciones a través de Wompi.</li>
             <li>Mejorar el servicio y dar soporte.</li>
           </ul>
 
           <h2>3. ¿Con quién compartimos tus datos?</h2>
-          <p>No vendemos ni compartimos tus datos personales con terceros para fines de mercadeo. Compartimos información únicamente con proveedores necesarios para operar el servicio: Wompi (pagos), Alegra (facturación electrónica ante la DIAN, solo si el negocio la solicita), y proveedores de infraestructura (hosting de correo y servidores). Estos proveedores solo acceden a lo estrictamente necesario para prestar su servicio.</p>
+          <p>No vendemos ni compartimos tus datos personales con terceros para fines de mercadeo. Compartimos información únicamente con proveedores necesarios para operar el servicio: Wompi (pagos), y proveedores de infraestructura (hosting de correo y servidores). Estos proveedores solo acceden a lo estrictamente necesario para prestar su servicio.</p>
 
           <h2>4. ¿Cómo protegemos tus datos?</h2>
           <p>Los datos se almacenan en servidores con acceso restringido. Las contraseñas se guardan cifradas. Las transacciones de pago se procesan directamente por Wompi — Tapin nunca almacena números de tarjeta completos.</p>
@@ -10492,7 +9135,7 @@ app.get("/terminos", (req, res) => {
           <p>Tapin es un servicio de tarjetas con tecnología NFC que permite a los clientes de un negocio calificar su experiencia con un toque, dirigiendo las calificaciones positivas a Google y gestionando las negativas de forma privada.</p>
 
           <h2>2. Planes y pagos</h2>
-          <p>El Plan Básico se cobra como pago único e incluye la tarjeta física, envío, y funciones esenciales. El Plan Pro mensual se cobra automáticamente cada mes a la tarjeta que el negocio registre, hasta que decida cancelar. Los pagos se procesan a través de Wompi. Los precios vigentes están publicados en <a href="/conoce">/conoce</a> y pueden cambiar con previo aviso.</p>
+          <p>El Plan Básico se cobra como pago único e incluye la tarjeta física, envío, y funciones esenciales. El Plan Pro se cobra mensualmente y se renueva automáticamente hasta que el negocio cancele. Los pagos se procesan a través de Wompi. Los precios vigentes están publicados en <a href="/conoce">/conoce</a> y pueden cambiar con previo aviso.</p>
 
           <h2>3. Responsabilidad sobre las reseñas</h2>
           <p>Tapin facilita la redirección de clientes a la plataforma de reseñas de Google, pero no controla, edita, ni garantiza el contenido de las reseñas publicadas por terceros en Google. Tapin tampoco publica reseñas en nombre de los clientes ni de los negocios.</p>
