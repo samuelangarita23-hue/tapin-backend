@@ -1967,9 +1967,12 @@ const TODAS_LAS_FRASES_VALIDAS = new Set(Object.values(FRASES_POR_CATEGORIA).fla
 // ---------- Rutas ----------
 
 // Esta es la URL que se programa en el chip NFC de la tarjeta Tapin.
-// En vez de redirigir directo a Google, primero muestra una pantalla rápida
-// de "¿cómo te fue?" — si la respuesta es positiva, lo manda a Google;
-// si es negativa, lo manda a un formulario privado en vez de exponerlo en público.
+// Plan Pro: primero muestra una pantalla rápida de "¿cómo te fue?" — si la
+// respuesta es positiva, lo manda a Google; si es negativa, lo manda a un
+// formulario privado en vez de exponerlo en público. Es el "filtro de
+// calificaciones", exclusivo de Pro (así está listado en /precios).
+// Plan Básico: NO tiene ese filtro — va directo a Google sin pantalla
+// intermedia, sin importar qué calificación hubiera dado el cliente.
 // Ejemplo: https://tu-dominio.com/r/mi-negocio
 app.get("/r/:slug", (req, res) => {
   const codigoTarjeta = req.params.slug; // el código físico exacto que se tocó
@@ -1985,6 +1988,11 @@ app.get("/r/:slug", (req, res) => {
   }
 
   registrarToque(slug, req, negocio, codigoTarjeta);
+
+  // Plan Básico: sin filtro de calificaciones — directo a Google siempre.
+  if (!esPro(negocio)) {
+    return res.redirect(302, negocio.googleUrl);
+  }
 
   res.send(`
     <html>
@@ -2042,6 +2050,14 @@ app.get("/calificar/:slug", (req, res) => {
 
   const valor = parseInt(req.query.valor, 10);
   let selloSumado = null; // se usa más abajo para avisarle al cliente si aplica
+
+  // Red de seguridad: el filtro de calificaciones es exclusivo de Pro. Si el
+  // negocio ya no es Pro (por ejemplo, bajó de plan y quedó un link viejo de
+  // /calificar guardado en algún lado), no se muestra el formulario privado
+  // — se manda directo a Google, igual que si nunca hubiera pasado por aquí.
+  if (!esPro(negocio)) {
+    return res.redirect(302, negocio.googleUrl);
+  }
 
   // Si el cliente tiene sesión iniciada, guardamos esta calificación en su
   // historial personal — funciona sin importar si el negocio es Pro o básico.
@@ -6076,58 +6092,6 @@ async function generarInformePDF(negocio, slug) {
   });
   piePagina(pReco);
 
-  // ---------- Cómo llegan tus clientes (desglose por dispositivo) ----------
-  const pDispositivos = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(pDispositivos, "Cómo llegan tus clientes", negocio.nombre);
-
-  y = ALTO - 108;
-  pDispositivos.drawText(
-    "De qué tipo de celular o equipo vienen los toques registrados en tu tarjeta.",
-    { x: MARGEN, y, size: 9, font: fontItalic, color: gris }
-  );
-  y -= 34;
-
-  if (totalConDispositivo === 0) {
-    pDispositivos.drawText("Todavía no hay toques suficientes para este análisis.", { x: MARGEN, y, size: 9.5, font, color: gris });
-    y -= 20;
-  } else {
-    // Estadística principal: % desde celular, en grande.
-    pDispositivos.drawText(String(pctMovil) + "%", { x: MARGEN, y: y - 6, size: 30, font: fontBold, color: verde });
-    pDispositivos.drawText("de tus toques vienen de un celular (iPhone o Android)", { x: MARGEN + 92, y: y - 2, size: 9.5, font, color: oscuro, maxWidth: 300 });
-    y -= 46;
-
-    // Barras horizontales por tipo de dispositivo, de mayor a menor.
-    const anchoBarraMax = ANCHO - 100 - 150;
-    rankingDispositivo.forEach(([nombreDisp, cuenta]) => {
-      const pct = Math.round((cuenta / totalConDispositivo) * 100);
-      pDispositivos.drawText(nombreDisp, { x: MARGEN, y: y - 10, size: 9, font, color: oscuro });
-      pDispositivos.drawRectangle({ x: MARGEN + 130, y: y - 13, width: anchoBarraMax, height: 12, color: verdeClaro });
-      pDispositivos.drawRectangle({ x: MARGEN + 130, y: y - 13, width: Math.max(3, (anchoBarraMax * pct) / 100), height: 12, color: verde });
-      pDispositivos.drawText(pct + "% (" + cuenta + ")", { x: MARGEN + 130 + anchoBarraMax + 10, y: y - 11, size: 8.5, font: fontBold, color: verdeOscuro });
-      y -= 26;
-    });
-    y -= 14;
-
-    // Aviso automático si hay una proporción alta de dispositivos que no
-    // son un celular normal de cliente -- casi siempre es personal
-    // probando la tarjeta desde un computador de la caja o el mostrador.
-    if (pctSospechoso >= 15 && totalConDispositivo >= 5) {
-      y -= dibujarCaja(
-        pDispositivos, MARGEN, y, ANCHO - 100,
-        "El " + pctSospechoso + "% de los toques no vienen de un celular (Windows, Mac o sin identificar). " +
-        "Casi siempre es señal de que alguien probó la tarjeta desde un computador, no de un cliente real -- " +
-        "vale la pena confirmarlo con tu equipo para que las cifras reflejen solo visitas reales.",
-        { color: oro, fondo: oroClaro, size: 8.5, etiqueta: "A revisar" }
-      );
-    } else {
-      y -= dibujarCaja(
-        pDispositivos, MARGEN, y, ANCHO - 100,
-        "La gran mayoría de tus toques vienen de un celular, como se espera de una tarjeta NFC -- es una buena señal de que las cifras de este informe reflejan clientes reales.",
-        { color: verde, fondo: verdeClaro, size: 8.5, etiqueta: "Confirmado" }
-      );
-    }
-  }
-  piePagina(pDispositivos);
 
   const detalle = pdfDoc.addPage([ANCHO, ALTO]);
   encabezadoSeccion(detalle, "Anexo - detalle de interacciones", negocio.nombre);
@@ -6801,6 +6765,18 @@ app.get("/reportes-guardados/:slug", (req, res) => {
           <div class="eyebrow">Historial · ${negocio.nombre}</div>
           <h1 class="titulo-pagina">Reportes mensuales</h1>
           <div class="subtitulo">Cada reporte mensual queda guardado aquí, no solo enviado por correo.</div>
+
+          <div style="background:${MARCA.verdeClaro};border-radius:10px;padding:14px 16px;margin-bottom:20px;max-width:500px;
+                      display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div>
+              <b style="font-size:0.88rem;">Datos en bruto (CSV)</b>
+              <div style="font-size:0.78rem;color:${MARCA.textoSuave};margin-top:2px;">Todos tus toques hasta hoy, fecha y dispositivo — listo para abrir en Excel.</div>
+            </div>
+            <a href="/export/${slug}.csv?key=${req.query.key}"
+               style="flex-shrink:0;background:${MARCA.verde};color:#fff;text-decoration:none;font-weight:700;
+                      font-size:0.8rem;padding:9px 16px;border-radius:8px;">Descargar CSV</a>
+          </div>
+
           <table>
             <tr><th>Mes</th><th>Descarga</th></tr>
             ${filas || `<tr><td colspan="2">Todavía no hay reportes guardados para este negocio.</td></tr>`}
