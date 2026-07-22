@@ -5076,6 +5076,25 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
               <p class="nota" style="margin-bottom:6px;"><b>Identificador de este negocio</b> (pídelo al activar una tarjeta nueva, junto con tu clave de acceso):</p>
               <div class="codigo-caja">${slug}</div>
 
+              <details style="margin-top:14px;">
+                <summary style="cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px;background:${MARCA.verde};color:#fff;border-radius:8px;padding:10px 16px;font-weight:700;font-size:0.8rem;">+ Agregar tarjeta</summary>
+                <div style="margin-top:12px;padding:14px 16px;background:${MARCA.verdeClaro};border-radius:10px;font-size:0.82rem;line-height:1.55;">
+                  <p style="margin:0 0 8px;"><b>¿Es una tarjeta más para ESTE mismo negocio</b> (otra mesa, caja o entrada)?</p>
+                  <ol style="margin:0 0 14px;padding-left:18px;">
+                    <li>Abre la página de activación de la tarjeta física nueva (viene impresa o en el NFC).</li>
+                    <li>Elige la opción <b>"Ya tengo un negocio en Tapin"</b>.</li>
+                    <li>Ingresa el identificador <code>${slug}</code> y tu clave de acceso.</li>
+                  </ol>
+                  <p style="margin:0 0 8px;"><b>¿Es la primera tarjeta de un negocio nuevo</b> (no de este)?</p>
+                  <ol style="margin:0;padding-left:18px;">
+                    <li>Abre la página de activación de esa tarjeta física.</li>
+                    <li>Elige la opción <b>"Es un negocio nuevo"</b>.</li>
+                    <li>Completa el nombre del negocio, el link de reseñas de Google, ciudad, categoría y crea una clave de acceso propia para ese negocio.</li>
+                  </ol>
+                  <p style="margin:12px 0 0;color:${MARCA.textoSuave};">¿No tienes tarjetas físicas adicionales todavía? Escríbeme para pedir más.</p>
+                </div>
+              </details>
+
               <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
                 ${resumenTarjetas.map((t, i) => `
                   <div style="border:1px solid ${MARCA.borde};border-radius:10px;padding:12px 14px;">
