@@ -1255,16 +1255,26 @@ function escaparHtml(texto) {
     .replace(/'/g, "&#39;");
 }
 
-// Valida que un link realmente sea de Google Maps/Reseñas, para no dejar
-// pasar por error un link equivocado que rompería la redirección de reseñas.
+// Valida que un link realmente sea del formulario de RESEÑAS de Google (no
+// de Google Maps a secas), para no dejar pasar por error un link que rompería
+// la redirección de "toca la tarjeta → deja una reseña en 1 clic". El link de
+// "Compartir" de Google Maps (maps.app.goo.gl, o www.google.com/maps/place/...)
+// solo muestra el negocio en el mapa — no abre el formulario de reseña — así
+// que se rechaza explícitamente aunque el dominio sea de Google.
 function esLinkGoogleValido(url) {
-  const dominiosValidos = ["google.com", "g.page", "goo.gl", "maps.app.goo.gl"];
+  const dominiosValidos = ["google.com", "g.page", "goo.gl"];
+  let u;
   try {
-    const host = new URL(url).hostname.replace(/^www\./, "");
-    return dominiosValidos.some((d) => host === d || host.endsWith("." + d));
+    u = new URL(url);
   } catch {
     return false;
   }
+  const host = u.hostname.replace(/^www\./, "");
+  const esDominioGoogle = dominiosValidos.some((d) => host === d || host.endsWith("." + d));
+  if (!esDominioGoogle) return false;
+  if (host === "maps.app.goo.gl") return false; // link de "Compartir" de Maps, no de reseñas
+  if (/\/maps\/(place|@)/.test(u.pathname)) return false; // link de ubicación en Maps, no de reseñas
+  return true;
 }
 
 // Lee una cookie sin depender de ningún paquete adicional (parseo manual del
@@ -2947,7 +2957,7 @@ app.get("/activar/:codigo", (req, res) => {
                 1. Busca el nombre de tu negocio en Google, entrando con el Gmail que lo administra.<br>
                 2. En el panel de dueño que te aparece, toca el botón <b>"Pedir reseñas"</b>.<br>
                 3. Copia el enlace que te da Google (empieza por <b>g.page/r/...</b>) y pégalo aquí.<br>
-                <span style="color:${MARCA.textoSuave};">También sirve el enlace de tu negocio en Google Maps (botón "Compartir" → empieza por <b>maps.app.goo.gl/...</b>). Solo se aceptan enlaces de Google — a este enlace llegan tus clientes cuando tocan la tarjeta y califican bien.</span>
+                <span style="color:${MARCA.rojo};font-weight:600;">Ojo: no sirve el enlace de "Compartir" de Google Maps (el que empieza por maps.app.goo.gl) — ese solo muestra tu negocio en el mapa, no abre el formulario de reseña. Tiene que ser el enlace de <b>"Pedir reseñas"</b>.</span>
               </div>
 
               <label>Email del negocio (alertas y reportes llegan aquí)</label>
@@ -3164,10 +3174,11 @@ app.post("/activar/:codigo", (req, res) => {
   }
   if (!esLinkGoogleValido(googleUrl)) {
     return res.status(400).send(
-      "Ese enlace no parece ser de Google Maps/Reseñas. Debe empezar por https://g.page/... o " +
-      "https://maps.app.goo.gl/... o https://www.google.com/maps/... — Para sacarlo: busca el nombre de tu " +
-      "negocio en Google con el Gmail que lo administra, y en el panel de dueño toca el botón \"Pedir reseñas\". " +
-      "Copia ese enlace, regresa e inténtalo de nuevo."
+      "Ese enlace no sirve para reseñas — debe ser el link de \"Pedir reseñas\" de Google (empieza por " +
+      "https://g.page/r/.../review), NO el enlace de \"Compartir\" de Google Maps (ese solo muestra el " +
+      "negocio en el mapa). Para sacarlo: busca el nombre de tu negocio en Google con el Gmail que lo " +
+      "administra, y en el panel de dueño toca el botón \"Pedir reseñas\". Copia ese enlace, regresa e " +
+      "inténtalo de nuevo."
     );
   }
   const claveLimpia = (claveAcceso || "").trim();
@@ -4771,7 +4782,9 @@ app.post("/mi-panel/:slug/editar", (req, res) => {
   }
   if (!esLinkGoogleValido(googleUrl)) {
     return res.status(400).send(
-      "Ese enlace no parece ser de Google Maps/Reseñas. Verifica el link e inténtalo de nuevo."
+      "Ese enlace no sirve para reseñas — debe ser el link de \"Pedir reseñas\" de Google (empieza por " +
+      "https://g.page/r/.../review), NO el enlace de \"Compartir\" de Google Maps. Verifica el link e " +
+      "inténtalo de nuevo."
     );
   }
   guardarCambiosNegocio(slug, negocio, { nombre, googleUrl, email, direccion, ciudad, categoria });
@@ -5075,19 +5088,13 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
               <details style="margin-top:14px;">
                 <summary style="cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px;background:${MARCA.verde};color:#fff;border-radius:8px;padding:10px 16px;font-weight:700;font-size:0.8rem;">+ Agregar tarjeta</summary>
                 <div style="margin-top:12px;padding:14px 16px;background:${MARCA.verdeClaro};border-radius:10px;font-size:0.82rem;line-height:1.55;">
-                  <p style="margin:0 0 8px;"><b>¿Es una tarjeta más para ESTE mismo negocio</b> (otra mesa, caja o entrada)?</p>
-                  <ol style="margin:0 0 14px;padding-left:18px;">
-                    <li>Abre la página de activación de la tarjeta física nueva (viene impresa o en el NFC).</li>
-                    <li>Elige la opción <b>"Ya tengo un negocio en Tapin"</b>.</li>
-                    <li>Ingresa el identificador <code>${slug}</code> y tu clave de acceso.</li>
-                  </ol>
-                  <p style="margin:0 0 8px;"><b>¿Es la primera tarjeta de un negocio nuevo</b> (no de este)?</p>
-                  <ol style="margin:0;padding-left:18px;">
-                    <li>Abre la página de activación de esa tarjeta física.</li>
-                    <li>Elige la opción <b>"Es un negocio nuevo"</b>.</li>
-                    <li>Completa el nombre del negocio, el link de reseñas de Google, ciudad, categoría y crea una clave de acceso propia para ese negocio.</li>
-                  </ol>
-                  <p style="margin:12px 0 0;color:${MARCA.textoSuave};">¿No tienes tarjetas físicas adicionales todavía? Escríbeme para pedir más.</p>
+                  <p style="margin:0 0 10px;">Escribe el código de la tarjeta física nueva (viene impreso o en el NFC) para vincularla a este negocio — empieza a sumar toques de inmediato, sin crear un negocio aparte.</p>
+                  <form method="POST" action="/mi-panel/${slug}/configuracion/tarjetas/vincular?key=${claveUsada}" style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <input type="text" name="codigo" placeholder="Ej: ${slug}" required maxlength="20"
+                           style="flex:1;min-width:180px;margin:0;padding:10px 12px;font-size:0.85rem;text-transform:uppercase;border:1px solid ${MARCA.borde};border-radius:8px;">
+                    <button type="submit" style="margin:0;background:${MARCA.verde};color:#fff;border:none;padding:10px 16px;font-size:0.8rem;font-weight:700;border-radius:8px;">Vincular esta tarjeta</button>
+                  </form>
+                  <p style="margin:10px 0 0;color:${MARCA.textoSuave};">¿Es la primera tarjeta de un negocio nuevo (no de este)? Actívala normal desde la página de activación, eligiendo "Es un negocio nuevo". ¿No tienes tarjetas físicas adicionales todavía? Escríbeme para pedir más.</p>
                 </div>
               </details>
 
@@ -5221,6 +5228,46 @@ app.post("/mi-panel/:slug/configuracion/tarjetas/:codigo/nombre", (req, res) => 
   codigos[codigo].etiqueta = nombreTarjeta || null;
   guardarCodigos(codigos);
   registrarAuditoria(slug, negocio, nombreTarjeta ? `Renombraste la tarjeta ${codigo} a "${nombreTarjeta}"` : `Quitaste el nombre de la tarjeta ${codigo}`);
+  res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
+});
+
+// Vincula una tarjeta física nueva a este negocio directamente desde el
+// propio panel del dueño, sin pasar por /activar/:codigo — el dueño solo
+// escribe el código que trae la tarjeta nueva. Es el equivalente, en un solo
+// paso y desde adentro del panel, al modo "vincular" que ya existe en la
+// página pública de activación.
+app.post("/mi-panel/:slug/configuracion/tarjetas/vincular", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
+
+  const volver = { texto: "Volver a Configuración", href: `/mi-panel/${slug}/configuracion?key=${req.query.key}` };
+  const codigoInput = (req.body.codigo || "").trim().toUpperCase();
+  if (!codigoInput) {
+    return enviarError(res, 400, "Falta el código de la tarjeta", "Escribe el código que trae impreso o en el NFC la tarjeta física nueva.", volver);
+  }
+
+  const codigos = leerCodigos();
+  const slugPrincipal = resolverSlug(codigoInput, codigos);
+  if (slugPrincipal === slug || codigoInput === slug) {
+    return enviarError(res, 400, "Esa tarjeta ya es de este negocio", "El código que escribiste ya pertenece a este negocio (es la tarjeta principal o ya está vinculada).", volver);
+  }
+
+  const entrada = codigos[codigoInput];
+  if (!entrada) {
+    return enviarError(res, 404, "No encontramos esa tarjeta", "Verifica que el código esté bien escrito — es el que viene impreso o en el NFC de la tarjeta física.", volver);
+  }
+  if (entrada.activado) {
+    return enviarError(res, 400, "Esa tarjeta ya está en uso", "Esta tarjeta ya fue activada antes (es de otro negocio, o ya está vinculada a otro). Si es tuya y quieres moverla aquí, primero debe desvincularse desde el negocio donde está.", volver);
+  }
+
+  entrada.activado = true;
+  entrada.activadoEl = new Date().toISOString();
+  entrada.vinculadoA = slug;
+  delete entrada.negocio;
+  guardarCodigos(codigos);
+  registrarAuditoria(slug, negocio, `Vinculaste la tarjeta ${codigoInput} a este negocio`);
   res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
 });
 
