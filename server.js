@@ -352,37 +352,6 @@ async function enviarEmail(destinatario, asunto, html, adjuntos = []) {
   }
 }
 
-// Llama a la API de Claude (Anthropic) para generar texto — se usa en el
-// generador de contenido para redes y el análisis de patrones en quejas.
-// Necesita ANTHROPIC_API_KEY en las variables de entorno de Render (se saca
-// gratis con crédito inicial en console.anthropic.com). Si no está
-// configurada, devuelve null y quien la llame debe manejar ese caso
-// (mostrar el texto de plantilla de siempre, sin romper nada).
-async function generarConIA(prompt, maxTokens = 300) {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-  try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001", // rápido y barato, perfecto para textos cortos
-        max_tokens: maxTokens,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-    const data = await resp.json();
-    const texto = data?.content?.find((b) => b.type === "text")?.text;
-    return texto ? texto.trim() : null;
-  } catch (err) {
-    console.error("[generarConIA] Error:", err.message);
-    return null;
-  }
-}
-
 // Clave simple para proteger /stats, /historial y /export (cámbiala por la tuya)
 const ADMIN_KEY = process.env.ADMIN_KEY || "cambia-esta-clave";
 
@@ -1220,7 +1189,7 @@ function obtenerNegocio(slugOriginal) {
 // Funciones exclusivas de Plan Pro: retroalimentación privada + alerta instantánea
 // ante retroalimentación negativa, registro detallado toque por toque, reporte
 // mensual (correo + PDF con picos/caídas por hora), exportación de reportes
-// (CSV/PDF/Word), generador de contenido para redes, y comparación sectorial.
+// (CSV/PDF/Word), y comparación sectorial.
 // El plan básico (pago único) solo incluye: tarjeta física + envío, redirección
 // automática a Google, panel con historial y estadísticas resumidas, y acta de entrega.
 // Si el negocio no tiene plan "pro", estas simplemente no se disparan — sin
@@ -1306,7 +1275,7 @@ function claveEfectiva(req, slug) {
 
 // Autoriza al admin (ADMIN_KEY) O al dueño del negocio con su propia clave,
 // siempre que el negocio sea Pro — usado en las funciones que antes eran
-// "solo admin" (quejas, contenido, exportes) para que el negocio también
+// "solo admin" (quejas, exportes) para que el negocio también
 // pueda entrar directamente con su clave de panel.
 function autorizadoProNegocio(req, negocio, slug) {
   const key = slug ? claveEfectiva(req, slug) : req.query.key;
@@ -2251,7 +2220,6 @@ app.post("/calificar/:slug", async (req, res) => {
 });
 
 // Guarda el micro-testimonio elegido con un solo toque y manda al cliente a Google.
-// Esto alimenta el generador de contenido para redes (/contenido/:slug).
 app.get("/testimonio/:slug", (req, res) => {
   const codigoTarjeta = req.params.slug;
   const slug = resolverSlug(codigoTarjeta);
@@ -2639,7 +2607,7 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null, tar
               <label>Plan</label>
               <select name="plan">
                 <option value="basico" ${valores.plan !== "pro" ? "selected" : ""}>Básico ($119.900 — envío incluido)</option>
-                <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($59.900/mes — alertas, reporte mensual, contenido)</option>
+                <option value="pro" ${valores.plan === "pro" ? "selected" : ""}>Pro ($59.900/mes — alertas, reporte mensual)</option>
               </select>
 
               <label>Dirección (aparece en el mapa público de /descubre)</label>
@@ -3425,7 +3393,6 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
           <a href="/export/${slug}.docx?key=${key}">Word</a>
           <a href="/entrega/${slug}.pdf?key=${key}">Acta de entrega</a>
           <a href="/quejas/${slug}?key=${key}">Retroalimentación</a>
-          <a href="/contenido/${slug}?key=${key}">Contenido</a>
           <a href="/notificar/${slug}?key=${key}">Enviar reporte por email</a>
           <a href="/reportes-guardados/${slug}?key=${key}">Reportes guardados</a>
         </div>
@@ -3825,169 +3792,6 @@ app.post("/quejas/:slug/nota", (req, res) => {
   res.redirect(`/quejas/${slug}?key=${req.query.key}`);
 });
 
-// Genera el SVG de una tarjeta de testimonio lista para redes sociales (formato cuadrado, 1080x1080).
-function tarjetaTestimonioSvg(frase, nombreNegocio, valor) {
-  const estrellas = "★".repeat(valor) + "☆".repeat(5 - valor);
-  const escapar = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return `<svg width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg">
-    <rect width="1080" height="1080" fill="${MARCA.crema}"/>
-    <rect x="40" y="40" width="1000" height="1000" rx="36" fill="${MARCA.verdeOscuro}"/>
-    <text x="540" y="300" font-family="Georgia, serif" font-size="180" fill="${MARCA.oro}" text-anchor="middle">&#8220;</text>
-    <text x="540" y="540" font-family="Arial, sans-serif" font-size="58" font-weight="700" fill="#FFFFFF" text-anchor="middle">${escapar(frase)}</text>
-    <text x="540" y="630" font-family="Arial, sans-serif" font-size="48" fill="${MARCA.oro}" text-anchor="middle" letter-spacing="6">${estrellas}</text>
-    <text x="540" y="900" font-family="Arial, sans-serif" font-size="40" font-weight="700" fill="#FFFFFF" text-anchor="middle">${escapar(nombreNegocio)}</text>
-    <text x="540" y="950" font-family="Arial, sans-serif" font-size="24" fill="#CFE3D8" text-anchor="middle">Reseña real via Tapin</text>
-  </svg>`;
-}
-
-// Galería de testimonios positivos listos para convertir en contenido de redes.
-// Visítalo así: https://tu-dominio.com/contenido/mi-negocio?key=TU_CLAVE
-app.get("/contenido/:slug", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
-    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
-  }
-
-  // El administrador puede previsualizar esta sección con su token aunque el
-  // negocio esté en Plan Básico; para el dueño real, sigue exclusiva de Pro.
-  if (!esPro(negocio) && !claveEsTokenAdmin(claveEfectiva(req, slug))) {
-    return res.status(402).send(
-      `Esta función (generador de contenido para redes) es exclusiva del Plan Pro. ` +
-      `Súbele el plan a "${negocio.nombre}" desde /editar/${slug}?key=${req.query.key} para activarla.`
-    );
-  }
-
-  const datos = leerDatos();
-  const testimonios = (datos[slug] && datos[slug].testimonios) || [];
-
-  const tarjetas = testimonios
-    .map((t, i) => i)
-    .reverse()
-    .map((i) => {
-      const t = testimonios[i];
-      const svgMini = tarjetaTestimonioSvg(t.frase, negocio.nombre, t.valor);
-      const svgB64 = Buffer.from(svgMini).toString("base64");
-      return `
-        <div class="tarjeta">
-          <img src="data:image/svg+xml;base64,${svgB64}" alt="${t.frase}">
-          <div class="tarjeta-pie">
-            <span>${t.fechaLegible}</span>
-            <a href="/contenido/${slug}/tarjeta.svg?key=${req.query.key}&i=${i}" download>Descargar</a>
-          </div>
-          ${process.env.ANTHROPIC_API_KEY ? `
-          <div class="tarjeta-caption">
-            <button type="button" onclick="generarCaption(${i}, this)">✨ Generar caption con IA</button>
-            <div class="caption-resultado" id="caption-${i}"></div>
-          </div>
-          ` : ""}
-        </div>`;
-    })
-    .join("");
-
-  res.send(`
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Contenido para redes — ${negocio.nombre}</title>
-        <style>
-          ${ESTILO_BASE}
-          .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;}
-          .tarjeta{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.04);}
-          .tarjeta img{width:100%;display:block;}
-          .tarjeta-pie{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;font-size:0.78rem;color:${MARCA.textoSuave};}
-          .tarjeta-pie a{font-weight:700;color:${MARCA.verde};text-decoration:none;}
-          .tarjeta-caption{padding:10px 14px 14px;border-top:1px solid ${MARCA.borde};}
-          .tarjeta-caption button{width:100%;background:${MARCA.crema};border:1px solid ${MARCA.borde};
-                                   border-radius:8px;padding:8px;font-size:0.78rem;font-weight:600;cursor:pointer;color:${MARCA.texto};}
-          .tarjeta-caption button:disabled{opacity:0.6;cursor:wait;}
-          .caption-resultado{font-size:0.8rem;color:${MARCA.textoSuave};margin-top:8px;white-space:pre-wrap;
-                              background:${MARCA.verdeClaro};border-radius:8px;padding:10px;display:none;}
-        </style>
-      </head>
-      <body>
-        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/stats?key=${req.query.key}">&larr; Volver al panel</a></div>
-        <div class="content">
-          <div class="eyebrow">Marketing automático · ${negocio.nombre}</div>
-          <h1 class="titulo-pagina">Contenido para redes</h1>
-          <div class="subtitulo">Cada vez que un cliente califica bien y elige una frase, se genera automáticamente una tarjeta lista para Instagram/Stories.</div>
-          <div class="grid">
-            ${tarjetas || "<p>Todavía no hay testimonios. Aparecerán aquí cuando los clientes califiquen positivo y elijan una frase.</p>"}
-          </div>
-        </div>
-        <script>
-          async function generarCaption(i, boton) {
-            boton.disabled = true;
-            boton.textContent = 'Generando...';
-            try {
-              const resp = await fetch('/contenido/${slug}/caption?key=${req.query.key}&i=' + i);
-              const data = await resp.json();
-              const div = document.getElementById('caption-' + i);
-              div.textContent = data.caption || 'No se pudo generar — intenta de nuevo.';
-              div.style.display = 'block';
-              boton.textContent = '✨ Generar otra vez';
-            } catch (err) {
-              boton.textContent = 'Error — intenta de nuevo';
-            }
-            boton.disabled = false;
-          }
-        </script>
-      </body>
-    </html>
-  `);
-});
-
-// Genera un caption con IA para acompañar una tarjeta de testimonio al
-// publicarla en redes — bajo demanda, no se genera solo para todas de una.
-app.get("/contenido/:slug/caption", async (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).json({ caption: null });
-  if (!autorizadoProNegocio(req, negocio, slug) || !esPro(negocio)) {
-    return res.status(401).json({ caption: null });
-  }
-  const datos = leerDatos();
-  const testimonios = (datos[slug] && datos[slug].testimonios) || [];
-  const i = parseInt(req.query.i, 10);
-  const t = testimonios[i];
-  if (!t) return res.status(404).json({ caption: null });
-
-  const prompt = `Eres el community manager de "${negocio.nombre}", un negocio de categoría "${negocio.categoria || "general"}" en Colombia. ` +
-    `Un cliente calificó bien y eligió esta frase: "${t.frase}". ` +
-    `Escribe un caption corto para Instagram (máximo 3 líneas, tono cálido y cercano, en español de Colombia, ` +
-    `sin hashtags genéricos de relleno, máximo 2-3 hashtags relevantes al final) para acompañar una imagen con este testimonio. ` +
-    `Responde solo con el caption, sin explicaciones ni comillas.`;
-
-  const caption = await generarConIA(prompt, 200);
-  res.json({ caption: caption || "No se pudo generar el caption — intenta de nuevo en un momento." });
-});
-
-
-// Descarga el SVG individual de una tarjeta de testimonio.
-app.get("/contenido/:slug/tarjeta.svg", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
-    return res.status(401).send("No autorizado.");
-  }
-  if (!esPro(negocio)) {
-    return res.status(402).send("Esta función es exclusiva del Plan Pro.");
-  }
-
-  const datos = leerDatos();
-  const testimonios = (datos[slug] && datos[slug].testimonios) || [];
-  const i = parseInt(req.query.i, 10);
-  const t = testimonios[i];
-  if (!t) return res.status(404).send("Testimonio no encontrado.");
-
-  const svg = tarjetaTestimonioSvg(t.frase, negocio.nombre, t.valor);
-  res.setHeader("Content-Type", "image/svg+xml");
-  res.setHeader("Content-Disposition", `attachment; filename="tapin-${slug}-${i}.svg"`);
-  res.send(svg);
-});
 
 // Panel individual de UN SOLO negocio, usando su propia clave (no la clave maestra).
 // Así puedes darle este enlace al dueño sin que vea los datos de tus otros negocios.
@@ -4630,7 +4434,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               </div>
               <div class="fila-herramientas">
                 <a href="/quejas/${slug}?key=${claveUsada}" class="btn-herramienta">Retroalimentación privada</a>
-                <a href="/contenido/${slug}?key=${claveUsada}" class="btn-herramienta">Generador de contenido</a>
                 <a href="/reportes-guardados/${slug}?key=${claveUsada}" class="btn-herramienta">Reportes guardados</a>
               </div>
             </div>
@@ -4674,7 +4477,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 <li>Tabla de actividad reciente con cada toque</li>
                 <li>Recomendaciones automáticas para tu negocio</li>
                 <li>Alertas instantáneas de quejas y reporte PDF mensual por correo</li>
-                <li>Generador de contenido para redes y comparación con tu sector</li>
+                <li>Comparación con tu sector</li>
               </ul>
             </div>
             <div style="text-align:center;margin-top:18px;">
@@ -7403,7 +7206,6 @@ app.get("/conoce", (req, res) => {
                 <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
                 <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
                 <li><span class="check">✓</span> Reportes en CSV, PDF y Word — te los enviamos por correo cuando los necesites</li>
-                <li><span class="check">✓</span> Generador de contenido para redes sociales</li>
                 <li><span class="check">✓</span> Comparación contra el promedio de tu categoría</li>
               </ul>
             </div>
@@ -9025,7 +8827,7 @@ app.get("/", (req, res) => {
                   <li><span class="check">✓</span> Reporte PDF mensual con horas pico, subidas y caídas</li>
                   <li><span class="check">✓</span> Comparación y análisis frente a negocios del mismo sector</li>
                   <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
-                  <li><span class="check">✓</span> Recomendaciones automáticas y generador de contenido para redes</li>
+                  <li><span class="check">✓</span> Recomendaciones automáticas para tu negocio</li>
                   <li><span class="check">✓</span> Programa de fidelización de clientes</li>
                 </ul>
               </div>
