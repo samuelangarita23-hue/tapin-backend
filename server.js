@@ -695,7 +695,7 @@ function guardarCodigos(codigos) {
 // un negocio que YA existe (en vez de darle datos de un negocio nuevo), esa
 // tarjeta se guarda con "vinculadoA: <slug del negocio principal>" y no
 // tiene su propio objeto "negocio" — todo lo que pase en ella (toques,
-// calificaciones, quejas, sellos de fidelización) se resuelve y se guarda
+// sellos de fidelización) se resuelve y se guarda
 // bajo el slug del negocio principal.
 //
 // resolverSlug() sigue esa cadena hasta llegar al slug real que tiene los
@@ -1186,10 +1186,10 @@ function obtenerNegocio(slugOriginal) {
   return null;
 }
 
-// Funciones exclusivas de Plan Pro: retroalimentación privada + alerta instantánea
-// ante retroalimentación negativa, registro detallado toque por toque, reporte
-// mensual (correo + PDF con picos/caídas por hora), exportación de reportes
-// (CSV/PDF/Word), y comparación sectorial.
+// Funciones exclusivas de Plan Pro: registro detallado toque por toque,
+// programa de fidelización de clientes, reporte mensual (correo + PDF con
+// picos/caídas por hora), exportación de reportes (CSV/PDF/Word), y
+// comparación sectorial.
 // El plan básico (pago único) solo incluye: tarjeta física + envío, redirección
 // automática a Google, panel con historial y estadísticas resumidas, y acta de entrega.
 // Si el negocio no tiene plan "pro", estas simplemente no se disparan — sin
@@ -1210,8 +1210,8 @@ function esPro(negocio) {
   return true;
 }
 
-// Escapa HTML para que texto escrito por clientes (comentarios de quejas,
-// nombres, etc.) nunca se interprete como código — sin esto, alguien podría
+// Escapa HTML para que texto escrito por usuarios (nombres, etc.)
+// nunca se interprete como código — sin esto, alguien podría
 // escribir <script> en un comentario y que se ejecute cuando el negocio abra
 // su panel o su correo de alerta. Se usa en TODO texto libre de usuario que
 // se inserta en HTML.
@@ -1275,7 +1275,7 @@ function claveEfectiva(req, slug) {
 
 // Autoriza al admin (ADMIN_KEY) O al dueño del negocio con su propia clave,
 // siempre que el negocio sea Pro — usado en las funciones que antes eran
-// "solo admin" (quejas, exportes) para que el negocio también
+// "solo admin" (exportes) para que el negocio también
 // pueda entrar directamente con su clave de panel.
 function autorizadoProNegocio(req, negocio, slug) {
   const key = slug ? claveEfectiva(req, slug) : req.query.key;
@@ -1750,51 +1750,6 @@ function guardarTestimonio(slug, frase, valor, negocio, codigoTarjeta = null) {
 }
 
 // Promedio de las calificaciones positivas que sí pasan el filtro de Tapin.
-// Las quejas privadas no se mezclan porque no son reseñas publicadas.
-function promedioEstrellasFiltradas(testimonios, quejas = []) {
-  const valores = [...(testimonios || []), ...(quejas || [])]
-    .map((t) => t.valor == null && Object.prototype.hasOwnProperty.call(t, "comentario") ? 3 : Number(t.valor))
-    .filter((v) => Number.isFinite(v) && v >= 1 && v <= 5);
-  if (!valores.length) return null;
-  return Math.round((valores.reduce((suma, valor) => suma + valor, 0) / valores.length) * 10) / 10;
-}
-
-function guardarQueja(slug, comentario, negocio, telefono = "", valor = null, codigoTarjeta = null) {
-  const datos = leerDatos();
-  if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
-  if (!datos[slug].quejas) datos[slug].quejas = [];
-  const ahora = new Date();
-  datos[slug].quejas.push({
-    fechaISO: ahora.toISOString(),
-    fechaLegible: ahora.toLocaleString("es-CO", { timeZone: zonaDe(negocio) }),
-    comentario,
-    telefono,
-    valor: Number.isFinite(Number(valor)) && Number(valor) >= 1 && Number(valor) <= 5 ? Number(valor) : null,
-    estado: "pendiente", // pendiente | contactado | resuelto
-    codigoTarjeta: codigoTarjeta || slug,
-  });
-  guardarDatos(datos);
-
-  // Alerta instantánea (solo Pro): el dueño se entera de la queja apenas
-  // llega, no hasta el reporte mensual. No bloquea la respuesta al cliente
-  // si el correo falla — es un "fire and forget" a propósito. Solo se manda
-  // al instante si el negocio eligió frecuencia "instantánea" — si eligió
-  // resumen diario o semanal, esta queja se junta con las demás y se manda
-  // agrupada desde /enviar-resumenes-quejas (ver más abajo).
-  const frecuenciaQuejas = (negocio.alertas && negocio.alertas.frecuenciaQuejas) || "instantanea";
-  const quiereAlertas = (!negocio.alertas || negocio.alertas.quejas !== false) && frecuenciaQuejas === "instantanea";
-  if (esPro(negocio) && negocio.email && quiereAlertas) {
-    enviarEmail(
-      negocio.email,
-      `⚠️ Nueva queja privada en ${negocio.nombre}`,
-      `<p>Un cliente dejó una calificación negativa y este comentario privado:</p>
-       <p style="background:#F8F4EC;padding:14px;border-radius:8px;">"${escaparHtml(comentario)}"</p>
-       ${telefono ? `<p>Teléfono de contacto: <b>${escaparHtml(telefono)}</b></p>` : ""}
-       <p>Puedes verla y marcarla como contactada/resuelta en tu panel Pro.</p>`
-    ).catch((err) => console.error("[alerta queja] Error enviando correo:", err.message));
-  }
-}
-
 // Genera recomendaciones automáticas simples (reglas si-entonces) a partir de los
 // datos ya calculados — esto es lo que convierte "te muestro números" en
 // "te doy un consejo basado en tus números" (punto 8).
@@ -1905,12 +1860,10 @@ function promedioSector(categoria, slugActual, datos) {
   return Math.round(total / pares.length);
 }
 
-// Radar de sector: además del tráfico (lo que ya hacía promedioSector),
-// compara calificación promedio, tasa de conversión (toques -> reseñas) y
-// tasa de resolución de quejas contra el promedio de negocios de la misma
-// categoría. Mismo piso de privacidad: con menos de 2 negocios parecidos,
-// no se muestra nada — un "promedio" de un solo negocio lo identifica
-// directamente.
+// Radar de sector: compara el tráfico semanal (toques) contra el promedio
+// de negocios de la misma categoría. Mismo piso de privacidad que
+// promedioSector: con menos de 2 negocios parecidos, no se muestra nada —
+// un "promedio" de un solo negocio lo identifica directamente.
 function radarSector(negocio, slug, todosNegocios, datos) {
   const pares = Object.entries(todosNegocios).filter(
     ([s, n]) => n.categoria === negocio.categoria && s !== slug
@@ -1919,16 +1872,8 @@ function radarSector(negocio, slug, todosNegocios, datos) {
 
   const metricasDe = (s) => {
     const eventos = (datos[s] && datos[s].eventos) || [];
-    const testimonios = (datos[s] && datos[s].testimonios) || [];
-    const quejas = (datos[s] && datos[s].quejas) || [];
     const r = calcularResumen(eventos);
-    const totalResenas = testimonios.length + quejas.length;
-    return {
-      trafico: r.semana,
-      calificacion: promedioEstrellasFiltradas(testimonios, quejas),
-      conversion: r.total > 0 ? totalResenas / r.total : null,
-      resolucion: quejas.length > 0 ? quejas.filter((q) => q.estado === "resuelto").length / quejas.length : null,
-    };
+    return { trafico: r.semana };
   };
 
   const promedioDe = (valores) => {
@@ -1943,9 +1888,6 @@ function radarSector(negocio, slug, todosNegocios, datos) {
   return {
     negociosComparados: pares.length,
     trafico: { propio: propio.trafico, sector: promedioDe(delSector.map((m) => m.trafico)) },
-    calificacion: { propio: propio.calificacion, sector: promedioDe(delSector.map((m) => m.calificacion)) },
-    conversion: { propio: propio.conversion, sector: promedioDe(delSector.map((m) => m.conversion)) },
-    resolucion: { propio: propio.resolucion, sector: promedioDe(delSector.map((m) => m.resolucion)) },
   };
 }
 
@@ -1967,12 +1909,10 @@ const TODAS_LAS_FRASES_VALIDAS = new Set(Object.values(FRASES_POR_CATEGORIA).fla
 // ---------- Rutas ----------
 
 // Esta es la URL que se programa en el chip NFC de la tarjeta Tapin.
-// Plan Pro: primero muestra una pantalla rápida de "¿cómo te fue?" — si la
-// respuesta es positiva, lo manda a Google; si es negativa, lo manda a un
-// formulario privado en vez de exponerlo en público. Es el "filtro de
-// calificaciones", exclusivo de Pro (así está listado en /precios).
-// Plan Básico: NO tiene ese filtro — va directo a Google sin pantalla
-// intermedia, sin importar qué calificación hubiera dado el cliente.
+// El cliente toca la tarjeta y va directo a dejar su reseña en Google —
+// sin pantallas intermedias ni preguntas antes, sin importar el plan.
+// Si tiene sesión de cliente iniciada y el negocio tiene el programa de
+// fidelización activo (Plan Pro), esta misma visita le suma un sello.
 // Ejemplo: https://tu-dominio.com/r/mi-negocio
 app.get("/r/:slug", (req, res) => {
   const codigoTarjeta = req.params.slug; // el código físico exacto que se tocó
@@ -1989,250 +1929,12 @@ app.get("/r/:slug", (req, res) => {
 
   registrarToque(slug, req, negocio, codigoTarjeta);
 
-  // Plan Básico: sin filtro de calificaciones — directo a Google siempre.
-  if (!esPro(negocio)) {
-    return res.redirect(302, negocio.googleUrl);
-  }
-
-  res.send(`
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>${negocio.nombre}</title>
-        <style>
-          *{box-sizing:border-box;}
-          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F8F4EC;
-               display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;}
-          .box{background:#fff;border-radius:18px;padding:36px 28px;max-width:380px;width:100%;
-               text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.08);}
-          h1{font-size:1.25rem;margin:0 0 6px;color:#16201C;}
-          p{color:#777;font-size:0.92rem;margin:0 0 28px;}
-          .caras{display:flex;flex-direction:column;gap:8px;}
-          .caras a{text-decoration:none;padding:12px 16px;border-radius:12px;background:#F8F4EC;
-                    transition:transform .15s;display:flex;justify-content:center;gap:4px;}
-          .caras a:active{transform:scale(0.96);}
-          .caras svg{display:block;}
-        </style>
-      </head>
-      <body>
-        <div class="box">
-          <h1>${negocio.nombre}</h1>
-          <p>¿Cómo te fue con nosotros hoy?</p>
-          <div class="caras">
-            ${[5, 4, 3, 2, 1]
-              .map((n) => {
-                const estrella = (llena) => `
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="${llena ? MARCA.oro : "none"}"
-                       stroke="${MARCA.oro}" stroke-width="1.4" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2.5l2.9 6.06 6.6.77-4.86 4.55 1.28 6.55L12 17.3l-5.92 3.13 1.28-6.55L2.5 9.33l6.6-.77L12 2.5z"/>
-                  </svg>`;
-                return `<a href="/calificar/${codigoTarjeta}?valor=${n}" aria-label="${n} estrella${n > 1 ? "s" : ""}">
-                  ${[1, 2, 3, 4, 5].map((i) => estrella(i <= n)).join("")}
-                </a>`;
-              })
-              .join("")}
-          </div>
-        </div>
-      </body>
-    </html>
-  `);
-});
-
-// Procesa la calificación: si es positiva (4-5), va a Google.
-// Si es negativa (1-3), se guarda como queja privada y se le pide el detalle al cliente
-// en vez de exponer la insatisfacción en una reseña pública.
-app.get("/calificar/:slug", (req, res) => {
-  const codigoTarjeta = req.params.slug;
-  const slug = resolverSlug(codigoTarjeta);
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return enviarError(res, 404, "No encontramos este negocio", "El enlace que usaste no corresponde a ningún negocio activo en Tapin.");
-
-  const valor = parseInt(req.query.valor, 10);
-  let selloSumado = null; // se usa más abajo para avisarle al cliente si aplica
-
-  // Red de seguridad: el filtro de calificaciones es exclusivo de Pro. Si el
-  // negocio ya no es Pro (por ejemplo, bajó de plan y quedó un link viejo de
-  // /calificar guardado en algún lado), no se muestra el formulario privado
-  // — se manda directo a Google, igual que si nunca hubiera pasado por aquí.
-  if (!esPro(negocio)) {
-    return res.redirect(302, negocio.googleUrl);
-  }
-
-  // Si el cliente tiene sesión iniciada, guardamos esta calificación en su
-  // historial personal — funciona sin importar si el negocio es Pro o básico.
-  if (valor >= 1 && valor <= 5) {
-    const cliente = clienteActual(req);
-    if (cliente) {
-      const clientes = leerClientes();
-      if (clientes[cliente.id]) {
-        if (!clientes[cliente.id].historial) clientes[cliente.id].historial = [];
-        clientes[cliente.id].historial.push({
-          slug,
-          negocioNombre: negocio.nombre,
-          valor,
-          fecha: new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" }),
-          fechaISO: new Date().toISOString(),
-        });
-        guardarClientes(clientes);
-      }
-      // Idea: la fidelización ya no necesita una tarjeta física aparte — con
-      // solo calificar (cualquier estrella, no solo positivas) desde la
-      // misma tarjeta de reseñas, si tiene sesión iniciada, ya suma el sello.
-      if (esPro(negocio) && negocio.fidelizacion) {
-        selloSumado = sumarSelloFidelizacion(slug, negocio, cliente.email, cliente.nombre);
-      }
-    }
-  }
-
-  if (valor >= 4) {
-    // Calificación positiva (4-5): directo a Google, sin pantallas ni
-    // preguntas intermedias — ni siquiera en Plan Pro.
-    return res.redirect(302, negocio.googleUrl);
-  }
-
-  // Calificación negativa: mostramos un formulario privado en vez de mandarlo a Google.
-  // Los motivos varían según la categoría del negocio — un restaurante y una
-  // peluquería no tienen los mismos problemas típicos.
-  const motivosPorCategoria = {
-    restaurante: ["Atención lenta", "Comida fría o mal preparada", "Precio alto", "Local sucio", "Pedido incorrecto", "Otro"],
-    peluqueria: ["Espera muy larga", "No quedé conforme con el resultado", "Precio alto", "Mala actitud", "Local sucio", "Otro"],
-    tienda: ["Atención lenta", "Producto no era lo esperado", "Precio alto", "Local desordenado", "Mala actitud", "Otro"],
-    clinica: ["Espera muy larga", "Mala actitud del personal", "Precio alto", "Instalaciones sucias", "Atención poco clara", "Otro"],
-    otro: ["Atención lenta", "Mala actitud", "Precio alto", "Local sucio", "Producto no era lo esperado", "Otro"],
-  };
-  const motivosNegativos = motivosPorCategoria[negocio.categoria] || motivosPorCategoria.otro;
-  const chipsNegativos = motivosNegativos
-    .map((m) => `<a href="/calificar/${codigoTarjeta}/rapido?valor=${valor}&motivo=${encodeURIComponent(m)}" class="chip">${m}</a>`)
-    .join("");
-
-  res.send(`
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Cuéntanos más</title>
-        <style>
-          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F8F4EC;
-               display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;}
-          .box{background:#fff;border-radius:18px;padding:32px 26px;max-width:380px;width:100%;
-               box-shadow:0 10px 30px rgba(0,0,0,0.08);}
-          h1{font-size:1.15rem;color:#16201C;margin:0 0 8px;}
-          p{color:#777;font-size:0.9rem;margin:0 0 18px;}
-          .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px;}
-          .chip{background:#FBEFE9;color:#993C1D;border:1px solid #F0D5C8;border-radius:100px;
-                padding:10px 14px;font-size:0.85rem;font-weight:600;text-decoration:none;}
-          .chip:active{transform:scale(0.96);}
-          .divisor{display:flex;align-items:center;gap:10px;margin:4px 0 16px;color:#aaa;font-size:0.76rem;}
-          .divisor::before,.divisor::after{content:"";flex:1;height:1px;background:#eee;}
-          textarea{width:100%;border:1px solid #ddd;border-radius:10px;padding:12px;font-size:0.95rem;
-                    min-height:70px;font-family:inherit;box-sizing:border-box;}
-          button{margin-top:14px;width:100%;background:#1F6E4E;color:#fff;border:none;border-radius:10px;
-                 padding:13px;font-size:0.95rem;font-weight:600;cursor:pointer;}
-        </style>
-      </head>
-      <body>
-        <div class="box">
-          <h1>Lamentamos que tu visita no haya sido perfecta</h1>
-          <p>Cuéntanos qué pasó (toca una, es lo más rápido) — esto llega directo al negocio, no se publica en ningún lado.</p>
-          <div class="chips">${chipsNegativos}</div>
-
-          <div class="divisor">o cuéntanos con tus palabras</div>
-          <form method="POST" action="/calificar/${codigoTarjeta}">
-            <input type="hidden" name="valor" value="${valor}">
-            <textarea name="comentario" placeholder="Escribe aquí lo que pasó... (opcional)"></textarea>
-            <input type="tel" name="telefono" placeholder="Tu teléfono (opcional, para que te llamen)" style="width:100%;margin-top:10px;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:0.92rem;font-family:inherit;box-sizing:border-box;">
-            <button type="submit">Enviar</button>
-          </form>
-        </div>
-      </body>
-    </html>
-  `);
-});
-
-// Igual que /testimonio para los positivos, pero para el lado negativo: un
-// solo toque en un motivo corto guarda la queja de una vez, sin tener que
-// escribir nada. Mucho más rápido, así no se pierden clientes por pereza de teclear.
-app.get("/calificar/:slug/rapido", (req, res) => {
-  const codigoTarjeta = req.params.slug;
-  const slug = resolverSlug(codigoTarjeta);
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-
-  const motivo = req.query.motivo || "(sin detalle)";
-  const valorRapido = parseInt(req.query.valor, 10) || null;
-  guardarQueja(slug, motivo, negocio, "", valorRapido, codigoTarjeta);
-
-  // La fidelización premia la VISITA, no solo las reseñas positivas — si el
-  // cliente tiene sesión iniciada, suma su sello igual que en una calificación buena.
-  let selloSumado = null;
   if (esPro(negocio) && negocio.fidelizacion) {
     const cliente = clienteActual(req);
-    if (cliente) selloSumado = sumarSelloFidelizacion(slug, negocio, cliente.email, cliente.nombre);
+    if (cliente) sumarSelloFidelizacion(slug, negocio, cliente.email, cliente.nombre);
   }
 
-  res.send(`
-    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>body{font-family:-apple-system,sans-serif;background:#F8F4EC;display:flex;align-items:center;
-    justify-content:center;min-height:100vh;margin:0;padding:24px;text-align:center;color:#16201C;}
-    .box{background:#fff;border-radius:18px;padding:36px 28px;max-width:380px;box-shadow:0 10px 30px rgba(0,0,0,0.08);}
-    .sello-aviso{background:#FBF6E9;border-radius:10px;padding:10px 14px;font-size:0.8rem;color:#7A5A00;margin-top:14px;}
-    </style></head>
-    <body><div class="box"><h2>Gracias por avisarnos</h2><p>El negocio ya recibió tu comentario y lo va a revisar.</p>
-    ${selloSumado ? `<div class="sello-aviso">${selloSumado.listo ? `¡Beneficio desbloqueado! Ya tienes: ${selloSumado.fid.premio}` : `+1 sello de fidelización — llevas ${selloSumado.actual.sellos} de ${selloSumado.fid.metaSellos}`}</div>` : ""}
-    </div></body></html>
-  `);
-});
-
-app.post("/calificar/:slug", async (req, res) => {
-  const codigoTarjeta = req.params.slug;
-  const slug = resolverSlug(codigoTarjeta);
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-
-  const comentario = req.body.comentario || "(sin comentario)";
-  const telefono = req.body.telefono || "";
-  const valorTexto = parseInt(req.body.valor, 10) || null;
-  guardarQueja(slug, comentario, negocio, telefono, valorTexto, codigoTarjeta);
-
-  let selloSumado = null;
-  if (esPro(negocio) && negocio.fidelizacion) {
-    const cliente = clienteActual(req);
-    if (cliente) selloSumado = sumarSelloFidelizacion(slug, negocio, cliente.email, cliente.nombre);
-  }
-
-  // Alerta inmediata por correo — solo Plan Pro. El negocio básico igual evita
-  // que la queja se publique en Google, pero no recibe el aviso instantáneo.
-  if (esPro(negocio)) {
-    const horaLocal = new Date().toLocaleString("es-CO", { timeZone: zonaDe(negocio) });
-    enviarEmail(
-      negocio.email,
-      `🚨 Cliente insatisfecho en ${negocio.nombre} — actúa ahora`,
-      `
-        <div style="font-family:-apple-system,Arial,sans-serif;max-width:480px;">
-          <h2 style="color:#C0392B;margin-bottom:4px;">Un cliente no tuvo una buena experiencia</h2>
-          <p style="color:#666;font-size:0.9rem;margin-top:0;">${horaLocal}</p>
-          <div style="background:#FBEFE9;border-left:3px solid #C0392B;padding:14px 16px;border-radius:8px;margin:16px 0;">
-            <p style="margin:0;color:#16201C;">"${escaparHtml(comentario)}"</p>
-          </div>
-          ${telefono ? `<p><b>Teléfono para contactarlo:</b> <a href="tel:${encodeURIComponent(telefono)}">${escaparHtml(telefono)}</a></p>` : `<p style="color:#888;">No dejó teléfono de contacto.</p>`}
-          <p style="font-size:0.85rem;color:#888;margin-top:24px;">Entre más rápido respondas, más probable es convertir esto en un cliente recuperado en vez de una reseña negativa pública.</p>
-        </div>
-      `
-    ).catch(() => {});
-  }
-
-  res.send(`
-    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>body{font-family:-apple-system,sans-serif;background:#F8F4EC;display:flex;align-items:center;
-    justify-content:center;min-height:100vh;margin:0;padding:24px;text-align:center;color:#16201C;}
-    .box{background:#fff;border-radius:18px;padding:36px 28px;max-width:380px;box-shadow:0 10px 30px rgba(0,0,0,0.08);}
-    .sello-aviso{background:#FBF6E9;border-radius:10px;padding:10px 14px;font-size:0.8rem;color:#7A5A00;margin-top:14px;}
-    </style></head>
-    <body><div class="box"><h2>Gracias por avisarnos 🙏</h2><p>El negocio ya recibió tu comentario y lo va a revisar.</p>
-    ${selloSumado ? `<div class="sello-aviso">${selloSumado.listo ? `¡Beneficio desbloqueado! Ya tienes: ${selloSumado.fid.premio}` : `+1 sello de fidelización — llevas ${selloSumado.actual.sellos} de ${selloSumado.fid.metaSellos}`}</div>` : ""}
-    </div></body></html>
-  `);
+  return res.redirect(302, negocio.googleUrl);
 });
 
 // Guarda el micro-testimonio elegido con un solo toque y manda al cliente a Google.
@@ -3141,7 +2843,7 @@ app.post("/activar/:codigo", (req, res) => {
             <h1 class="titulo-pagina">¡Tarjeta vinculada!</h1>
             <div class="ok-card">
               <p>Esta tarjeta ya está conectada a <b>${escaparHtml(negocioExistente.nombre)}</b> — todo lo que pase en ella
-                 (toques, calificaciones, quejas, sellos de fidelización) se suma a las estadísticas de ese mismo negocio,
+                 (toques, sellos de fidelización) se suma a las estadísticas de ese mismo negocio,
                  no crea uno aparte.</p>
               <p>Panel de este negocio:<br><code>${req.protocol}://${req.get("host")}/mi-panel/${slugPrincipal}?key=${encodeURIComponent(claveInput)}</code></p>
               <p>La tarjeta ya está lista — el cliente puede empezar a usarla de inmediato.</p>
@@ -3307,14 +3009,12 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
   let totalToquesGlobal = 0;
   let totalHoyGlobal = 0;
   let totalSemanaGlobal = 0;
-  const estrellasGlobales = [];
+  let totalClientesFidGlobal = 0;
   const dias7Global = new Array(7).fill(0);
   for (const slug in NEGOCIOS_TOTAL) {
     const eventos = (datos[slug] && datos[slug].eventos) || [];
-    const testimonios = (datos[slug] && datos[slug].testimonios) || [];
-    const quejas = (datos[slug] && datos[slug].quejas) || [];
-    testimonios.forEach((t) => estrellasGlobales.push(t));
-    quejas.forEach((q) => estrellasGlobales.push(q));
+    const clientesFid = (datos[slug] && datos[slug].fidelizacion) || {};
+    totalClientesFidGlobal += Object.keys(clientesFid).length;
     const r = calcularResumen(eventos);
     totalNegocios++;
     totalToquesGlobal += r.total;
@@ -3322,8 +3022,6 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
     totalSemanaGlobal += r.semana;
     r.dias7.forEach((v, i) => { dias7Global[i] += v; });
   }
-  const promedioEstrellas = promedioEstrellasFiltradas(estrellasGlobales);
-  const testimonios = estrellasGlobales;
 
   const PAISES_INFO = {
     colombia: { nombre: "Colombia", bandera: "🇨🇴" },
@@ -3344,9 +3042,7 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
 
   function tarjetaHtml(slug) {
     const eventos = (datos[slug] && datos[slug].eventos) || [];
-    const testimonios = (datos[slug] && datos[slug].testimonios) || [];
-    const quejas = (datos[slug] && datos[slug].quejas) || [];
-    const promedioEstrellasNegocio = promedioEstrellasFiltradas(testimonios, quejas);
+    const clientesFidNegocio = (datos[slug] && datos[slug].fidelizacion) || {};
     const r = calcularResumen(eventos);
     const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
     const promSector = promedioSector(NEGOCIOS_TOTAL[slug].categoria, slug, datos);
@@ -3398,7 +3094,7 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
 
         <div class="card-ultimo">Último toque: <b>${ultimoTexto}</b></div>
 
-        <div class="card-ultimo" style="margin-bottom:12px;padding-top:10px;">Promedio filtrado: <b style="color:${MARCA.oro};">${promedioEstrellasNegocio !== null ? promedioEstrellasNegocio + " / 5 ★" : "Sin calificaciones"}</b></div>
+        <div class="card-ultimo" style="margin-bottom:12px;padding-top:10px;">Fidelización: <b style="color:${MARCA.oro};">${Object.keys(clientesFidNegocio).length ? Object.keys(clientesFidNegocio).length + " cliente" + (Object.keys(clientesFidNegocio).length === 1 ? "" : "s") + " con sello" : "Sin activar"}</b></div>
 
         <div class="card-actions">
           <a href="/historial/${slug}?key=${key}">Historial</a>
@@ -3408,7 +3104,6 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
           <a href="/export/${slug}.pdf?key=${key}">PDF</a>
           <a href="/export/${slug}.docx?key=${key}">Word</a>
           <a href="/entrega/${slug}.pdf?key=${key}">Acta de entrega</a>
-          <a href="/quejas/${slug}?key=${key}">Retroalimentación</a>
           <a href="/notificar/${slug}?key=${key}">Enviar reporte por email</a>
           <a href="/reportes-guardados/${slug}?key=${key}">Reportes guardados</a>
         </div>
@@ -3581,9 +3276,9 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
             </div>
 
             <div class="chart-card" style="margin-top:0;text-align:center;">
-              <div class="chart-card-titulo">Promedio de estrellas recibidas</div>
-              <div style="font-size:1.4rem;font-weight:700;color:${MARCA.oro};">${promedioEstrellas !== null ? promedioEstrellas + " / 5 ★" : "Sin calificaciones filtradas"}</div>
-              <div class="suave" style="font-size:0.72rem;margin-top:4px;">Incluye calificaciones positivas y negativas que pasaron el filtro de Tapin${estrellasGlobales.length ? " · " + estrellasGlobales.length + " evaluaciones" : ""}. Las negativas se guardan privadas y no se publican en Google.</div>
+              <div class="chart-card-titulo">Clientes con sello de fidelización</div>
+              <div style="font-size:1.4rem;font-weight:700;color:${MARCA.oro};">${totalClientesFidGlobal}</div>
+              <div class="suave" style="font-size:0.72rem;margin-top:4px;">Suma de clientes con al menos un sello, en todos los negocios con el programa de fidelización activo.</div>
             </div>
             <div class="chart-card">
               <div class="chart-card-titulo">Toques combinados de todos los negocios — últimos 7 días</div>
@@ -3669,146 +3364,6 @@ app.get("/historial/:slug", limitarIntentosAdmin, (req, res) => {
   `);
 });
 
-// Quejas privadas (calificaciones negativas) de un negocio — nunca se publican en Google.
-// Visítalo así: https://tu-dominio.com/quejas/mi-negocio?key=TU_CLAVE
-app.get("/quejas/:slug", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
-    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
-  }
-
-  const datos = leerDatos();
-  const quejas = (datos[slug] && datos[slug].quejas) || [];
-  const resueltas = quejas.filter((q) => q.estado === "resuelto").length;
-  const tasaRecuperacion = quejas.length ? Math.round((resueltas / quejas.length) * 100) : 0;
-
-  const colores = { pendiente: "#C0392B", contactado: "#C9A24B", resuelto: "#0F5132" };
-  const fondos = { pendiente: "#FBEFE9", contactado: "#FBF3E1", resuelto: "#E7F0EA" };
-
-  const filas = quejas
-    .map((q, i) => i) // índices reales antes de invertir, para los botones de acción
-    .reverse()
-    .map((i) => {
-      const q = quejas[i];
-      const estado = q.estado || "pendiente";
-      return `<tr>
-        <td data-label="Fecha">${q.fechaLegible}</td>
-        <td data-label="Comentario">${escaparHtml(q.comentario)}</td>
-        <td data-label="Teléfono">${q.telefono ? `<a href="tel:${encodeURIComponent(q.telefono)}">${escaparHtml(q.telefono)}</a>` : "—"}</td>
-        <td data-label="Estado"><span style="background:${fondos[estado]};color:${colores[estado]};padding:4px 10px;border-radius:100px;font-size:0.74rem;font-weight:700;">${estado}</span></td>
-        <td data-label="Nota">
-          <form method="POST" action="/quejas/${slug}/nota?key=${req.query.key}" style="display:flex;gap:4px;">
-            <input type="hidden" name="i" value="${i}">
-            <input type="text" name="nota" value="${(q.nota || "").replace(/"/g, "&quot;")}" placeholder="Ej: la llamé, le di descuento"
-                   style="font-size:0.78rem;padding:6px 8px;border:1px solid ${MARCA.borde};border-radius:6px;width:150px;">
-            <button type="submit" style="font-size:0.72rem;padding:6px 10px;background:${MARCA.crema};border:1px solid ${MARCA.borde};border-radius:6px;cursor:pointer;">Guardar</button>
-          </form>
-        </td>
-        <td data-label="Acción">
-          ${estado !== "contactado" ? `<form method="POST" action="/quejas/${slug}/estado?key=${req.query.key}" style="display:inline;">
-              <input type="hidden" name="i" value="${i}"><input type="hidden" name="estado" value="contactado">
-              <button type="submit" style="background:none;border:none;color:${MARCA.verde};font-weight:600;font-size:0.82rem;cursor:pointer;padding:0;margin-right:8px;text-decoration:underline;">Marcar contactado</button>
-            </form>` : ""}
-          ${estado !== "resuelto" ? `<form method="POST" action="/quejas/${slug}/estado?key=${req.query.key}" style="display:inline;">
-              <input type="hidden" name="i" value="${i}"><input type="hidden" name="estado" value="resuelto">
-              <button type="submit" style="background:none;border:none;color:${MARCA.verde};font-weight:600;font-size:0.82rem;cursor:pointer;padding:0;text-decoration:underline;">Marcar resuelto</button>
-            </form>` : ""}
-        </td>
-      </tr>`;
-    })
-    .join("");
-
-  const volverHref = req.query.key === ADMIN_KEY ? `/stats?key=${req.query.key}` : `/mi-panel/${slug}?key=${req.query.key}`;
-
-  res.send(`
-    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Retroalimentación — ${negocio.nombre}</title>
-    <style>
-      ${ESTILO_BASE}
-      .metrics{display:flex;gap:14px;margin-bottom:24px;max-width:600px;flex-wrap:wrap;}
-      .metric{background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;padding:14px;flex:1;min-width:100px;text-align:center;}
-      .metric-num{font-size:1.5rem;font-weight:700;color:${MARCA.verde};}
-      .metric-lbl{font-size:0.72rem;color:${MARCA.textoSuave};margin-top:4px;}
-      table{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden;border:1px solid ${MARCA.borde};}
-      th,td{padding:10px 16px;text-align:left;border-bottom:1px solid ${MARCA.borde};font-size:0.86rem;}
-      th{background:${MARCA.verdeOscuro};color:#fff;font-size:0.72rem;text-transform:uppercase;}
-      a{color:${MARCA.verde};font-weight:600;font-size:0.82rem;text-decoration:none;}
-
-      @media (max-width:720px){
-        table, thead, tbody, tr{display:block;width:100%;}
-        thead{display:none;}
-        table{border:none;background:none;}
-        tr{background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;margin-bottom:12px;padding:6px 0;overflow:hidden;}
-        td{display:flex;justify-content:space-between;align-items:center;gap:12px;
-           border-bottom:1px solid ${MARCA.borde};padding:10px 14px;text-align:right;}
-        td:last-child{border-bottom:none;}
-        td::before{content:attr(data-label);font-weight:700;color:${MARCA.textoSuave};font-size:0.72rem;
-                    text-transform:uppercase;letter-spacing:0.02em;text-align:left;flex-shrink:0;}
-        td[data-label="Comentario"]{text-align:left;}
-        td[data-label="Acción"]{flex-direction:column;align-items:flex-end;gap:6px;}
-      }
-    </style></head>
-    <body>
-      <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="${volverHref}">&larr; Volver al panel</a></div>
-      <div class="content">
-        <div class="eyebrow">Rescate de clientes · ${negocio.nombre}</div>
-        <h1 class="titulo-pagina">Retroalimentación privada</h1>
-        <div class="subtitulo">Cada reseña negativa se queda aquí en vez de publicarse. El dueño recibe un correo al instante para poder reaccionar.</div>
-        <div class="metrics">
-          <div class="metric"><div class="metric-num">${quejas.length}</div><div class="metric-lbl">Total recibida</div></div>
-          <div class="metric"><div class="metric-num">${resueltas}</div><div class="metric-lbl">Resueltas</div></div>
-          <div class="metric"><div class="metric-num">${tasaRecuperacion}%</div><div class="metric-lbl">Tasa de recuperación</div></div>
-        </div>
-        <table><thead><tr><th>Fecha</th><th>Comentario</th><th>Teléfono</th><th>Estado</th><th>Nota</th><th>Acción</th></tr></thead>
-        <tbody>${filas || "<tr><td colspan='6'>Sin retroalimentación registrada todavía.</td></tr>"}</tbody>
-        </table>
-      </div>
-    </body></html>
-  `);
-});
-
-// Cambia el estado de una queja (pendiente -> contactado -> resuelto), para llevar
-// el seguimiento de recuperación de clientes insatisfechos.
-app.post("/quejas/:slug/estado", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
-    return res.status(401).send("No autorizado.");
-  }
-  const i = parseInt(req.body.i, 10);
-  const nuevoEstado = req.body.estado;
-  if (!["contactado", "resuelto", "pendiente"].includes(nuevoEstado)) {
-    return res.status(400).send("Estado inválido.");
-  }
-  const datos = leerDatos();
-  if (datos[slug] && datos[slug].quejas && datos[slug].quejas[i]) {
-    datos[slug].quejas[i].estado = nuevoEstado;
-    guardarDatos(datos);
-  }
-  res.redirect(`/quejas/${slug}?key=${req.query.key}`);
-});
-
-// Idea 12: nota rápida por queja — memoria de qué se hizo, no solo el estado.
-app.post("/quejas/:slug/nota", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!autorizadoProNegocio(req, negocio, slug)) {
-    return res.status(401).send("No autorizado.");
-  }
-  const i = parseInt(req.body.i, 10);
-  const nota = (req.body.nota || "").trim();
-  const datos = leerDatos();
-  if (datos[slug] && datos[slug].quejas && datos[slug].quejas[i]) {
-    datos[slug].quejas[i].nota = nota;
-    guardarDatos(datos);
-  }
-  res.redirect(`/quejas/${slug}?key=${req.query.key}`);
-});
-
-
 // Panel individual de UN SOLO negocio, usando su propia clave (no la clave maestra).
 // Así puedes darle este enlace al dueño sin que vea los datos de tus otros negocios.
 // Incluye recomendaciones automáticas generadas a partir de sus propios datos.
@@ -3866,14 +3421,13 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
     ? Math.round(((r.semana - semanaAnteriorToques) / semanaAnteriorToques) * 100)
     : null;
 
-  const testimonios = (datos[slug] && datos[slug].testimonios) || [];
-  const quejas = (datos[slug] && datos[slug].quejas) || [];
-  const totalCalificado = testimonios.length + quejas.length;
-  const promedioEstrellas = promedioEstrellasFiltradas(testimonios, quejas);
-  const pctPositivas = totalCalificado ? Math.round((testimonios.length / totalCalificado) * 100) : 0;
-  const pctNegativas = totalCalificado ? 100 - pctPositivas : 0;
-  const quejasResueltas = quejas.filter((q) => q.estado === "resuelto").length;
-  const tasaRecuperacion = quejas.length ? Math.round((quejasResueltas / quejas.length) * 100) : null;
+  // Resumen del programa de fidelización (Plan Pro) — cuántos clientes llevan
+  // sellos acumulados y cuántos ya están listos para canjear su premio.
+  const clientesFidPanel = (datos[slug] && datos[slug].fidelizacion) || {};
+  const totalClientesFidPanel = Object.keys(clientesFidPanel).length;
+  const listosParaPremioPanel = negocio.fidelizacion
+    ? Object.values(clientesFidPanel).filter((c) => c.sellos >= negocio.fidelizacion.metaSellos).length
+    : 0;
 
   // Si el mismo correo tiene otras tarjetas activadas, se las mostramos aquí
   // para que un negocio con varias sedes no tenga que ir sede por sede.
@@ -3919,7 +3473,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   if (esPro(negocio) && r.total > 0) {
     const partes = [`${r.semana} toques esta semana`];
     if (horas.totalMes > 0) partes.push(`pico ${horas.picoHora}:00`);
-    if (totalCalificado > 0) partes.push(`${pctPositivas}% positivas`);
     resumenFrase = partes.join(" · ");
   }
 
@@ -4154,12 +3707,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               ${cambioVsSemanaAnterior !== null ? `<div class="dash-card-delta ${cambioVsSemanaAnterior >= 0 ? "up" : "down"}">${cambioVsSemanaAnterior >= 0 ? "▲" : "▼"} ${cambioVsSemanaAnterior >= 0 ? "+" : ""}${cambioVsSemanaAnterior}% vs. semana anterior</div>` : ""}
             </div>
             <div class="dash-card">
-              <div class="dash-card-lbl">Calificación promedio</div>
-              ${promedioEstrellas !== null ? `
-                <div class="dash-card-num">${promedioEstrellas}</div>
-                <div class="dash-card-estrellas">${"★".repeat(Math.round(promedioEstrellas))}${"☆".repeat(5 - Math.round(promedioEstrellas))}</div>
-                <div class="dash-card-sub">basado en ${testimonios.length + quejas.length} opinion${testimonios.length + quejas.length === 1 ? "" : "es"}</div>
-              ` : `<div class="dash-card-sub" style="margin-top:6px;">Sin calificaciones filtradas todavía</div>`}
+              <div class="dash-card-lbl">Total histórico</div>
+              <div class="dash-card-num">${r.total}</div>
+              <div class="dash-card-sub">toques registrados</div>
             </div>
           </div>
 
@@ -4321,24 +3871,16 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               </div>
             </div>
 
-            ${promSector !== null ? `
             ${meta ? `
             <div class="panel-analitica-full">
               <div class="par-simetrico">
                 <div class="par-simetrico-item">
-                  <div class="card-titulo">Cómo te calificaron</div>
+                  <div class="card-titulo">Fidelización</div>
                   <div class="chart-card" style="margin-top:0;">
-                    ${totalCalificado > 0
-                      ? `<div class="sentimiento-barra">
-                           <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
-                           <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
-                         </div>
-                         <div class="sentimiento-leyenda">
-                           <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                           <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-                         </div>
-                         ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
-                      : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
+                    ${negocio.fidelizacion
+                      ? `<div style="font-size:1.4rem;font-weight:700;color:${MARCA.verdeOscuro};">${totalClientesFidPanel} cliente${totalClientesFidPanel === 1 ? "" : "s"} con sello</div>
+                         <div class="dash-card-sub">${listosParaPremioPanel} listo${listosParaPremioPanel === 1 ? "" : "s"} para canjear premio</div>`
+                      : `<div class="sentimiento-vacio">Actívala en Configuración para premiar a tus clientes frecuentes.</div>`}
                   </div>
                 </div>
                 <div class="par-simetrico-item">
@@ -4356,19 +3898,12 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             </div>
             ` : `
             <div class="panel-analitica-full">
-              <div class="card-titulo">Cómo te calificaron</div>
+              <div class="card-titulo">Fidelización</div>
               <div class="chart-card" style="margin-top:0;">
-                ${totalCalificado > 0
-                  ? `<div class="sentimiento-barra">
-                       <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
-                       <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
-                     </div>
-                     <div class="sentimiento-leyenda">
-                       <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                       <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-                     </div>
-                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
-                  : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
+                ${negocio.fidelizacion
+                  ? `<div style="font-size:1.4rem;font-weight:700;color:${MARCA.verdeOscuro};">${totalClientesFidPanel} cliente${totalClientesFidPanel === 1 ? "" : "s"} con sello</div>
+                     <div class="dash-card-sub">${listosParaPremioPanel} listo${listosParaPremioPanel === 1 ? "" : "s"} para canjear premio</div>`
+                  : `<div class="sentimiento-vacio">Actívala en Configuración para premiar a tus clientes frecuentes.</div>`}
               </div>
             </div>
             `}
@@ -4379,9 +3914,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 ${radar ? `<div class="radar-sector">
                   ${[
                     { etiqueta: "Tráfico semanal", propio: radar.trafico.propio, sector: radar.trafico.sector, fmt: (v) => `${Math.round(v)} toques` },
-                    { etiqueta: "Calificación", propio: radar.calificacion.propio, sector: radar.calificacion.sector, fmt: (v) => `${v.toFixed(1)}★` },
-                    { etiqueta: "Toque → reseña", propio: radar.conversion.propio, sector: radar.conversion.sector, fmt: (v) => `${Math.round(v * 100)}%` },
-                    { etiqueta: "Quejas resueltas", propio: radar.resolucion.propio, sector: radar.resolucion.sector, fmt: (v) => `${Math.round(v * 100)}%` },
                   ].map((fila) => {
                     if (fila.propio === null || fila.sector === null) {
                       return `<div class="radar-fila">
@@ -4402,32 +3934,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 </div>` : `<div class="sentimiento-vacio">Todavía no hay suficientes negocios parecidos en tu categoría para comparar.</div>`}
               </div>
             </div>
-            ` : `
-            <div class="panel-analitica-full">
-              <div class="card-titulo">Cómo te calificaron</div>
-              <div class="chart-card" style="margin-top:0;">
-                ${totalCalificado > 0
-                  ? `<div class="sentimiento-barra">
-                       <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
-                       <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
-                     </div>
-                     <div class="sentimiento-leyenda">
-                       <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                       <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-                     </div>
-                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>` : ""}`
-                  : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
-              </div>
-            </div>
-            ${esPro(negocio) ? `
-            <div class="panel-analitica-full">
-              <div class="card-titulo">Tú vs. tu sector</div>
-              <div class="chart-card" style="margin-top:0;">
-                <div class="sentimiento-vacio">Vas a poder comparar tu negocio con los de tu categoría en cuanto haya al menos 2 negocios más como el tuyo en Tapin. Por ahora no hay suficientes para hacerlo sin señalar a nadie en particular.</div>
-              </div>
-            </div>
-            ` : ""}
-            `}
 
             <div class="panel-analitica-full">
               <div class="card-titulo">
@@ -4443,13 +3949,13 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             <div>
               <div class="card-titulo">Más de tu plan Pro</div>
               <div class="reco" style="border-left-color:${MARCA.verde};">
-                <b>Alertas instantáneas activas</b> — te llega un correo a <b>${negocio.email || "tu correo"}</b> apenas alguien deja una queja privada.
+                <b>Programa de fidelización</b> — cada visita de un cliente con sesión iniciada suma un sello automáticamente, sin que tengas que hacer nada.
               </div>
               <div class="reco" style="border-left-color:${MARCA.verde};">
                 <b>Reporte PDF mensual</b> — a fin de mes te llega por correo el análisis completo de tu negocio, automáticamente.
               </div>
               <div class="fila-herramientas">
-                <a href="/quejas/${slug}?key=${claveUsada}" class="btn-herramienta">Retroalimentación privada</a>
+                <a href="/mi-panel/${slug}/fidelizacion?key=${claveUsada}" class="btn-herramienta">Programa de fidelización</a>
                 <a href="/reportes-guardados/${slug}?key=${claveUsada}" class="btn-herramienta">Reportes guardados</a>
               </div>
             </div>
@@ -4473,26 +3979,16 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               <div class="horas-nota">Tus horas pico — bloqueado en el plan Básico.</div>
             </div>
             <div class="chart-card" style="opacity:0.55;filter:grayscale(0.4);pointer-events:none;margin-top:10px;">
-              ${totalCalificado > 0
-                ? `<div class="sentimiento-barra">
-                     <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
-                     <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
-                   </div>
-                   <div class="sentimiento-leyenda">
-                     <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                     <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-                   </div>`
-                : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
-              <div class="horas-nota">Cómo te calificaron — bloqueado en el plan Básico.</div>
+              <div class="sentimiento-vacio">Programa de fidelización de clientes — bloqueado en el plan Básico.</div>
             </div>
             <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
               Con <b>Plan Pro</b> ($${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes) obtienes:
               <ul style="margin:8px 0 0;padding-left:18px;">
                 <li>Gráfica de horas pico (cuándo te tocan más)</li>
-                <li>Desglose de reputación: positivas vs. quejas privadas</li>
+                <li>Programa de fidelización de clientes con sellos automáticos</li>
                 <li>Tabla de actividad reciente con cada toque</li>
                 <li>Recomendaciones automáticas para tu negocio</li>
-                <li>Alertas instantáneas de quejas y reporte PDF mensual por correo</li>
+                <li>Reporte PDF mensual automático por correo</li>
                 <li>Comparación con tu sector</li>
               </ul>
             </div>
@@ -4714,7 +4210,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
     return enviarError(res, 401, "No pudimos verificar tu acceso", "La configuración solo la puede abrir la clave completa del negocio, no un link de solo lectura.");
   }
 
-  const alertas = negocio.alertas || { quejas: true, reporteMensual: true };
+  const alertas = negocio.alertas || { reporteMensual: true };
   const datos = leerDatos();
   const auditoria = ((datos[slug] && datos[slug].auditoria) || []).slice().reverse().slice(0, 15);
   const eventosParaTarjetas = (datos[slug] && datos[slug].eventos) || [];
@@ -4837,13 +4333,6 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
               <h3>Alertas por correo</h3>
               <p class="nota">Elige cuáles quieres recibir — todas están activadas por defecto.</p>
               <form method="POST" action="/mi-panel/${slug}/configuracion/alertas?key=${claveUsada}">
-                <label class="fila-check"><input type="checkbox" name="quejas" ${alertas.quejas !== false ? "checked" : ""}> Avisarme cuando llega una queja</label>
-                <label>¿Con qué frecuencia?</label>
-                <select name="frecuenciaQuejas" style="width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:8px;font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;font-family:inherit;">
-                  <option value="instantanea" ${(alertas.frecuenciaQuejas || "instantanea") === "instantanea" ? "selected" : ""}>Al instante — apenas llega cada una</option>
-                  <option value="diario" ${alertas.frecuenciaQuejas === "diario" ? "selected" : ""}>Resumen diario — un correo con todas las del día</option>
-                  <option value="semanal" ${alertas.frecuenciaQuejas === "semanal" ? "selected" : ""}>Resumen semanal — un correo con todas de la semana</option>
-                </select>
                 <label class="fila-check"><input type="checkbox" name="reporteMensual" ${alertas.reporteMensual !== false ? "checked" : ""}> Reporte mensual automático</label>
                 <label>WhatsApp para alertas (opcional)</label>
                 <input type="text" name="whatsapp" value="${negocio.whatsappAlertas || ""}" placeholder="Ej: 3001234567">
@@ -4997,9 +4486,7 @@ app.post("/mi-panel/:slug/configuracion/alertas", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
-  const frecuenciaQuejas = ["instantanea", "diario", "semanal"].includes(req.body.frecuenciaQuejas)
-    ? req.body.frecuenciaQuejas : "instantanea";
-  const alertas = { quejas: req.body.quejas === "on", reporteMensual: req.body.reporteMensual === "on", frecuenciaQuejas };
+  const alertas = { reporteMensual: req.body.reporteMensual === "on" };
   const whatsappAlertas = (req.body.whatsapp || "").trim();
   guardarCambiosNegocio(slug, negocio, { alertas, whatsappAlertas });
   res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
@@ -5516,8 +5003,6 @@ async function generarInformePDF(negocio, slug) {
 
   const datos = leerDatos();
   const eventos = (datos[slug] && datos[slug].eventos) || [];
-  const testimonios = (datos[slug] && datos[slug].testimonios) || [];
-  const quejas = (datos[slug] && datos[slug].quejas) || [];
   const r = calcularResumen(eventos);
   const recomendaciones = generarRecomendaciones(eventos, r, negocio);
   const promSector = promedioSector(negocio.categoria, slug, datos);
@@ -5533,13 +5018,15 @@ async function generarInformePDF(negocio, slug) {
   const proyeccion = proyeccionMes(eventos, negocio);
   const fechaGenerado = new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" });
 
-  // ---------- Metricas estadísticas adicionales (analista de datos) ----------
-  const totalCalificado = testimonios.length + quejas.length;
-  const promedioEstrellas = promedioEstrellasFiltradas(testimonios, quejas);
-  const pctPositivas = totalCalificado ? Math.round((testimonios.length / totalCalificado) * 100) : 0;
-  const pctNegativas = totalCalificado ? 100 - pctPositivas : 0;
-  const quejasResueltas = quejas.filter((q) => q.estado === "resuelto").length;
-  const tasaRecuperacion = quejas.length ? Math.round((quejasResueltas / quejas.length) * 100) : null;
+  // ---------- Fidelización de clientes (Plan Pro) ----------
+  const clientesFidPdf = (datos[slug] && datos[slug].fidelizacion) || {};
+  const totalClientesFidPdf = Object.keys(clientesFidPdf).length;
+  const listosParaPremioPdf = negocio.fidelizacion
+    ? Object.values(clientesFidPdf).filter((c) => c.sellos >= negocio.fidelizacion.metaSellos).length
+    : 0;
+  const topClientesFidPdf = Object.entries(clientesFidPdf)
+    .sort((a, b) => (b[1].sellos || 0) - (a[1].sellos || 0))
+    .slice(0, 6);
 
   const inicioHoyCmp = new Date();
   inicioHoyCmp.setHours(0, 0, 0, 0);
@@ -5742,7 +5229,7 @@ async function generarInformePDF(negocio, slug) {
   const fichaTecnica = [
     ["Interacciones analizadas", String(r.total)],
     ["Días con historial", String(diasActivo)],
-    ["Calificaciones recibidas", String(totalCalificado)],
+    ["Clientes con sello de fidelización", String(totalClientesFidPdf)],
     ["Cobertura horaria (30 días)", horas.horasConDatos + "/24 horas"],
   ];
   let fy = ALTO - 340;
@@ -5792,7 +5279,7 @@ async function generarInformePDF(negocio, slug) {
     );
   }
   if (percentil !== null) piezasResumen.push("el negocio se ubica en el percentil " + percentil + " de su categoría");
-  if (promedioEstrellas !== null) piezasResumen.push("el promedio de calificación filtrada es " + promedioEstrellas + "/5");
+  if (totalClientesFidPdf > 0) piezasResumen.push(totalClientesFidPdf + " cliente" + (totalClientesFidPdf === 1 ? "" : "s") + " con sello de fidelización");
   const fraseResumen = piezasResumen.length
     ? "En síntesis: " + piezasResumen.join("; ") + "."
     : "Todavía no hay suficiente historial para generar una síntesis estadística confiable - vuelve a revisar este informe cuando haya más actividad acumulada.";
@@ -5986,43 +5473,43 @@ async function generarInformePDF(negocio, slug) {
   y -= 80;
   piePagina(pSemana);
 
-  const pReputacion = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(pReputacion, "Reputación y satisfacción", negocio.nombre + " - calificaciones filtradas por Tapin");
+  const pFidelizacion = pdfDoc.addPage([ANCHO, ALTO]);
+  encabezadoSeccion(pFidelizacion, "Fidelización de clientes", negocio.nombre + " - clientes que vuelven y acumulan sellos");
 
   y = ALTO - 108;
-  const repW = (ANCHO - 100 - 2 * 12) / 3;
-  let rx = MARGEN;
-  dibujarKpi(pReputacion, rx, y, repW, 62, "Calificación promedio", promedioEstrellas !== null ? promedioEstrellas + "/5" : "-", { sub: totalCalificado + " evaluaciones", color: oro });
-  rx += repW + 12;
-  dibujarKpi(pReputacion, rx, y, repW, 62, "Reseñas positivas", pctPositivas + "%", { sub: testimonios.length + " enviadas a Google", color: verde });
-  rx += repW + 12;
-  dibujarKpi(pReputacion, rx, y, repW, 62, "Quejas privadas", pctNegativas + "%", { sub: tasaRecuperacion !== null ? tasaRecuperacion + "% resueltas" : quejas.length + " recibidas", color: rojo });
+  const fidW = (ANCHO - 100 - 2 * 12) / 3;
+  let fx = MARGEN;
+  dibujarKpi(pFidelizacion, fx, y, fidW, 62, "Clientes con sello", totalClientesFidPdf, { sub: "con al menos 1 visita registrada", color: oro });
+  fx += fidW + 12;
+  dibujarKpi(pFidelizacion, fx, y, fidW, 62, "Listos para premio", listosParaPremioPdf, { sub: "ya llegaron a la meta", color: verde });
+  fx += fidW + 12;
+  dibujarKpi(pFidelizacion, fx, y, fidW, 62, "Meta de sellos", (negocio.fidelizacion && negocio.fidelizacion.metaSellos) || "-", { sub: "sellos para ganar el premio", color: verdeOscuro });
   y -= 86;
 
-  tituloSeccionInterna(pReputacion, "Distribución de calificaciones filtradas", MARGEN, y);
+  tituloSeccionInterna(pFidelizacion, "Clientes con más sellos", MARGEN, y);
   y -= 16;
-  if (totalCalificado > 0) {
-    const barraAncho = ANCHO - 100;
-    const wPos = (pctPositivas / 100) * barraAncho;
-    pReputacion.drawRectangle({ x: MARGEN, y: y - 16, width: barraAncho, height: 16, color: rojoClaro });
-    pReputacion.drawRectangle({ x: MARGEN, y: y - 16, width: wPos, height: 16, color: verde });
-    y -= 30;
-    pReputacion.drawRectangle({ x: MARGEN, y: y - 10, width: 9, height: 9, color: verde });
-    pReputacion.drawText("Positivas - enviadas a Google (" + testimonios.length + ", " + pctPositivas + "%)", { x: MARGEN + 15, y: y - 9, size: 8.5, font, color: oscuro });
-    y -= 16;
-    pReputacion.drawRectangle({ x: MARGEN, y: y - 10, width: 9, height: 9, color: rojo });
-    pReputacion.drawText("Quejas - privadas, nunca públicas (" + quejas.length + ", " + pctNegativas + "%)", { x: MARGEN + 15, y: y - 9, size: 8.5, font, color: oscuro });
-    y -= 26;
-
-    if (tasaRecuperacion !== null) {
-      y -= dibujarCaja(pReputacion, MARGEN, y, ANCHO - 100,
-        "De las " + quejas.length + " quejas privadas recibidas, " + quejasResueltas + " ya fueron marcadas como resueltas - una tasa de recuperación del " + tasaRecuperacion + "%. Cada queja resuelta es una reseña negativa pública que se evitó.",
-        { color: verde, fondo: verdeClaro, size: 8.5, etiqueta: "Gestión de reputación" });
-    }
+  if (negocio.fidelizacion && topClientesFidPdf.length > 0) {
+    const barraAncho = ANCHO - 100 - 150;
+    const maxSellos = Math.max(...topClientesFidPdf.map(([, c]) => c.sellos || 0), 1);
+    topClientesFidPdf.forEach(([, c]) => {
+      pFidelizacion.drawText((c.nombre || "Cliente"), { x: MARGEN, y: y - 10, size: 9, font, color: oscuro, maxWidth: 140 });
+      pFidelizacion.drawRectangle({ x: MARGEN + 150, y: y - 13, width: barraAncho, height: 12, color: verdeClaro });
+      pFidelizacion.drawRectangle({ x: MARGEN + 150, y: y - 13, width: Math.max(3, (barraAncho * (c.sellos || 0)) / maxSellos), height: 12, color: oro });
+      pFidelizacion.drawText(String(c.sellos || 0) + " / " + ((negocio.fidelizacion && negocio.fidelizacion.metaSellos) || "-"), { x: MARGEN + 150 + barraAncho + 10, y: y - 11, size: 8.5, font: fontBold, color: verdeOscuro });
+      y -= 26;
+    });
+    y -= 10;
+    y -= dibujarCaja(pFidelizacion, MARGEN, y, ANCHO - 100,
+      "Cada cliente identificado que vuelve a tocar tu tarjeta suma un sello automáticamente, sin que tengas que hacer seguimiento manual.",
+      { color: verde, fondo: verdeClaro, size: 8.5, etiqueta: "Programa Pro" });
+  } else if (negocio.fidelizacion) {
+    pFidelizacion.drawText("Todavía no hay clientes con sellos en este periodo.", { x: MARGEN, y: y - 10, size: 9, font, color: gris });
   } else {
-    pReputacion.drawText("Todavía no hay calificaciones registradas en este periodo.", { x: MARGEN, y: y - 10, size: 9, font, color: gris });
+    pFidelizacion.drawText("Todavía no has activado el programa de fidelización.", { x: MARGEN, y: y - 10, size: 9, font, color: gris });
+    y -= 16;
+    pFidelizacion.drawText("Actívalo desde tu panel para premiar a los clientes que más vuelven.", { x: MARGEN, y: y - 10, size: 8.5, font: fontItalic, color: gris });
   }
-  piePagina(pReputacion);
+  piePagina(pFidelizacion);
 
   const pSector = pdfDoc.addPage([ANCHO, ALTO]);
   encabezadoSeccion(pSector, "Comparación sectorial", negocio.nombre + " - categoría: " + (negocio.categoria || "-"));
@@ -6083,7 +5570,6 @@ async function generarInformePDF(negocio, slug) {
   if (diaFlojo) todasLasRecos.push("Refuerza la promoción o el personal el " + diaFlojo.dia + ", tu día historicamente más flojo.");
   if (caidaPropia) todasLasRecos.push("La semana actual está " + caidaPropia.pctCaida + "% por debajo de tu propio promedio - revisa si algo cambio operativamente.");
   if (percentil !== null && percentil < 50) todasLasRecos.push("Estas por debajo de la mediana de tu categoría - revisa la ubicacion de la tarjeta y la frecuencia con que el personal la ofrece.");
-  if (tasaRecuperacion !== null && tasaRecuperacion < 50) todasLasRecos.push("Solo el " + tasaRecuperacion + "% de las quejas privadas están resueltas - cerrar ese ciclo mejora la retención de clientes insatisfechos.");
 
   todasLasRecos.forEach((texto) => {
     if (y < 100) return;
@@ -6123,10 +5609,9 @@ async function generarInformePDF(negocio, slug) {
     detalle.drawText("Metodología", { x: MARGEN, y, size: 10, font: fontBold, color: oscuro });
     y -= 16;
     const notaMetodologica =
-      "Todas las cifras de este informe provienen exclusivamente de los toques NFC y calificaciones registrados en la tarjeta Tapin de este negocio. " +
+      "Todas las cifras de este informe provienen exclusivamente de los toques NFC registrados en la tarjeta Tapin de este negocio. " +
       "Las proyecciones se calculan a partir del ritmo diario observado en el periodo, con un rango de +-15% para reflejar la incertidumbre natural. " +
-      "Los promedios y percentiles sectoriales solo se muestran cuando hay al menos 3 negocios comparables de la misma categoría y país. " +
-      "Las calificaciones negativas nunca se publican en Google; se gestionan como retroalimentación privada.";
+      "Los promedios y percentiles sectoriales solo se muestran cuando hay al menos 3 negocios comparables de la misma categoría y país.";
     detalle.drawText(notaMetodologica, { x: MARGEN, y, size: 7.8, font: fontItalic, color: gris, maxWidth: ANCHO - 100, lineHeight: 11 });
   }
   piePagina(detalle);
@@ -6614,64 +6099,6 @@ app.get("/verificar-links-google", limitarIntentosAdmin, async (req, res) => {
   res.json({ ok: true, revisados: Object.keys(negocios).length, rotos: rotos.length, detalle: rotos });
 });
 
-// Manda los resúmenes agrupados de quejas (diario/semanal) a los negocios
-// que eligieron esa frecuencia en vez de "al instante" — visítala con un
-// cron diario (revisa sola si a cada negocio ya le toca según su frecuencia).
-// Visítala así: https://tu-dominio.com/enviar-resumenes-quejas?key=TU_CLAVE
-app.get("/enviar-resumenes-quejas", limitarIntentosAdmin, async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
-
-  const negocios = todosLosNegocios();
-  const datos = leerDatos();
-  const ahora = new Date();
-  const resultado = [];
-
-  for (const slug in negocios) {
-    const negocio = negocios[slug];
-    if (!esPro(negocio) || !negocio.email) continue;
-    const alertas = negocio.alertas || {};
-    if (alertas.quejas === false) continue;
-    const frecuencia = alertas.frecuenciaQuejas;
-    if (frecuencia !== "diario" && frecuencia !== "semanal") continue;
-
-    const horasEspera = frecuencia === "diario" ? 24 : 24 * 7;
-    const ultimoEnvio = negocio.ultimoResumenQuejas ? new Date(negocio.ultimoResumenQuejas) : null;
-    const yaToca = !ultimoEnvio || (ahora - ultimoEnvio) >= horasEspera * 60 * 60 * 1000;
-    if (!yaToca) continue;
-
-    const desde = ultimoEnvio || new Date(ahora.getTime() - horasEspera * 60 * 60 * 1000);
-    const quejas = ((datos[slug] && datos[slug].quejas) || []).filter((q) => new Date(q.fechaISO) >= desde);
-
-    // Se actualiza la fecha de "último resumen" así no haya quejas nuevas —
-    // para que el reloj de "cada cuánto" se mantenga estable, no se recorra.
-    guardarCambiosNegocio(slug, negocio, { ultimoResumenQuejas: ahora.toISOString() });
-
-    if (quejas.length === 0) {
-      resultado.push({ slug, enviado: false, motivo: "sin quejas nuevas" });
-      continue;
-    }
-
-    const filas = quejas
-      .map((q) => `<li style="margin-bottom:10px;"><b>${q.fechaLegible}</b><br>"${escaparHtml(q.comentario)}"${q.telefono ? `<br>Tel: ${escaparHtml(q.telefono)}` : ""}</li>`)
-      .join("");
-    try {
-      await enviarEmail(
-        negocio.email,
-        `Resumen ${frecuencia === "diario" ? "diario" : "semanal"} de retroalimentación — ${negocio.nombre}`,
-        `<p>Tuviste <b>${quejas.length}</b> comentario${quejas.length > 1 ? "s" : ""} privado${quejas.length > 1 ? "s" : ""} ${frecuencia === "diario" ? "hoy" : "esta semana"}:</p>
-         <ul>${filas}</ul>
-         <p>Puedes verlas y marcarlas en tu panel Pro.</p>`
-      );
-      resultado.push({ slug, enviado: true, cantidad: quejas.length });
-    } catch (err) {
-      console.error("[enviar-resumenes-quejas] Error:", err.message);
-      resultado.push({ slug, enviado: false, motivo: "error de envío" });
-    }
-  }
-
-  res.json({ ok: true, procesados: resultado.length, detalle: resultado });
-});
-
 // Avisa por correo a los negocios con Plan Pro anual cuando les quedan 7 días
 // para vencer — para que renueven a tiempo y no se les caiga el plan sin
 // darse cuenta. Visítala con un cron diario, solo manda un correo por negocio
@@ -6958,19 +6385,6 @@ app.get("/respaldo-correo", limitarIntentosAdmin, async (req, res) => {
   }
 });
 // ---------- Dashboard de clientes: mapa de calor público ----------
-// Calcula una "reputación" aproximada de un negocio a partir de sus quejas
-// privadas vs. su total de toques (no tenemos un conteo directo de "positivos",
-// así que la aproximamos: total - quejas = toques que no terminaron en queja).
-function reputacionNegocio(slug, datos) {
-  const info = datos[slug] || { total: 0 };
-  const quejas = (info.quejas || []).length;
-  const total = info.total || 0;
-  const positivos = Math.max(0, total - quejas);
-  const porcentaje = total > 0 ? Math.round((positivos / total) * 100) : 100;
-  const estrellas = total > 0 ? Math.max(1, Math.round((positivos / total) * 5)) : 5;
-  return { total, quejas, porcentaje, estrellas };
-}
-
 // Página pública para clientes: mapa de calor con todos los negocios Tapin
 // que tengan ubicación configurada, mostrando su reputación al tocarlos.
 // Visítalo así: https://tu-dominio.com/descubre
@@ -7105,7 +6519,7 @@ app.get("/conoce", (req, res) => {
         <div class="hero">
           <div>${logoSvg("#FFFFFF", 34)}</div>
           <h1>Así funciona Tapin</h1>
-          <p>Tarjeta NFC para negocios en Colombia que convierte cada visita en una reseña de Google en segundos — la forma más simple de aumentar las reseñas de Google de tu negocio y cuidar tu reputación online, sin arriesgarte a que una calificación negativa se publique.</p>
+          <p>Tarjeta NFC para negocios en Colombia que convierte cada visita en una reseña de Google en segundos — la forma más simple de aumentar las reseñas de Google de tu negocio.</p>
 
           <div class="tarjeta-wrap">
             <div class="tarjeta-nfc">
@@ -7131,15 +6545,15 @@ app.get("/conoce", (req, res) => {
         <main class="contenido" id="como-funciona">
           <div class="paso">
             <div class="paso-num">1</div>
-            <div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta, se abre una página simple donde el cliente califica su experiencia.</p></div>
+            <div><h3>El cliente toca la tarjeta</h3><p>Con el celular pegado a la tarjeta, se abre automáticamente el enlace para dejar la reseña.</p></div>
           </div>
           <div class="paso">
             <div class="paso-num">2</div>
-            <div><h3>Si calificó bien, va directo a Google</h3><p>Lo mandamos automáticamente a dejar la reseña pública en tu perfil de Google — sin pasos extra, sin fricción.</p></div>
+            <div><h3>Va directo a Google</h3><p>Sin pantallas ni pasos de más: lo llevamos directo a dejar la reseña pública en tu perfil de Google.</p></div>
           </div>
           <div class="paso">
             <div class="paso-num">3</div>
-            <div><h3>Si calificó mal, queda como retroalimentación privada</h3><p>En vez de publicarse, ese comentario llega directo a ti — nunca se vuelve una reseña negativa pública. Es información que te sirve para mejorar, no un golpe a tu reputación.</p></div>
+            <div><h3>Si tiene sesión iniciada, suma un sello</h3><p>Con Plan Pro, cada visita de un cliente identificado suma un sello a tu programa de fidelización, sin que nadie tenga que hacer nada extra.</p></div>
           </div>
           <div class="paso">
             <div class="paso-num">4</div>
@@ -7177,8 +6591,8 @@ app.get("/conoce", (req, res) => {
               </div>
               <ul>
                 <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                <li><span class="check">✓</span> Retroalimentación privada — lo negativo nunca se publica</li>
-                <li><span class="check">✓</span> Alerta instantánea por correo ante retroalimentación negativa</li>
+                <li><span class="check">✓</span> Programa de fidelización de clientes con sellos automáticos</li>
+                <li><span class="check">✓</span> Recomendaciones automáticas basadas en tus propios datos</li>
                 <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
                 <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
                 <li><span class="check">✓</span> Reportes en CSV, PDF y Word — te los enviamos por correo cuando los necesites</li>
@@ -7246,7 +6660,6 @@ app.get("/descubre", (req, res) => {
     .map((slug) => ({ slug, negocio: todos[slug] }))
     .filter(({ negocio }) => negocio.lat != null && negocio.lng != null)
     .map(({ slug, negocio }) => {
-      const rep = reputacionNegocio(slug, datos);
       const categoria = negocio.categoria || "otro";
       return {
         slug,
@@ -7258,7 +6671,6 @@ app.get("/descubre", (req, res) => {
         lng: negocio.lng,
         googleUrl: negocio.googleUrl,
         esFavorito: misFavoritos.includes(slug),
-        ...rep,
       };
     });
 
@@ -7361,14 +6773,11 @@ app.get("/descubre", (req, res) => {
             });
             const marker = L.marker([p.lat, p.lng], { icon: icono }).addTo(mapa);
 
-            const estrellasHtml = '★'.repeat(p.estrellas) + '☆'.repeat(5 - p.estrellas);
             const contenedor = document.createElement('div');
             contenedor.className = 'popup-card';
             contenedor.innerHTML =
               '<div class="popup-nombre">' + p.nombre + '</div>' +
               '<div class="popup-cat">' + p.categoria + '</div>' +
-              '<div class="popup-estrellas">' + estrellasHtml + '</div>' +
-              '<div class="popup-pct">' + p.porcentaje + '% de reseñas positivas</div>' +
               (p.direccion ? '<div class="popup-dir">' + p.direccion + '</div>' : '') +
               '<div class="popup-botones"></div>';
 
@@ -8521,7 +7930,7 @@ app.get("/", (req, res) => {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Tapin — Convierte cada visita en una reseña de Google</title>
-        <meta name="description" content="Tapin: tarjeta NFC para negocios en Colombia que aumenta las reseñas de Google en segundos. Gestión de reputación online — las calificaciones negativas se quedan en privado, nunca se publican.">
+        <meta name="description" content="Tapin: tarjeta NFC para negocios en Colombia que aumenta las reseñas de Google en segundos. Panel con estadísticas, fidelización de clientes y reportes automáticos con el Plan Pro.">
         <meta name="google-site-verification" content="H7LUjIzom1urhBIS-T8yWBsUl1T2-o6NBbVAiEZf-Nw" />
         <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d432b'/%3E%3Ctext x='32' y='46' text-anchor='middle' font-family='Arial,sans-serif' font-size='42' font-weight='700' fill='%23fbf6e9'%3ET%3C/text%3E%3C/svg%3E">
         <meta property="og:title" content="Tapin — Convierte cada visita en una reseña de Google">
@@ -8735,11 +8144,11 @@ app.get("/", (req, res) => {
 
           <div id="como-funciona">
             <div class="seccion-titulo">Así funciona Tapin</div>
-            <div class="seccion-sub">El proceso es fácil. La diferencia está en el filtro de calificaciones, que es exclusivo del Plan Pro.</div>
+            <div class="seccion-sub">El proceso es igual de simple en ambos planes. La diferencia está en las herramientas de seguimiento y crecimiento que trae el Plan Pro.</div>
 
             <div class="flujo flujo-basico">
               <div class="flujo-cabecera"><span class="flujo-etiqueta">Sin Plan Pro</span><h3>Con tu tarjeta Tapin</h3></div>
-              <p class="flujo-descripcion">El cliente va directamente a dejar su reseña. Este recorrido no incluye el filtro de calificaciones.</p>
+              <p class="flujo-descripcion">El cliente toca la tarjeta y va directo a dejar su reseña en Google.</p>
               <div class="pasos">
                 <div class="paso"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
                 <div class="paso"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código y completas los datos de tu negocio en pocos minutos.</p></div>
@@ -8749,14 +8158,14 @@ app.get("/", (req, res) => {
             </div>
 
             <div class="flujo flujo-pro">
-              <div class="flujo-cabecera"><span class="flujo-etiqueta">Con Plan Pro</span><h3>Con filtro de calificaciones</h3></div>
-              <p class="flujo-descripcion"><b>Este filtro solo está incluido en el Plan Pro:</b> separa las experiencias positivas y convierte las negativas en retroalimentación privada para el negocio.</p>
+              <div class="flujo-cabecera"><span class="flujo-etiqueta">Con Plan Pro</span><h3>Con herramientas Pro</h3></div>
+              <p class="flujo-descripcion"><b>Estas herramientas solo están incluidas en el Plan Pro:</b> seguimiento detallado de cada visita, fidelización de clientes y reportes automáticos para tu negocio.</p>
               <div class="pasos">
                 <div class="paso paso-pro"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
                 <div class="paso paso-pro"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código, completas los datos y activas el Plan Pro.</p></div>
-                <div class="paso paso-pro"><div class="paso-num">3</div><h3>El cliente toca y califica</h3><p>Al acercar el celular, se abre una página sencilla para calificar la experiencia.</p></div>
-                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">4</div><h3>El filtro separa la calificación</h3><p>Las experiencias positivas siguen hacia Google y las negativas se reciben de forma privada.</p></div>
-                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">5</div><h3>Reseña pública o retroalimentación privada</h3><p>Si fue positiva, el cliente deja su reseña en Google Reviews; si fue negativa, el negocio la recibe de forma privada y obtiene una alerta instantánea.</p></div>
+                <div class="paso paso-pro"><div class="paso-num">3</div><h3>El cliente toca la tarjeta</h3><p>Al acercar el celular, se abre el enlace para dejar la reseña en Google, igual que en el plan básico.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">4</div><h3>Suma un sello de fidelización</h3><p>Si el cliente tiene sesión iniciada, esa visita suma puntos para tu programa de fidelización, sin que tenga que hacer nada extra.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">5</div><h3>Historial detallado de cada toque</h3><p>Fecha, hora y tipo de dispositivo quedan registrados automáticamente para que tengas visibilidad completa de la actividad de tu tarjeta.</p></div>
                 <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">6</div><h3>Recibe el reporte mensual</h3><p>El último paso es un reporte mensual con todas tus estadísticas y análisis: horas pico, subidas, caídas y comparación con otros negocios de tu sector.</p></div>
               </div>
             </div>
@@ -8774,7 +8183,7 @@ app.get("/", (req, res) => {
 
           <div id="precios">
             <div class="seccion-titulo">Lo que cuesta, sin letra pequeña</div>
-            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres el filtro, retroalimentación privada, reportes y más. Para pagar la mensualidad Pro primero debes tener una tarjeta Tapin.</div>
+            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres fidelización de clientes, reportes automáticos y más. Para pagar la mensualidad Pro primero debes tener una tarjeta Tapin.</div>
             <div class="planes">
               <div class="plan">
                 <div class="plan-nombre">Pago único</div>
@@ -8797,8 +8206,7 @@ app.get("/", (req, res) => {
                 <ul>
                   <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
                   <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                  <li><span class="check">✓</span> Filtro de calificaciones y retroalimentación privada</li>
-                  <li><span class="check">✓</span> Alerta instantánea ante retroalimentación negativa</li>
+                  <li><span class="check">✓</span> Programa de fidelización de clientes con sellos automáticos</li>
                   <li><span class="check">✓</span> Historial detallado de cada toque y estadísticas completas</li>
                   <li><span class="check">✓</span> Reporte PDF mensual con horas pico, subidas y caídas</li>
                   <li><span class="check">✓</span> Comparación y análisis frente a negocios del mismo sector</li>
@@ -8850,15 +8258,15 @@ app.get("/", (req, res) => {
               </details>
               <details class="faq-item">
                 <summary>¿Cuál es la diferencia entre la tarjeta y el Plan Pro?</summary>
-                <p>La compra básica incluye la tarjeta física, el envío y el acceso esencial. El Plan Pro añade el filtro de calificaciones, retroalimentación privada, alertas, estadísticas detalladas, reportes y otras herramientas avanzadas.</p>
+                <p>La compra básica incluye la tarjeta física, el envío y el acceso esencial. El Plan Pro añade programa de fidelización de clientes, estadísticas detalladas, reportes automáticos y otras herramientas avanzadas.</p>
               </details>
               <details class="faq-item">
                 <summary>¿Necesito una tarjeta Tapin para contratar el Plan Pro?</summary>
                 <p>Sí. La mensualidad Pro funciona sobre una tarjeta Tapin activa. Primero debes tener y activar tu tarjeta para poder utilizar las funciones Pro.</p>
               </details>
               <details class="faq-item">
-                <summary>¿Qué hace el filtro exclusivo del Plan Pro?</summary>
-                <p>Las experiencias positivas continúan hacia Google Reviews. Las negativas se convierten en retroalimentación privada y generan una alerta para que el negocio pueda atenderlas. Sin Plan Pro, este filtro no está disponible.</p>
+                <summary>¿Qué incluye el programa de fidelización del Plan Pro?</summary>
+                <p>Cada vez que un cliente con sesión iniciada usa tu tarjeta, suma un sello automáticamente. Al llegar a la meta que tú definas, se lleva el premio que elijas — sin que tengas que hacer seguimiento manual.</p>
               </details>
               <details class="faq-item">
                 <summary>¿Qué incluye el reporte mensual Pro?</summary>
@@ -9704,10 +9112,10 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
             : `<p>Pagas el primer mes ahora y queda activo de inmediato. Los meses siguientes se cobran automáticamente a la tarjeta que registres después de este pago.</p>`}
           <ul>
             <li>Gráfica de horas pico</li>
-            <li>Reputación: positivas vs. quejas privadas</li>
+            <li>Programa de fidelización de clientes</li>
             <li>Actividad reciente al detalle</li>
             <li>Recomendaciones automáticas</li>
-            <li>Alertas instantáneas y exportes</li>
+            <li>Reporte mensual automático y exportes</li>
           </ul>
           <div class="monto">
             $${precioProAplicable.toLocaleString("es-CO")} COP<span style="font-size:0.9rem;font-weight:600;color:${MARCA.textoSuave};">${esAnual ? "/año" : "/mes"}</span>
@@ -10249,13 +9657,13 @@ app.get("/privacidad", (req, res) => {
           <h2>1. ¿Qué datos recogemos?</h2>
           <ul>
             <li><b>De los negocios:</b> nombre del negocio, correo electrónico, dirección, categoría, enlace de reseñas de Google, y datos de facturación procesados por nuestro proveedor de pagos (Wompi) y, si el negocio solicita factura electrónica, por nuestro proveedor tecnológico autorizado por la DIAN (Alegra).</li>
-            <li><b>De los clientes finales que califican con la tarjeta:</b> calificación (1-5), comentario opcional (si la calificación es negativa), teléfono (opcional), fecha, hora, y tipo de dispositivo. No pedimos ni guardamos nombres de clientes finales salvo que decidan crear una cuenta de usuario.</li>
+            <li><b>De los clientes finales que usan la tarjeta:</b> fecha, hora, y tipo de dispositivo de cada toque. No pedimos ni guardamos nombres de clientes finales salvo que decidan crear una cuenta de usuario.</li>
             <li><b>De usuarios registrados (clientes con cuenta):</b> nombre, correo, y contraseña (guardada de forma cifrada, nunca en texto plano).</li>
           </ul>
 
           <h2>2. ¿Para qué usamos estos datos?</h2>
           <ul>
-            <li>Operar el servicio: redirigir calificaciones positivas a Google, mostrar retroalimentación privada al negocio correspondiente.</li>
+            <li>Operar el servicio: redirigir al cliente a dejar su reseña en Google y registrar sellos del programa de fidelización cuando aplica.</li>
             <li>Generar estadísticas y reportes para el negocio (horas pico, tendencias, comparación con su categoría).</li>
             <li>Enviar alertas y reportes por correo a los negocios.</li>
             <li>Procesar pagos y suscripciones a través de Wompi, y generar facturas electrónicas ante la DIAN a través de Alegra cuando el negocio lo solicita.</li>
