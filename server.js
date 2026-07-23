@@ -5018,16 +5018,6 @@ async function generarInformePDF(negocio, slug) {
   const proyeccion = proyeccionMes(eventos, negocio);
   const fechaGenerado = new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" });
 
-  // ---------- Fidelización de clientes (Plan Pro) ----------
-  const clientesFidPdf = (datos[slug] && datos[slug].fidelizacion) || {};
-  const totalClientesFidPdf = Object.keys(clientesFidPdf).length;
-  const listosParaPremioPdf = negocio.fidelizacion
-    ? Object.values(clientesFidPdf).filter((c) => c.sellos >= negocio.fidelizacion.metaSellos).length
-    : 0;
-  const topClientesFidPdf = Object.entries(clientesFidPdf)
-    .sort((a, b) => (b[1].sellos || 0) - (a[1].sellos || 0))
-    .slice(0, 6);
-
   const inicioHoyCmp = new Date();
   inicioHoyCmp.setHours(0, 0, 0, 0);
   const inicioSemanaAnteriorCmp = new Date(inicioHoyCmp);
@@ -5229,7 +5219,7 @@ async function generarInformePDF(negocio, slug) {
   const fichaTecnica = [
     ["Interacciones analizadas", String(r.total)],
     ["Días con historial", String(diasActivo)],
-    ["Clientes con sello de fidelización", String(totalClientesFidPdf)],
+    ["Clientes recurrentes", String(clientesRecurrentes)],
     ["Cobertura horaria (30 días)", horas.horasConDatos + "/24 horas"],
   ];
   let fy = ALTO - 340;
@@ -5279,7 +5269,6 @@ async function generarInformePDF(negocio, slug) {
     );
   }
   if (percentil !== null) piezasResumen.push("el negocio se ubica en el percentil " + percentil + " de su categoría");
-  if (totalClientesFidPdf > 0) piezasResumen.push(totalClientesFidPdf + " cliente" + (totalClientesFidPdf === 1 ? "" : "s") + " con sello de fidelización");
   const fraseResumen = piezasResumen.length
     ? "En síntesis: " + piezasResumen.join("; ") + "."
     : "Todavía no hay suficiente historial para generar una síntesis estadística confiable - vuelve a revisar este informe cuando haya más actividad acumulada.";
@@ -5472,44 +5461,6 @@ async function generarInformePDF(negocio, slug) {
   dibujarKpi(pSemana, MARGEN, y, (ANCHO - 100 - 12) / 2, 60, "Clientes con 3+ calificaciones", clientesRecurrentes, { sub: "señal de fidelización real, no solo tráfico nuevo", color: verde });
   y -= 80;
   piePagina(pSemana);
-
-  const pFidelizacion = pdfDoc.addPage([ANCHO, ALTO]);
-  encabezadoSeccion(pFidelizacion, "Fidelización de clientes", negocio.nombre + " - clientes que vuelven y acumulan sellos");
-
-  y = ALTO - 108;
-  const fidW = (ANCHO - 100 - 2 * 12) / 3;
-  let fx = MARGEN;
-  dibujarKpi(pFidelizacion, fx, y, fidW, 62, "Clientes con sello", totalClientesFidPdf, { sub: "con al menos 1 visita registrada", color: oro });
-  fx += fidW + 12;
-  dibujarKpi(pFidelizacion, fx, y, fidW, 62, "Listos para premio", listosParaPremioPdf, { sub: "ya llegaron a la meta", color: verde });
-  fx += fidW + 12;
-  dibujarKpi(pFidelizacion, fx, y, fidW, 62, "Meta de sellos", (negocio.fidelizacion && negocio.fidelizacion.metaSellos) || "-", { sub: "sellos para ganar el premio", color: verdeOscuro });
-  y -= 86;
-
-  tituloSeccionInterna(pFidelizacion, "Clientes con más sellos", MARGEN, y);
-  y -= 16;
-  if (negocio.fidelizacion && topClientesFidPdf.length > 0) {
-    const barraAncho = ANCHO - 100 - 150;
-    const maxSellos = Math.max(...topClientesFidPdf.map(([, c]) => c.sellos || 0), 1);
-    topClientesFidPdf.forEach(([, c]) => {
-      pFidelizacion.drawText((c.nombre || "Cliente"), { x: MARGEN, y: y - 10, size: 9, font, color: oscuro, maxWidth: 140 });
-      pFidelizacion.drawRectangle({ x: MARGEN + 150, y: y - 13, width: barraAncho, height: 12, color: verdeClaro });
-      pFidelizacion.drawRectangle({ x: MARGEN + 150, y: y - 13, width: Math.max(3, (barraAncho * (c.sellos || 0)) / maxSellos), height: 12, color: oro });
-      pFidelizacion.drawText(String(c.sellos || 0) + " / " + ((negocio.fidelizacion && negocio.fidelizacion.metaSellos) || "-"), { x: MARGEN + 150 + barraAncho + 10, y: y - 11, size: 8.5, font: fontBold, color: verdeOscuro });
-      y -= 26;
-    });
-    y -= 10;
-    y -= dibujarCaja(pFidelizacion, MARGEN, y, ANCHO - 100,
-      "Cada cliente identificado que vuelve a tocar tu tarjeta suma un sello automáticamente, sin que tengas que hacer seguimiento manual.",
-      { color: verde, fondo: verdeClaro, size: 8.5, etiqueta: "Programa Pro" });
-  } else if (negocio.fidelizacion) {
-    pFidelizacion.drawText("Todavía no hay clientes con sellos en este periodo.", { x: MARGEN, y: y - 10, size: 9, font, color: gris });
-  } else {
-    pFidelizacion.drawText("Todavía no has activado el programa de fidelización.", { x: MARGEN, y: y - 10, size: 9, font, color: gris });
-    y -= 16;
-    pFidelizacion.drawText("Actívalo desde tu panel para premiar a los clientes que más vuelven.", { x: MARGEN, y: y - 10, size: 8.5, font: fontItalic, color: gris });
-  }
-  piePagina(pFidelizacion);
 
   const pSector = pdfDoc.addPage([ANCHO, ALTO]);
   encabezadoSeccion(pSector, "Comparación sectorial", negocio.nombre + " - categoría: " + (negocio.categoria || "-"));
@@ -6553,10 +6504,6 @@ app.get("/conoce", (req, res) => {
           </div>
           <div class="paso">
             <div class="paso-num">3</div>
-            <div><h3>Si tiene sesión iniciada, suma un sello</h3><p>Con Plan Pro, cada visita de un cliente identificado suma un sello a tu programa de fidelización, sin que nadie tenga que hacer nada extra.</p></div>
-          </div>
-          <div class="paso">
-            <div class="paso-num">4</div>
             <div><h3>Todo queda registrado</h3><p>Cada toque queda guardado con fecha, hora y dispositivo — tu propio historial de actividad, disponible en tu panel cuando quieras verlo.</p></div>
           </div>
 
@@ -6591,9 +6538,8 @@ app.get("/conoce", (req, res) => {
               </div>
               <ul>
                 <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                <li><span class="check">✓</span> Programa de fidelización de clientes con sellos automáticos</li>
-                <li><span class="check">✓</span> Recomendaciones automáticas basadas en tus propios datos</li>
                 <li><span class="check">✓</span> Registro completo de cada toque (fecha, hora, dispositivo)</li>
+                <li><span class="check">✓</span> Recomendaciones automáticas basadas en tus propios datos</li>
                 <li><span class="check">✓</span> Reporte mensual automático con picos y caídas por hora</li>
                 <li><span class="check">✓</span> Reportes en CSV, PDF y Word — te los enviamos por correo cuando los necesites</li>
                 <li><span class="check">✓</span> Comparación contra el promedio de tu categoría</li>
@@ -7930,7 +7876,7 @@ app.get("/", (req, res) => {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Tapin — Convierte cada visita en una reseña de Google</title>
-        <meta name="description" content="Tapin: tarjeta NFC para negocios en Colombia que aumenta las reseñas de Google en segundos. Panel con estadísticas, fidelización de clientes y reportes automáticos con el Plan Pro.">
+        <meta name="description" content="Tapin: tarjeta NFC para negocios en Colombia que aumenta las reseñas de Google en segundos. Panel con estadísticas y reportes automáticos con el Plan Pro.">
         <meta name="google-site-verification" content="H7LUjIzom1urhBIS-T8yWBsUl1T2-o6NBbVAiEZf-Nw" />
         <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d432b'/%3E%3Ctext x='32' y='46' text-anchor='middle' font-family='Arial,sans-serif' font-size='42' font-weight='700' fill='%23fbf6e9'%3ET%3C/text%3E%3C/svg%3E">
         <meta property="og:title" content="Tapin — Convierte cada visita en una reseña de Google">
@@ -8159,14 +8105,13 @@ app.get("/", (req, res) => {
 
             <div class="flujo flujo-pro">
               <div class="flujo-cabecera"><span class="flujo-etiqueta">Con Plan Pro</span><h3>Con herramientas Pro</h3></div>
-              <p class="flujo-descripcion"><b>Estas herramientas solo están incluidas en el Plan Pro:</b> seguimiento detallado de cada visita, fidelización de clientes y reportes automáticos para tu negocio.</p>
+              <p class="flujo-descripcion"><b>Estas herramientas solo están incluidas en el Plan Pro:</b> seguimiento detallado de cada visita y reportes automáticos para tu negocio.</p>
               <div class="pasos">
                 <div class="paso paso-pro"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
                 <div class="paso paso-pro"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código, completas los datos y activas el Plan Pro.</p></div>
                 <div class="paso paso-pro"><div class="paso-num">3</div><h3>El cliente toca la tarjeta</h3><p>Al acercar el celular, se abre el enlace para dejar la reseña en Google, igual que en el plan básico.</p></div>
-                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">4</div><h3>Suma un sello de fidelización</h3><p>Si el cliente tiene sesión iniciada, esa visita suma puntos para tu programa de fidelización, sin que tenga que hacer nada extra.</p></div>
-                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">5</div><h3>Historial detallado de cada toque</h3><p>Fecha, hora y tipo de dispositivo quedan registrados automáticamente para que tengas visibilidad completa de la actividad de tu tarjeta.</p></div>
-                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">6</div><h3>Recibe el reporte mensual</h3><p>El último paso es un reporte mensual con todas tus estadísticas y análisis: horas pico, subidas, caídas y comparación con otros negocios de tu sector.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">4</div><h3>Historial detallado de cada toque</h3><p>Fecha, hora y tipo de dispositivo quedan registrados automáticamente para que tengas visibilidad completa de la actividad de tu tarjeta.</p></div>
+                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">5</div><h3>Recibe el reporte mensual</h3><p>El último paso es un reporte mensual con todas tus estadísticas y análisis: horas pico, subidas, caídas y comparación con otros negocios de tu sector.</p></div>
               </div>
             </div>
           </div>
@@ -8183,7 +8128,7 @@ app.get("/", (req, res) => {
 
           <div id="precios">
             <div class="seccion-titulo">Lo que cuesta, sin letra pequeña</div>
-            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres fidelización de clientes, reportes automáticos y más. Para pagar la mensualidad Pro primero debes tener una tarjeta Tapin.</div>
+            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres estadísticas detalladas, reportes automáticos y más. Para pagar la mensualidad Pro primero debes tener una tarjeta Tapin.</div>
             <div class="planes">
               <div class="plan">
                 <div class="plan-nombre">Pago único</div>
@@ -8206,13 +8151,11 @@ app.get("/", (req, res) => {
                 <ul>
                   <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
                   <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                  <li><span class="check">✓</span> Programa de fidelización de clientes con sellos automáticos</li>
                   <li><span class="check">✓</span> Historial detallado de cada toque y estadísticas completas</li>
                   <li><span class="check">✓</span> Reporte PDF mensual con horas pico, subidas y caídas</li>
                   <li><span class="check">✓</span> Comparación y análisis frente a negocios del mismo sector</li>
                   <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
                   <li><span class="check">✓</span> Recomendaciones automáticas para tu negocio</li>
-                  <li><span class="check">✓</span> Programa de fidelización de clientes</li>
                 </ul>
               </div>
             </div>
@@ -8258,15 +8201,11 @@ app.get("/", (req, res) => {
               </details>
               <details class="faq-item">
                 <summary>¿Cuál es la diferencia entre la tarjeta y el Plan Pro?</summary>
-                <p>La compra básica incluye la tarjeta física, el envío y el acceso esencial. El Plan Pro añade programa de fidelización de clientes, estadísticas detalladas, reportes automáticos y otras herramientas avanzadas.</p>
+                <p>La compra básica incluye la tarjeta física, el envío y el acceso esencial. El Plan Pro añade estadísticas detalladas, reportes automáticos y otras herramientas avanzadas.</p>
               </details>
               <details class="faq-item">
                 <summary>¿Necesito una tarjeta Tapin para contratar el Plan Pro?</summary>
                 <p>Sí. La mensualidad Pro funciona sobre una tarjeta Tapin activa. Primero debes tener y activar tu tarjeta para poder utilizar las funciones Pro.</p>
-              </details>
-              <details class="faq-item">
-                <summary>¿Qué incluye el programa de fidelización del Plan Pro?</summary>
-                <p>Cada vez que un cliente con sesión iniciada usa tu tarjeta, suma un sello automáticamente. Al llegar a la meta que tú definas, se lleva el premio que elijas — sin que tengas que hacer seguimiento manual.</p>
               </details>
               <details class="faq-item">
                 <summary>¿Qué incluye el reporte mensual Pro?</summary>
@@ -9112,7 +9051,7 @@ app.get("/mejorar-a-pro/:slug", (req, res) => {
             : `<p>Pagas el primer mes ahora y queda activo de inmediato. Los meses siguientes se cobran automáticamente a la tarjeta que registres después de este pago.</p>`}
           <ul>
             <li>Gráfica de horas pico</li>
-            <li>Programa de fidelización de clientes</li>
+            <li>Historial detallado de cada toque</li>
             <li>Actividad reciente al detalle</li>
             <li>Recomendaciones automáticas</li>
             <li>Reporte mensual automático y exportes</li>
