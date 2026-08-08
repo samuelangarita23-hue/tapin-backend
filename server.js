@@ -2625,7 +2625,7 @@ app.get("/activar/:codigo", (req, res) => {
                      ✓ Plan Pro ${entrada.planProTipo === "anual" ? "anual" : "mensual"} — ya incluido con la compra de esta tarjeta
                    </div>`
                 : `<div style="background:${MARCA.crema};color:${MARCA.textoSuave};padding:12px 14px;border-radius:9px;font-size:0.88rem;">
-                     Solo tarjeta ($${PRECIO_BASICO_COP.toLocaleString("es-CO")} — pago único con todas las estadísticas). El Filtro Pro es opcional.
+                     Plan Básico ($119.900 — pago único). ¿Quieres Pro? Lo puedes agregar después desde tu panel.
                    </div>`}
 
               <label>País (define la hora local de los reportes)</label>
@@ -3498,18 +3498,16 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   // controles permanecen desactivados hasta mejorar a Pro.
   const promSector = promedioSector(negocio.categoria, slug, datos);
 
-  // Todas las estadísticas del negocio vienen incluidas con la tarjeta —
-  // esPro() ya no gatea nada de esto, ahora solo indica si tiene el Filtro
-  // Legal (retroalimentación privada) activo.
-  const diaFlojo = diaMasFlojo(eventos, negocio);
-  const caida = !negocio.pausado ? alertaCaidaPropia(eventos, r.semana) : null;
-  const clientesRecurrentes = contarClientesRecurrentes(slug);
-  const percentil = percentilCategoria(negocio, slug, todosNegocios, datos);
+  // Ideas 5-9: solo tienen sentido para negocios Pro (van en esa sección del panel).
+  const diaFlojo = esPro(negocio) ? diaMasFlojo(eventos, negocio) : null;
+  const caida = esPro(negocio) && !negocio.pausado ? alertaCaidaPropia(eventos, r.semana) : null;
+  const clientesRecurrentes = esPro(negocio) ? contarClientesRecurrentes(slug) : 0;
+  const percentil = esPro(negocio) ? percentilCategoria(negocio, slug, todosNegocios, datos) : null;
 
   // Idea 9: resumen de los últimos 30 días en una sola frase, combinando lo
   // que ya calculamos (mejor no repetir cálculos: reutiliza horas y r).
   let resumenFrase = null;
-  if (r.total > 0) {
+  if (esPro(negocio) && r.total > 0) {
     const partes = [`${r.semana} toques esta semana`];
     if (horas.totalMes > 0) partes.push(`pico ${horas.picoHora}:00`);
     if (totalCalificado > 0) partes.push(`${pctPositivas}% positivas`);
@@ -3692,7 +3690,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               <div class="ultimo-toque" style="margin-top:12px;">Total histórico: <b>${r.total}</b> · Último toque: <b>${ultimoTexto}</b></div>
             </div>
 
-            <div class="dash-panel proyeccion-panel">
+            <div class="dash-panel proyeccion-panel ${esPro(negocio) ? "" : "tarjeta-bloqueada"}">
               <div class="dash-panel-top">
                 <div>
                   <div class="dash-panel-titulo">Proyección</div>
@@ -3811,7 +3809,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           </div>
           ` : ""}
 
-          ${true ? `
+          ${esPro(negocio) ? `
           <section class="panel-boceto panel-pro" aria-label="Resumen detallado del negocio">
             <div class="boceto-fila-superior">
               <div class="boceto-bloque">
@@ -6090,7 +6088,7 @@ app.get("/conoce", (req, res) => {
             </div>
           </div>
 
-          <div class="seccion-titulo" id="precios">Precios claros</div>
+          <div class="seccion-titulo" id="precios">Precios por cantidad</div>
           <div class="precios-grid">
             <div class="precio-card">
               <div class="precio-card-titulo">Compra de tarjetas</div>
@@ -6104,17 +6102,20 @@ app.get("/conoce", (req, res) => {
               </table>
             </div>
             <div class="precio-card">
-              <div class="precio-card-titulo">Plan Pro · Filtro legal</div>
-              <div class="precio-card-sub">Precio fijo mensual por cada tarjeta activa</div>
+              <div class="precio-card-titulo">Suscripción Plan Pro</div>
               <table class="tabla-precios">
-                <tr><th>Servicio</th><th>Precio mensual</th></tr>
-                ${filasTablaProHtml()}
+                <tr><th>Tarjetas activas</th><th>Precio c/u / mes</th></tr>
+                ${ESCALONES_PRO.slice().reverse().map((e, i, arr) => {
+                  const siguiente = arr[i + 1];
+                  const rango = siguiente ? `${e.minimo}-${siguiente.minimo - 1}` : `${e.minimo}+`;
+                  return `<tr><td>${rango}</td><td>$${e.precio.toLocaleString("es-CO")}</td></tr>`;
+                }).join("")}
               </table>
             </div>
           </div>
 
           <div class="nota">
-            <b>Todo el análisis ya está incluido:</b> la tarjeta de $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP incluye el panel, historial, horas pico, calendario, comparación con tu sector y reportes. El Plan Pro de $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes es opcional y corresponde únicamente al filtro legal de calificación y retroalimentación privada.
+            <b>Sobre las reseñas:</b> más volumen de reseñas totales, buenas y malas, es lo que Google y tus clientes realmente valoran — un perfil con solo reseñas positivas suele generar desconfianza. Tapin te ayuda a que más clientes lleguen a dejar su reseña, y con el Plan Pro tienes las estadísticas para saber cuándo y por qué sube o baja tu actividad.
           </div>
 
           <a class="cta" href="/pedido">Pedir mi tarjeta Tapin →</a>
@@ -7671,24 +7672,21 @@ app.get("/", (req, res) => {
 
           <div id="precios">
             <div class="seccion-titulo">Lo que cuesta, sin letra pequeña</div>
-            <div class="seccion-sub">La tarjeta incluye todas las estadísticas por un único pago. El Plan Pro es opcional y añade el filtro de calificación compatible con las políticas de Google.</div>
+            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres estadísticas al detalle, reportes automáticos y más. Para pagar la mensualidad Pro primero debes tener una tarjeta Tapin.</div>
             <div class="planes">
               <div class="plan">
-                <div class="plan-nombre">Solo tarjeta</div>
+                <div class="plan-nombre">Pago único</div>
                 <div class="plan-precio">$${PRECIO_BASICO_COP.toLocaleString("es-CO")}<span> COP</span></div>
-                <p style="font-size:0.78rem;color:${MARCA.verde};font-weight:700;margin:-6px 0 14px;">Pago único · sin mensualidad</p>
                 <ul>
                   <li><span class="check">✓</span> Tarjeta NFC física + envío incluido</li>
-                  <li><span class="check">✓</span> Enlace directo a tus reseñas de Google</li>
-                  <li><span class="check">✓</span> Panel completo con historial y todas las estadísticas</li>
-                  <li><span class="check">✓</span> Calendario, horas pico y comparación con tu sector</li>
-                  <li><span class="check">✓</span> Reportes y recomendaciones para tu negocio</li>
+                  <li><span class="check">✓</span> Redirección automática a tus reseñas de Google</li>
+                  <li><span class="check">✓</span> Panel con historial y estadísticas</li>
                   <li><span class="check">✓</span> Acta de entrega formal</li>
                 </ul>
               </div>
               <div class="plan pro">
-                <div class="plan-badge">OPCIONAL</div>
-                <div class="plan-nombre">Plan Pro · Filtro legal</div>
+                <div class="plan-badge">RECOMENDADO</div>
+                <div class="plan-nombre">Mensualidad Pro</div>
                 <div class="plan-precio">$${PRECIO_PRO_COP.toLocaleString("es-CO")}<span> COP/mes</span></div>
                 <div class="plan-anual">
                   <div><div class="plan-anual-etiqueta">Pago anual</div><div class="plan-anual-precio">$${PRECIO_PRO_ANUAL_COP.toLocaleString("es-CO")} COP/año</div></div>
@@ -7696,11 +7694,13 @@ app.get("/", (req, res) => {
                 </div>
                 <ul>
                   <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
-                  <li><span class="check">✓</span> Pantalla de calificación para todos los clientes</li>
-                  <li><span class="check">✓</span> Siempre muestra la opción de reseña en Google</li>
-                  <li><span class="check">✓</span> Añade retroalimentación privada sin ocultar reseñas</li>
-                  <li><span class="check">✓</span> Alertas por correo cuando un cliente te escribe</li>
-                  <li><span class="check">✓</span> Cumple con las políticas de reseñas de Google</li>
+                  <li><span class="check">✓</span> Todo lo del pago único, más:</li>
+                  <li><span class="check">✓</span> Historial detallado de cada toque y estadísticas completas</li>
+                  <li><span class="check">✓</span> Reporte PDF mensual con horas pico, subidas y caídas</li>
+                  <li><span class="check">✓</span> Comparación y análisis frente a negocios del mismo sector</li>
+                  <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
+                  <li><span class="check">✓</span> Recomendaciones automáticas para tu negocio</li>
+                  <li><span class="check">✓</span> Programa de fidelización de clientes</li>
                 </ul>
               </div>
             </div>
@@ -7718,10 +7718,10 @@ app.get("/", (req, res) => {
                 </table>
               </div>
               <div class="precio-card">
-                <div class="precio-card-titulo">Plan Pro · Filtro legal</div>
-                <div class="precio-card-sub">Precio fijo mensual por cada tarjeta activa</div>
+                <div class="precio-card-titulo">Suscripción Plan Pro</div>
+                <div class="precio-card-sub">Precio mensual por tarjeta según cuántas tengas activas</div>
                 <table class="tabla-precios tabla-pro">
-                  <tr><th>Servicio</th><th>Precio mensual</th></tr>
+                  <tr><th>Tarjetas activas</th><th>Precio mensual</th></tr>
                   ${filasTablaProHtml()}
                 </table>
               </div>
@@ -7757,12 +7757,12 @@ app.get("/", (req, res) => {
                 <p>Sí. La mensualidad Pro funciona sobre una tarjeta Tapin activa. Primero debes tener y activar tu tarjeta para poder utilizar las funciones Pro.</p>
               </details>
               <details class="faq-item">
-                <summary>¿Qué estadísticas incluye la tarjeta?</summary>
-                <p>La compra única de $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP incluye horas pico, calendario de actividad, comparación semana a semana y contra el promedio de tu sector, reportes y recomendaciones automáticas.</p>
+                <summary>¿Qué estadísticas veo con el Plan Pro?</summary>
+                <p>Horas pico, calendario de actividad, comparación semana a semana y contra el promedio de tu sector, y recomendaciones automáticas generadas a partir de tus propios datos.</p>
               </details>
               <details class="faq-item">
-                <summary>¿Qué incluye el Plan Pro?</summary>
-                <p>Por $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP al mes añade el filtro legal de calificación, retroalimentación privada y alertas por correo. Todas las estadísticas ya están incluidas con la tarjeta.</p>
+                <summary>¿Qué incluye el reporte mensual Pro?</summary>
+                <p>Incluye tus estadísticas completas, actividad, horas pico, subidas y caídas, análisis de resultados y comparación frente a otros negocios de tu sector.</p>
               </details>
               <details class="faq-item">
                 <summary>¿Cómo funcionan los pagos del Plan Pro?</summary>
@@ -7853,21 +7853,33 @@ app.get("/admin/entrar", limitarIntentos(6, 15), (req, res) => {
 });
 
 // ---------- Flujo de compra: pedido → pago con Wompi → confirmación ----------
-// Esto es para la tarjeta ($140.000 COP, pago único, incluye la tarjeta física,
-// el envío y todas las estadísticas). El Filtro Pro mensual se cobra aparte.
+// Esto es para el Plan Básico ($119.900 COP, pago único, incluye la tarjeta física y el envío
+// y el envío). El Plan Pro (mensual) necesita una integración distinta — ver nota
 // al final del archivo README sobre pagos recurrentes.
-const PRECIO_BASICO_COP = 140000; // incluye TODAS las estadísticas — ya no hay plan Gratis con vista bloqueada
-const PRECIO_PRO_COP = 20000; // ahora es el precio del Filtro Legal (retroalimentación + reseña), no de las estadísticas
-const PRECIO_PRO_ANUAL_COP = 216000; // pago único, cubre 12 meses del Filtro Legal (~10% más barato que mes a mes)
-// El Filtro Legal cuesta lo mismo por cada tarjeta activa. Las estadísticas
-// ya vienen incluidas en el pago único de la tarjeta.
+const PRECIO_BASICO_COP = 120000;
+const PRECIO_PRO_COP = 60000;
+const PRECIO_PRO_ANUAL_COP = 648000; // pago único, cubre 12 meses (~10% más barato que mes a mes)
+// Mientras más locales activos en Plan Pro tenga el mismo negocio, más paga
+// por cada uno — al contrario que las tarjetas: un negocio grande saca más
+// valor de comparar entre sus propias sedes, así que tiene sentido que pague
+// más por local, no menos. Ya anunciado en /conoce.
 const ESCALONES_PRO = [
+  { minimo: 50, precio: 200000 },
+  { minimo: 25, precio: 160000 },
+  { minimo: 10, precio: 120000 },
+  { minimo: 4, precio: 90000 },
   { minimo: 1, precio: PRECIO_PRO_COP },
 ];
 
-// Precio público fijo del Filtro Legal por cada tarjeta activa.
+// Filas comerciales de la tabla pública. A partir de 100 tarjetas se prepara
+// una cotización empresarial en lugar de publicar una tarifa automática.
 const FILAS_TABLA_PRO = [
-  { rango: "Cada tarjeta", precio: PRECIO_PRO_COP },
+  { rango: "1–3", precio: 60000 },
+  { rango: "4–9", precio: 90000 },
+  { rango: "10–24", precio: 120000 },
+  { rango: "25–49", precio: 160000 },
+  { rango: "50–99", precio: 200000 },
+  { rango: "100+", cotizacion: true },
 ];
 
 function filasTablaProHtml() {
@@ -7882,11 +7894,11 @@ function filasTablaProHtml() {
 // tarjeta baja según cuántas se pidan de una vez, pero nunca por debajo de
 // un margen saludable.
 const ESCALONES_DESCUENTO = [
-  { minimo: 100, precio: 84000, descuento: "40%" },
-  { minimo: 50, precio: 91000, descuento: "35%" },
-  { minimo: 25, precio: 98000, descuento: "30%" },
-  { minimo: 10, precio: 112000, descuento: "20%" },
-  { minimo: 4, precio: 126000, descuento: "10%" },
+  { minimo: 100, precio: 72000, descuento: "40%" },
+  { minimo: 50, precio: 78000, descuento: "35%" },
+  { minimo: 25, precio: 84000, descuento: "30%" },
+  { minimo: 10, precio: 96000, descuento: "20%" },
+  { minimo: 4, precio: 108000, descuento: "10%" },
   { minimo: 1, precio: PRECIO_BASICO_COP, descuento: null },
 ];
 function precioTarjetaPorCantidad(cantidad) {
@@ -7950,7 +7962,7 @@ app.get("/pedido", (req, res) => {
           <div class="logo">${logoSvg(MARCA.verdeOscuro, 26)}</div>
           <h1>Pide tu tarjeta Tapin</h1>
           <p>Llena tus datos, paga en línea con Wompi, y te enviamos la tarjeta a tu negocio.</p>
-          <div class="precio">Solo tarjeta — $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP c/u (pago único, envío y estadísticas incluidos)</div>
+          <div class="precio">Plan Básico — $${PRECIO_BASICO_COP.toLocaleString("es-CO")} COP c/u (incluye envío)</div>
           <form method="POST" action="/pedido">
             <label>¿Cuántas tarjetas necesitas?</label>
             <input type="number" name="cantidad" id="input-cantidad" min="1" max="500" value="1" required>
@@ -7981,8 +7993,8 @@ app.get("/pedido", (req, res) => {
             <label class="pro-opcion" style="cursor:pointer;">
               <input type="checkbox" name="incluirPro" id="check-incluir-pro" value="si" onchange="document.getElementById('opciones-plan-pro').style.display=this.checked?'block':'none';">
               <span class="txt">
-                <b>Incluir Plan Pro · Filtro legal</b>
-                Añade la pantalla de calificación, retroalimentación privada y alertas, cumpliendo con las políticas de Google.
+                <b>Incluir Plan Pro</b>
+                Rescate de reseñas negativas en tiempo real, reportes mensuales y más. Se cobra junto con tu tarjeta en este mismo pago.
               </span>
             </label>
 
