@@ -3995,11 +3995,10 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           .config-header{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:24px;}
           .config-header .titulo-pagina{margin-bottom:0;}
           .config-subtitulo{max-width:480px;color:${MARCA.textoSuave};font-size:.82rem;line-height:1.5;text-align:right;}
-          .config-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start;}
-          .config-grid.config-pro{grid-template-areas:"sus alert" "meta alert" "pause read" "audit audit";}
-          .config-grid.config-gratis{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:"meta read pause" "audit audit audit";align-items:stretch;}
-          .config-grid.config-gratis>.form-card:not(.config-auditoria){display:flex;flex-direction:column;height:100%;}
-          .config-grid.config-gratis>.form-card:not(.config-auditoria)>form{margin-top:auto;}
+          .config-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:stretch;
+                       grid-template-areas:"meta alert" "pause read" "audit audit";}
+          .config-grid>.form-card:not(.config-auditoria){display:flex;flex-direction:column;height:100%;}
+          .config-grid>.form-card:not(.config-auditoria)>form{margin-top:auto;}
           .config-suscripcion{grid-area:sus}.config-meta{grid-area:meta}.config-alertas{grid-area:alert}
           .config-pausar{grid-area:pause}.config-lectura{grid-area:read}.config-auditoria{grid-area:audit}
           .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:22px;max-width:none;margin:0;
@@ -4020,12 +4019,12 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           .linea-audit b{color:${MARCA.texto};font-weight:600;}
           .config-auditoria .linea-audit:last-child{border-bottom:none;}
           @media(max-width:980px){
-            .config-grid.config-gratis{grid-template-columns:1fr 1fr;grid-template-areas:"meta read" "pause pause" "audit audit";}
+            .config-grid{grid-template-areas:"meta alert" "pause read" "audit audit";}
           }
           @media(max-width:760px){
             .config-header{align-items:flex-start;flex-direction:column;}
             .config-subtitulo{text-align:left;}
-            .config-grid,.config-grid.config-pro,.config-grid.config-gratis{grid-template-columns:1fr;grid-template-areas:none;}
+            .config-grid{grid-template-columns:1fr;grid-template-areas:none;}
             .config-grid>*{grid-area:auto!important;}
             .linea-audit{align-items:flex-start;flex-direction:column;gap:3px;}
           }
@@ -4039,7 +4038,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
             <div class="config-subtitulo">Administra tus metas, alertas, accesos y el estado del negocio desde un solo lugar.</div>
           </div>
 
-          <div class="config-grid config-gratis">
+          <div class="config-grid">
 
           <div class="form-card config-meta">
             <h3>Meta mensual</h3>
@@ -4151,292 +4150,6 @@ function normalizarIdentificador(valor) {
   return (valor || "").trim().toLowerCase();
 }
 
-// Suma un sello de fidelización — reutilizable desde cualquier punto donde
-// identifiquemos al cliente (ya no depende de tocar una tarjeta física
-// aparte; se dispara automáticamente al calificar con la tarjeta de reseñas).
-function sumarSelloFidelizacion(slug, negocio, identificador, nombre) {
-  const fid = negocio.fidelizacion;
-  if (!fid) return null;
-  const id = normalizarIdentificador(identificador);
-  if (!id) return null;
-
-  const datos = leerDatos();
-  if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
-  if (!datos[slug].fidelizacion) datos[slug].fidelizacion = {};
-  const actual = datos[slug].fidelizacion[id] || { sellos: 0, nombre: nombre || id };
-  actual.sellos = (actual.sellos || 0) + 1;
-  if (nombre) actual.nombre = nombre;
-  datos[slug].fidelizacion[id] = actual;
-  guardarDatos(datos);
-
-  return { actual, fid, listo: actual.sellos >= fid.metaSellos };
-}
-
-app.get("/mi-panel/:slug/fidelizacion", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  const claveUsada = claveEfectiva(req, slug);
-  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
-    return res.status(401).send("No autorizado.");
-  }
-  if (!esPro(negocio)) {
-    return res.status(402).send(
-      `La fidelización es exclusiva del Plan Pro. ` +
-      `Súbele el plan a "${negocio.nombre}" desde /mejorar-a-pro/${slug}?key=${claveUsada} para activarla.`
-    );
-  }
-  req.query.key = claveUsada;
-
-  const fid = negocio.fidelizacion || { metaSellos: 10, premio: "" };
-  const datos = leerDatos();
-  const clientesFid = (datos[slug] && datos[slug].fidelizacion) || {};
-  const totalClientes = Object.keys(clientesFid).length;
-  const listosParaPremio = Object.values(clientesFid).filter((c) => c.sellos >= fid.metaSellos).length;
-
-  const filas = Object.entries(clientesFid)
-    .sort((a, b) => (b[1].sellos || 0) - (a[1].sellos || 0))
-    .map(([id, c]) => {
-      const listo = fid.metaSellos && c.sellos >= fid.metaSellos;
-      return `<tr style="${listo ? `background:${MARCA.verdeClaro};` : ""}">
-        <td>${escaparHtml(c.nombre || id)}</td>
-        <td>${id}</td>
-        <td>${c.sellos || 0} / ${fid.metaSellos || "—"}</td>
-        <td>${listo
-          ? `<a href="/mi-panel/${slug}/fidelizacion/${encodeURIComponent(id)}/canjear?key=${claveUsada}" style="color:${MARCA.verdeOscuro};font-weight:700;">Canjear premio</a>`
-          : ""}</td>
-      </tr>`;
-    })
-    .join("");
-
-  res.send(`
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Fidelización — ${negocio.nombre}</title>
-        <style>
-          ${ESTILO_BASE}
-          table{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden;border:1px solid ${MARCA.borde};margin-bottom:24px;}
-          th,td{padding:10px 14px;text-align:left;border-bottom:1px solid ${MARCA.borde};font-size:0.85rem;}
-          th{background:${MARCA.verdeOscuro};color:#fff;font-size:0.7rem;text-transform:uppercase;}
-          a{color:${MARCA.verde};font-weight:600;text-decoration:none;font-size:0.82rem;}
-          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:22px;max-width:420px;margin-bottom:24px;}
-          input{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;}
-          label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin-bottom:6px;}
-          button{width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:12px;font-weight:700;cursor:pointer;}
-          .tarjeta-info{background:${MARCA.verdeClaro};border-radius:10px;padding:14px 16px;font-size:0.85rem;color:${MARCA.verdeOscuro};margin-bottom:24px;}
-          .metrics{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;}
-          .metric{background:#fff;border:1px solid ${MARCA.borde};border-radius:12px;padding:14px 18px;flex:1;min-width:120px;text-align:center;}
-          .metric-num{font-size:1.5rem;font-weight:800;color:${MARCA.verdeOscuro};}
-          .metric-lbl{font-size:0.7rem;color:${MARCA.textoSuave};text-transform:uppercase;margin-top:2px;}
-        </style>
-      </head>
-      <body>
-        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div><a class="back" href="/mi-panel/${slug}?key=${claveUsada}" style="color:#CFE3D8;">&larr; Volver al panel</a></div>
-        <div class="content">
-          <div class="eyebrow">Plan Pro · ${negocio.nombre}</div>
-          <h1 class="titulo-pagina">Fidelización</h1>
-          <div class="subtitulo">Cada visita suma un sello. Tú decides cada cuántos y qué se ganan.</div>
-
-          <div class="metrics">
-            <div class="metric"><div class="metric-num">${totalClientes}</div><div class="metric-lbl">Clientes en el programa</div></div>
-            <div class="metric"><div class="metric-num">${listosParaPremio}</div><div class="metric-lbl">Con premio listo</div></div>
-          </div>
-
-          <div class="tarjeta-info">
-            No necesitas otra tarjeta — funciona con la misma tarjeta de reseñas. Cuando un cliente con cuenta en Tapin califica tu negocio (cualquier estrella), le suma un sello automáticamente.
-          </div>
-
-          <a href="/mi-panel/${slug}/fidelizacion/exportar.csv?key=${claveUsada}" style="display:inline-block;margin-bottom:22px;">Exportar clientes a CSV →</a>
-
-          <div class="form-card">
-            <h3 style="margin-top:0;">Configuración</h3>
-            <form method="POST" action="/mi-panel/${slug}/fidelizacion?key=${claveUsada}">
-              <label>¿Cada cuántos sellos se gana algo?</label>
-              <input type="number" name="metaSellos" min="1" max="100" value="${fid.metaSellos || 10}" required>
-              <label>¿Qué se gana? (se le muestra tal cual al cliente)</label>
-              <input type="text" name="premio" value="${fid.premio || ""}" placeholder="Ej: Café gratis, 10% de descuento..." required>
-              <button type="submit">Guardar</button>
-            </form>
-          </div>
-
-          <table>
-            <tr><th>Cliente</th><th>Identificador</th><th>Sellos</th><th>Acción</th></tr>
-            ${filas || `<tr><td colspan="4">Todavía no hay clientes en el programa de fidelización.</td></tr>`}
-          </table>
-        </div>
-      </body>
-    </html>
-  `);
-});
-
-app.post("/mi-panel/:slug/fidelizacion", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  const claveUsada = claveEfectiva(req, slug);
-  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
-    return res.status(401).send("No autorizado.");
-  }
-  if (!esPro(negocio)) return res.status(402).send("Exclusivo del Plan Pro.");
-
-  const metaSellos = Math.min(100, Math.max(1, parseInt(req.body.metaSellos, 10) || 10));
-  const premio = (req.body.premio || "").trim();
-  if (!premio) return res.status(400).send("Falta describir el premio.");
-
-  guardarCambiosNegocio(slug, negocio, { fidelizacion: { metaSellos, premio } });
-  res.redirect(`/mi-panel/${slug}/fidelizacion?key=${claveUsada}`);
-});
-
-// Idea 2: exportar la lista de clientes de fidelización a CSV, para que el
-// negocio les pueda escribir por su cuenta (WhatsApp, email marketing, etc.).
-app.get("/mi-panel/:slug/fidelizacion/exportar.csv", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  const claveUsada = claveEfectiva(req, slug);
-  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
-    return res.status(401).send("No autorizado.");
-  }
-  const fid = negocio.fidelizacion || { metaSellos: 10 };
-  const datos = leerDatos();
-  const clientesFid = (datos[slug] && datos[slug].fidelizacion) || {};
-
-  let csv = "Nombre,Identificador,Sellos,Meta,Premio disponible\n";
-  for (const [id, c] of Object.entries(clientesFid)) {
-    const listo = c.sellos >= fid.metaSellos ? "Sí" : "No";
-    csv += `"${(c.nombre || id).replace(/"/g, '""')}","${id}",${c.sellos || 0},${fid.metaSellos},${listo}\n`;
-  }
-  res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename="fidelizacion-${slug}.csv"`);
-  res.send("\uFEFF" + csv); // BOM para que Excel abra bien los acentos
-});
-
-app.get("/mi-panel/:slug/fidelizacion/:id/canjear", (req, res) => {
-  const { slug, id } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  const claveUsada = claveEfectiva(req, slug);
-  if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, claveUsada)) {
-    return res.status(401).send("No autorizado.");
-  }
-  const datos = leerDatos();
-  if (!datos[slug] || !datos[slug].fidelizacion || !datos[slug].fidelizacion[decodeURIComponent(id)]) {
-    return res.status(404).send("Ese cliente no existe en el programa.");
-  }
-  datos[slug].fidelizacion[decodeURIComponent(id)].sellos = 0;
-  guardarDatos(datos);
-  res.redirect(`/mi-panel/${slug}/fidelizacion?key=${claveUsada}`);
-});
-
-app.get("/fidelidad/:slug", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  if (!esPro(negocio) || !negocio.fidelizacion) {
-    return res.status(402).send("Este negocio no tiene activa la fidelización todavía.");
-  }
-
-  const cliente = clienteActual(req);
-  if (cliente) {
-    return res.redirect(`/fidelidad/${slug}/sumar?id=${encodeURIComponent(normalizarIdentificador(cliente.email))}&nombre=${encodeURIComponent(cliente.nombre || "")}`);
-  }
-
-  res.send(`
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:${MARCA.verdeOscuro};margin:0;
-               min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
-          .box{background:#fff;border-radius:18px;padding:32px 26px;max-width:360px;width:100%;text-align:center;}
-          h1{font-size:1.15rem;color:${MARCA.texto};margin:14px 0 4px;}
-          p{color:${MARCA.textoSuave};font-size:0.85rem;margin:0 0 20px;}
-          input{width:100%;padding:13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.95rem;box-sizing:border-box;margin-bottom:12px;}
-          button{width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:13px;font-weight:700;cursor:pointer;}
-          .divisor{font-size:0.76rem;color:#999;margin:16px 0;}
-        </style>
-      </head>
-      <body>
-        <div class="box">
-          <div>${logoSvg(MARCA.verdeOscuro, 30)}</div>
-          <h1>${negocio.nombre}</h1>
-          <p>Escribe tu correo o celular para sumar tu sello de hoy</p>
-          <form method="POST" action="/fidelidad/${slug}/identificar">
-            <input type="text" name="identificador" required placeholder="Tu correo o celular">
-            <input type="text" name="nombre" placeholder="Tu nombre (opcional)">
-            <button type="submit">Sumar mi sello</button>
-          </form>
-          <div class="divisor">¿Ya tienes cuenta en Tapin? <a href="/cliente" style="color:${MARCA.verde};">Inicia sesión</a> y no tengas que escribir esto cada vez.</div>
-        </div>
-      </body>
-    </html>
-  `);
-});
-
-app.post("/fidelidad/:slug/identificar", (req, res) => {
-  const { slug } = req.params;
-  const identificador = normalizarIdentificador(req.body.identificador);
-  if (!identificador) return res.status(400).send("Falta tu correo o celular.");
-  res.redirect(`/fidelidad/${slug}/sumar?id=${encodeURIComponent(identificador)}&nombre=${encodeURIComponent(req.body.nombre || "")}`);
-});
-
-app.get("/fidelidad/:slug/sumar", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  const fid = negocio.fidelizacion;
-  if (!esPro(negocio) || !fid) {
-    return res.status(402).send("Este negocio no tiene activa la fidelización todavía.");
-  }
-
-  const id = normalizarIdentificador(req.query.id);
-  if (!id) return res.status(400).send("Falta identificador.");
-  const nombre = (req.query.nombre || "").trim();
-
-  const datos = leerDatos();
-  if (!datos[slug]) datos[slug] = { total: 0, eventos: [] };
-  if (!datos[slug].fidelizacion) datos[slug].fidelizacion = {};
-  const actual = datos[slug].fidelizacion[id] || { sellos: 0, nombre: nombre || id };
-  actual.sellos = (actual.sellos || 0) + 1;
-  if (nombre) actual.nombre = nombre;
-  datos[slug].fidelizacion[id] = actual;
-  guardarDatos(datos);
-
-  const listo = actual.sellos >= fid.metaSellos;
-
-  res.send(`
-    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-      body{font-family:-apple-system,sans-serif;background:${MARCA.verdeOscuro};display:flex;align-items:center;
-      justify-content:center;min-height:100vh;margin:0;padding:24px;}
-      .box{background:#fff;border-radius:18px;padding:36px 28px;max-width:360px;text-align:center;}
-      .check{font-size:2.5rem;margin-bottom:10px;}
-      .sellos{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin:16px 0;}
-      .sello{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-             font-size:0.8rem;font-weight:700;}
-      .sello.lleno{background:${MARCA.oro};color:#fff;}
-      .sello.vacio{background:${MARCA.crema};color:${MARCA.textoSuave};border:1px solid ${MARCA.borde};}
-    </style></head>
-    <body><div class="box">
-      <div class="check">${listo ? "🎉" : "✓"}</div>
-      <h2>${listo ? "¡Premio desbloqueado!" : "¡Sello sumado!"}</h2>
-      <div class="sellos">
-        ${Array.from({ length: fid.metaSellos }, (_, i) =>
-          `<div class="sello ${i < actual.sellos % fid.metaSellos || (listo && i < fid.metaSellos) ? "lleno" : "vacio"}">${i + 1}</div>`
-        ).join("")}
-      </div>
-      <p style="color:${MARCA.textoSuave};">
-        ${listo
-          ? `Ya tienes: <b>${fid.premio}</b> — muéstrale esta pantalla al negocio.`
-          : `Llevas <b>${actual.sellos} de ${fid.metaSellos}</b> — sigue así para ganar: ${fid.premio}`}
-      </p>
-      <a href="/cuenta" style="display:inline-block;margin-top:14px;color:${MARCA.verde};font-weight:700;font-size:0.85rem;">Ver todas mis fidelizaciones →</a>
-    </div></body></html>
-  `);
-});
 
 // Mismo reporte que el PDF, pero para ver directo en el navegador sin descargar nada.
 // Visítalo así: https://tu-dominio.com/reporte/mi-negocio?key=TU_CLAVE
@@ -5780,7 +5493,6 @@ app.get("/conoce", (req, res) => {
                 <li><span class="check">✓</span> Reporte PDF mensual automático</li>
                 <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
                 <li><span class="check">✓</span> Recomendaciones automáticas para tu negocio</li>
-                <li><span class="check">✓</span> Programa de fidelización de clientes</li>
                 <li><span class="check">✓</span> Acta de entrega formal</li>
               </ul>
             </div>
@@ -6579,89 +6291,6 @@ app.get("/cuenta", (req, res) => {
     .filter((slug) => !favoritos.includes(slug) && categoriasFavoritas.has(todos[slug].categoria))
     .slice(0, 3);
 
-  // Zona de fidelización: recorre todos los negocios que tengan el programa
-  // activo y ve si este cliente (por su correo) ya tiene sellos ahí.
-  const datosGlobales = leerDatos();
-  const miIdentificador = normalizarIdentificador(cliente.email);
-  const misFidelizaciones = Object.keys(todos)
-    .filter((slug) => todos[slug].fidelizacion)
-    .map((slug) => {
-      const negocio = todos[slug];
-      const fid = negocio.fidelizacion;
-      const registro = datosGlobales[slug] && datosGlobales[slug].fidelizacion && datosGlobales[slug].fidelizacion[miIdentificador];
-      if (!registro || !registro.sellos) return null;
-      return {
-        slug, nombre: negocio.nombre, categoria: negocio.categoria || "otro",
-        sellos: registro.sellos, meta: fid.metaSellos, premio: fid.premio,
-        listo: registro.sellos >= fid.metaSellos,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => (b.sellos / b.meta) - (a.sellos / a.meta));
-
-  if (misFidelizaciones.some((f) => f.listo)) insignias.push({ texto: "Beneficio ganado", icono: "✓" });
-
-  // Idea 8: avisa si el beneficio de fidelización de algún negocio cambió desde la última vez que lo vio.
-  const vistosAntes = cliente.fidelizacionVista || {};
-  const fidelizacionesConCambio = misFidelizaciones.map((f) => {
-    const antes = vistosAntes[f.slug];
-    const cambio = antes && (antes.premio !== f.premio || antes.meta !== f.meta);
-    return { ...f, cambio: !!cambio };
-  });
-  // Actualiza lo que "ya vio" para la próxima carga (no bloquea la respuesta).
-  if (misFidelizaciones.length > 0) {
-    const clientes = leerClientes();
-    if (clientes[cliente.id]) {
-      const nuevaVista = { ...vistosAntes };
-      misFidelizaciones.forEach((f) => { nuevaVista[f.slug] = { premio: f.premio, meta: f.meta }; });
-      clientes[cliente.id].fidelizacionVista = nuevaVista;
-      guardarClientes(clientes);
-    }
-  }
-
-  const anilloProgreso = (sellos, meta, listo) => {
-    const pct = Math.min(1, sellos / meta);
-    const radio = 23;
-    const circunferencia = 2 * Math.PI * radio;
-    const offset = circunferencia * (1 - pct);
-    const color = listo ? MARCA.oro : MARCA.verde;
-    return `
-      <svg width="56" height="56" viewBox="0 0 56 56" style="transform:rotate(-90deg);flex-shrink:0;">
-        <circle cx="28" cy="28" r="${radio}" fill="none" stroke="${MARCA.borde}" stroke-width="5"/>
-        <circle cx="28" cy="28" r="${radio}" fill="none" stroke="${color}" stroke-width="5"
-                stroke-dasharray="${circunferencia}" stroke-dashoffset="${offset}" stroke-linecap="round"/>
-      </svg>`;
-  };
-
-  const fidelizacionesHtml = fidelizacionesConCambio
-    .map((f, i) => {
-      const icono = svgCategoria(f.categoria, MARCA.verdeOscuro);
-      const faltan = Math.max(0, f.meta - f.sellos);
-      return `
-        <div class="fid-card ${f.listo ? "fid-lista" : ""}" onclick="alternarFid(${i})">
-          ${f.cambio ? `<div style="font-size:0.68rem;font-weight:700;color:${MARCA.verdeOscuro};margin-bottom:6px;">● Beneficio actualizado</div>` : ""}
-          <div class="fid-fila">
-            <div class="fid-anillo-wrap">
-              ${anilloProgreso(f.sellos, f.meta, f.listo)}
-              <div class="fid-anillo-centro">${icono}</div>
-            </div>
-            <div class="fid-info">
-              <div class="fid-nombre">${f.nombre}</div>
-              <div class="fid-progreso">${f.sellos} de ${f.meta} visitas registradas</div>
-              ${f.listo
-                ? `<div class="fid-estado fid-estado-listo">Beneficio disponible</div>`
-                : `<div class="fid-estado">Faltan ${faltan} para tu beneficio</div>`}
-            </div>
-            <div class="fid-flecha" id="fid-flecha-${i}">⌄</div>
-          </div>
-          <div class="fid-detalle" id="fid-detalle-${i}">
-            <div class="fid-detalle-linea"><span>Beneficio</span><b>${f.premio}</b></div>
-            <div class="fid-detalle-linea"><span>Progreso</span><b>${f.sellos} / ${f.meta}</b></div>
-            ${f.listo ? `<div class="fid-detalle-nota">Muéstrale esta pantalla al negocio para reclamarlo.</div>` : ""}
-          </div>
-        </div>`;
-    })
-    .join("");
 
   const favoritosHtml = favoritos
     .map((slug) => {
@@ -6871,11 +6500,6 @@ app.get("/cuenta", (req, res) => {
           </div>
 
           ${insigniasHtml ? `<div class="insignias-fila">${insigniasHtml}</div>` : ""}
-
-          ${misFidelizaciones.length > 0 ? `
-          <div class="seccion-titulo">Fidelización</div>
-          <div class="fid-grid">${fidelizacionesHtml}</div>
-          ` : ""}
 
           <div class="seccion-titulo">Tus negocios favoritos</div>
           ${favoritosConMapa.length > 0 ? `<div id="mini-mapa"></div>` : ""}
@@ -7363,8 +6987,7 @@ app.get("/", (req, res) => {
                   <li><span class="check">✓</span> Reporte PDF mensual automático</li>
                   <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
                   <li><span class="check">✓</span> Recomendaciones automáticas para tu negocio</li>
-                  <li><span class="check">✓</span> Programa de fidelización de clientes</li>
-                  <li><span class="check">✓</span> Acta de entrega formal</li>
+                    <li><span class="check">✓</span> Acta de entrega formal</li>
                 </ul>
               </div>
             </div>
@@ -7402,7 +7025,7 @@ app.get("/", (req, res) => {
               </details>
               <details class="faq-item">
                 <summary>¿Qué incluye la tarjeta?</summary>
-                <p>Todo: la tarjeta física con envío, redirección automática a tus reseñas de Google, y el panel completo con historial, horas pico, calendario de actividad, reporte mensual automático, recomendaciones y programa de fidelización. Un solo pago, sin mensualidades ni funciones bloqueadas.</p>
+                <p>Todo: la tarjeta física con envío, redirección automática a tus reseñas de Google, y el panel completo con historial, horas pico, calendario de actividad, reporte mensual automático y recomendaciones. Un solo pago, sin mensualidades ni funciones bloqueadas.</p>
               </details>
               <details class="faq-item">
                 <summary>¿Qué estadísticas veo en mi panel?</summary>
