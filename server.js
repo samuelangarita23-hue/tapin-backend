@@ -1200,6 +1200,33 @@ function calcularResumen(eventos) {
   return { hoy, semana, dias7, ultimo, total: eventos.length };
 }
 
+// Desglosa los toques por tarjeta física de origen (Mesa 1, Silla 2, etc.) —
+// para negocios que vincularon varias tarjetas y quieren ver cuál se usa
+// más. Los toques de la tarjeta principal (sin etiqueta) se agrupan como
+// "Tarjeta principal". Reutiliza el mismo criterio de fechas que
+// calcularResumen para que "Hoy" y "Esta semana" signifiquen lo mismo.
+function calcularActividadPorOrigen(eventos) {
+  const ahora = new Date();
+  const inicioHoy = new Date(ahora);
+  inicioHoy.setHours(0, 0, 0, 0);
+  const inicioSemana = new Date(inicioHoy);
+  inicioSemana.setDate(inicioSemana.getDate() - 6);
+
+  const grupos = {};
+  for (const e of eventos) {
+    const clave = e.origen || "Tarjeta principal";
+    if (!grupos[clave]) grupos[clave] = { etiqueta: clave, hoy: 0, semana: 0, total: 0, ultimo: null };
+    const g = grupos[clave];
+    const fecha = new Date(e.fechaISO);
+    if (fecha >= inicioHoy) g.hoy++;
+    if (fecha >= inicioSemana) g.semana++;
+    g.total++;
+    g.ultimo = e;
+  }
+
+  return Object.values(grupos).sort((a, b) => b.total - a.total);
+}
+
 // Analiza la actividad por hora del día (0-23) durante el último mes, para
 // identificar picos (horas de más movimiento) y caídas (horas muertas).
 // También compara la última semana contra la anterior para ver si el pico
@@ -1518,7 +1545,7 @@ function graficaLinea(valores, { alto = 90, color = MARCA.verde } = {}) {
   </svg>`;
 }
 
-function registrarToque(slug, req, negocio) {
+function registrarToque(slug, req, negocio, origen = null) {
   const datos = leerDatos();
   if (!datos[slug]) {
     datos[slug] = { total: 0, eventos: [] };
@@ -1531,6 +1558,7 @@ function registrarToque(slug, req, negocio) {
     fechaISO: ahora.toISOString(), // fecha exacta en formato estándar (para guardar/exportar)
     fechaLegible: ahora.toLocaleString("es-CO", { timeZone: tz }), // ej: 27/6/2026, 9:14:32 a. m. (hora local del negocio)
     dispositivo: detectarDispositivo(req.headers["user-agent"]),
+    origen: origen || null, // etiqueta de la tarjeta física que lo generó (ej. "Mesa 2") — null = la tarjeta principal
   };
 
   datos[slug].total += 1;
@@ -1736,16 +1764,17 @@ const TODAS_LAS_FRASES_VALIDAS = new Set(Object.values(FRASES_POR_CATEGORIA).fla
 app.get("/r/:slug", (req, res) => {
   const { slug: slugTocado } = req.params;
 
-  // Una tarjeta "vinculada" (agregada como repuesto/extra desde el panel de
-  // un negocio ya existente) no tiene su propio negocio — solo apunta al
-  // slug real. Cualquier toque de esa tarjeta física se cuenta como si fuera
-  // un toque más del negocio al que está vinculada, sin crear una sede aparte.
+  // Una tarjeta "vinculada" (agregada como repuesto/extra, o puesta en una
+  // mesa/silla específica desde el panel de un negocio ya existente) no
+  // tiene su propio negocio — solo apunta al slug real. Cualquier toque de
+  // esa tarjeta física se cuenta como un toque más del negocio al que está
+  // vinculada (sin crear una sede aparte), pero guardamos su etiqueta para
+  // poder ver la actividad de cada mesa/silla por separado en el panel.
   const codigosRaw = leerCodigos();
-  if (codigosRaw[slugTocado] && codigosRaw[slugTocado].alias) {
-    return res.redirect(302, `/r/${codigosRaw[slugTocado].alias}`);
-  }
+  const entradaVinculada = codigosRaw[slugTocado];
+  const slug = entradaVinculada && entradaVinculada.alias ? entradaVinculada.alias : slugTocado;
+  const origen = entradaVinculada && entradaVinculada.alias ? (entradaVinculada.etiqueta || slugTocado) : null;
 
-  const slug = slugTocado;
   const negocio = obtenerNegocio(slug);
 
   if (!negocio) {
@@ -1756,7 +1785,7 @@ app.get("/r/:slug", (req, res) => {
     return res.status(404).send("Negocio no encontrado. Revisa el enlace de la tarjeta NFC.");
   }
 
-  registrarToque(slug, req, negocio);
+  registrarToque(slug, req, negocio, origen);
 
   // Sin filtro de calificación — todos los negocios mandan al cliente
   // directo a dejar su reseña en Google.
@@ -3287,6 +3316,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
     .filter((c) => codigosTodos[c].alias === slug)
     .map((c) => ({ codigo: c, etiqueta: codigosTodos[c].etiqueta || null }));
   const sugerenciaTarjeta = sugerenciaEtiquetaTarjeta(negocio.categoria);
+  const actividadPorOrigen = tarjetasVinculadas.length > 0 ? calcularActividadPorOrigen(eventos) : [];
 
   const actividadReciente = eventos
     .slice(-8)
@@ -3524,6 +3554,26 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 : `<div class="ultimo-toque" style="margin-top:12px;">Estamos reuniendo datos — necesitas al menos 3 días y 3 toques para calcular la estimación.</div>`}
             </div>
           </div>
+
+          ${tarjetasVinculadas.length > 0 ? `
+          <div class="seccion">
+            <div class="card-titulo">Actividad por tarjeta <span class="suave">${sugerenciaTarjeta.toLowerCase()}, repuesto, etc.</span></div>
+            <div class="chart-card" style="margin-top:0;padding:8px;">
+              ${actividadPorOrigen.length > 0 ? actividadPorOrigen.map((g, i) => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;${i < actividadPorOrigen.length - 1 ? `border-bottom:1px solid ${MARCA.borde};` : ""}">
+                  <span style="font-size:0.86rem;font-weight:600;">${escaparHtml(g.etiqueta)}</span>
+                  <div style="display:flex;gap:18px;text-align:right;">
+                    <div><div style="font-size:1rem;font-weight:800;color:${MARCA.texto};">${g.hoy}</div><div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Hoy</div></div>
+                    <div><div style="font-size:1rem;font-weight:800;color:${MARCA.texto};">${g.semana}</div><div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">7 días</div></div>
+                    <div><div style="font-size:1rem;font-weight:800;color:${MARCA.verde};">${g.total}</div><div style="font-size:0.64rem;color:${MARCA.textoSuave};text-transform:uppercase;">Total</div></div>
+                  </div>
+                </div>
+              `).join("")
+                : `<div class="sentimiento-vacio">Todavía no hay toques registrados en ninguna tarjeta.</div>`}
+            </div>
+            <div class="suave" style="font-size:0.72rem;margin-top:8px;">"Tarjeta principal" es la que activaste primero — las demás son las que vinculaste después.</div>
+          </div>
+          ` : ""}
 
           <div class="seccion grid-2">
             ${meta ? `
