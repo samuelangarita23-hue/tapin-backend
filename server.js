@@ -3064,12 +3064,11 @@ app.get("/demo", (req, res) => {
               <h1>Resumen</h1>
             </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <span class="dash-header-chip">Plan Pro</span>
               <span class="dash-header-chip" style="font-weight:500;color:${MARCA.textoSuave};">Actualizado al ${new Date().toLocaleDateString("es-CO")}</span>
             </div>
           </div>
 
-          <div class="dash-cards">
+          <div class="dash-cards" style="grid-template-columns:repeat(2,1fr);">
             <div class="dash-card">
               <div class="dash-card-lbl">Hoy</div>
               <div class="dash-card-num">${r.hoy}</div>
@@ -3081,12 +3080,6 @@ app.get("/demo", (req, res) => {
               <div class="dash-card-num">${r.semana}</div>
               <div class="dash-card-sub">interacciones</div>
               <div class="dash-card-delta up">▲ +${cambioVsSemanaAnterior}% vs. semana anterior</div>
-            </div>
-            <div class="dash-card">
-              <div class="dash-card-lbl">Calificación promedio</div>
-              <div class="dash-card-num">${promedioEstrellas}</div>
-              <div class="dash-card-estrellas">${"★".repeat(Math.round(promedioEstrellas))}${"☆".repeat(5 - Math.round(promedioEstrellas))}</div>
-              <div class="dash-card-sub">basado en ${totalCalificado} opiniones</div>
             </div>
           </div>
 
@@ -3166,18 +3159,6 @@ app.get("/demo", (req, res) => {
                 <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
                 <div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques} toques)</div>
               </div>
-            </div>
-          </div>
-
-          <div class="seccion analitica-reputacion">
-            <div class="card-titulo">Cómo te calificaron</div>
-            <div class="chart-card" style="margin-top:0;">
-              <div class="sentimiento-barra"><div style="width:${pctPositivas}%;background:${MARCA.verde};"></div><div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div></div>
-              <div class="sentimiento-leyenda">
-                <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-              </div>
-              <div class="horas-nota">Tasa de recuperación: <b>${tasaRecuperacion}%</b> de las quejas resueltas</div>
             </div>
           </div>
 
@@ -3360,10 +3341,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3.5a2 2 0 010-4h.09A1.65 1.65 0 005 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09c0 .68.39 1.29 1 1.51.63.28 1.36.15 1.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06c-.48.46-.61 1.19-.33 1.82.22.61.83 1 1.51 1H21a2 2 0 010 4h-.09c-.68 0-1.29.39-1.51 1z"/></svg>
                 Opciones
               </a>
-              <a href="${esPro(negocio) ? `/suscripcion/${slug}?key=${req.query.key}` : `/mejorar-a-pro/${slug}?key=${req.query.key}`}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                ${esPro(negocio) ? "Mi suscripción" : "Plan de pago"}
-              </a>
               <a href="/mi-panel/${slug}/configuracion?key=${req.query.key}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
                 Configuración
@@ -3388,7 +3365,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               ${negocio.pausado ? `<span class="dash-header-chip" style="background:#FBEFE9;color:#993C1D;border-color:#F0D5C8;">Pausado</span>` : ""}
               ${soloLectura ? `<span class="dash-header-chip">Solo lectura</span>` : ""}
-              <span class="dash-header-chip" style="${esPro(negocio) ? "" : `color:${MARCA.textoSuave};`}">${esPro(negocio) ? "Plan Pro" : "Plan Gratis"}</span>
               <span class="dash-header-chip" style="font-weight:500;color:${MARCA.textoSuave};">Actualizado al ${new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio) })}</span>
             </div>
           </div>
@@ -3448,7 +3424,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           </div>
           ` : ""}
 
-          <div class="dash-cards">
+          <div class="dash-cards" style="grid-template-columns:repeat(2,1fr);">
             <div class="dash-card">
               <div class="dash-card-lbl">Hoy</div>
               <div class="dash-card-num">${r.hoy}</div>
@@ -3460,14 +3436,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               <div class="dash-card-num">${r.semana}</div>
               <div class="dash-card-sub">interacciones</div>
               ${cambioVsSemanaAnterior !== null ? `<div class="dash-card-delta ${cambioVsSemanaAnterior >= 0 ? "up" : "down"}">${cambioVsSemanaAnterior >= 0 ? "▲" : "▼"} ${cambioVsSemanaAnterior >= 0 ? "+" : ""}${cambioVsSemanaAnterior}% vs. semana anterior</div>` : ""}
-            </div>
-            <div class="dash-card">
-              <div class="dash-card-lbl">Calificación promedio</div>
-              ${promedioEstrellas !== null ? `
-                <div class="dash-card-num">${promedioEstrellas}</div>
-                <div class="dash-card-estrellas">${"★".repeat(Math.round(promedioEstrellas))}${"☆".repeat(5 - Math.round(promedioEstrellas))}</div>
-                <div class="dash-card-sub">basado en ${testimonios.length + quejas.length} opinion${testimonios.length + quejas.length === 1 ? "" : "es"}</div>
-              ` : `<div class="dash-card-sub" style="margin-top:6px;">Sin calificaciones registradas todavía</div>`}
             </div>
           </div>
 
@@ -3632,20 +3600,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 </div>
               </div>
 
-              <div class="boceto-bloque">
-                <div class="card-titulo">Cómo te calificaron ${!esPro(negocio) ? `<span class="suave" style="font-weight:600;">· con Plan Pro</span>` : ""}</div>
-                <div class="chart-card">
-                  ${esPro(negocio)
-                    ? (totalCalificado > 0
-                        ? `<div class="grafica-vertical-marco"><div class="grafica-vertical">
-                             <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.verde};">${pctPositivas}%</div><div class="barra-vertical" style="height:${Math.max(6, pctPositivas)}%;background:linear-gradient(180deg,#2C9560,${MARCA.verde});"></div><div class="barra-vertical-etiqueta">Positivas<br><b>${testimonios.length}</b></div></div>
-                             <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.rojo};">${pctNegativas}%</div><div class="barra-vertical" style="height:${Math.max(6, pctNegativas)}%;background:linear-gradient(180deg,#E05243,${MARCA.rojo});"></div><div class="barra-vertical-etiqueta">Quejas<br><b>${quejas.length}</b></div></div>
-                           </div></div>
-                           <div class="grafica-resumen"><span><b>${totalCalificado}</b> respuestas</span>${tasaRecuperacion !== null ? `<span>Recuperación <b>${tasaRecuperacion}%</b></span>` : ""}<span>Balance <b>${pctPositivas - pctNegativas >= 0 ? "+" : ""}${pctPositivas - pctNegativas} pts</b></span></div>${totalCalificado === 0 ? `<div class="horas-nota">La gráfica empezará a crecer cuando recibas calificaciones.</div>` : ""}`
-                        : `<div class="sentimiento-vacio">Sin calificaciones todavía.</div>`)
-                    : `<div class="sentimiento-vacio">Activa el Plan Pro para recibir calificaciones y retroalimentación privada de tus clientes, cumpliendo con las políticas de reseñas de Google.</div>`}
-                </div>
-              </div>
             </div>
 
             <div class="boceto-fila-media" id="actividad">
@@ -3672,8 +3626,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
 
             <div class="boceto-contenidos">
               <div class="boceto-contenido"><div class="boceto-contenido-titulo">Recomendaciones</div>${recomendacionesHtml || `<div class="reco">Sigue reuniendo toques para conocer el comportamiento general de tu negocio.</div>`}</div>
-              <div class="boceto-contenido"><div class="boceto-contenido-titulo">${esPro(negocio) ? "Plan Pro activo" : "Plan Pro"}</div>${esPro(negocio) ? `<div class="reco"><b>Retroalimentación privada activa</b> — recibirás un correo en <b>${negocio.email || "tu correo"}</b> cuando un cliente te deje un comentario en privado.</div><div class="reco"><b>100% legal:</b> a cada cliente que califica se le sigue mostrando siempre el botón para dejar reseña en Google, sin importar si calificó bien o mal — el Plan Pro solo agrega, de forma pareja para todos, la opción de contarte algo en privado además. Nunca oculta ni reemplaza la reseña pública, así que cumple con la política de reseñas de Google y con la regla de la FTC contra el "review gating".</div>` : `<div class="reco"><b>Retroalimentación privada:</b> además de invitar al cliente a dejar su reseña en Google (igual que hoy), le agregas la opción de contarte en privado cómo le fue — el botón de Google nunca se oculta, así que es 100% legal y cumple con las políticas de reseñas de Google.</div><div class="reco"><b>Te llega por correo</b> apenas un cliente te escribe algo en privado, para que puedas contactarlo y resolverlo rápido.</div><a class="boton-mejorar" href="/mejorar-a-pro/${slug}?key=${req.query.key}"><span>Activar Plan Pro</span><b>→</b></a>`}</div>
-              <div class="boceto-contenido"><div class="boceto-contenido-titulo">Tu plan</div><div class="reco"><b>Todas las estadísticas incluidas</b> — calendario, horas pico, comparación con tu sector, actividad detallada y reportes, sin costo adicional.</div>${esPro(negocio) ? `<div class="reco"><b>Plan Pro activo</b> — $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes.</div>` : `<div class="reco"><b>Plan Pro:</b> opcional, $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes — actívalo cuando quieras.</div>`}</div>
             </div>
           </section>
 
@@ -3707,22 +3659,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 ${horas.totalMes > 0
                   ? `<div class="horas-nota">Pico: <b>${horas.picoHora}:00</b> (${horas.maxToques})</div>`
                   : `<div class="horas-nota">Sin suficientes datos.</div>`}
-              </div>
-            </div>
-            <div>
-              <div class="card-titulo">Cómo te calificaron</div>
-              <div class="chart-card" style="margin-top:0;">
-                ${totalCalificado > 0
-                  ? `<div class="sentimiento-barra">
-                       <div style="width:${pctPositivas}%;background:${MARCA.verde};"></div>
-                       <div style="width:${pctNegativas}%;background:${MARCA.rojo};"></div>
-                     </div>
-                     <div class="sentimiento-leyenda">
-                       <span><i style="background:${MARCA.verde};"></i>Positivas: ${testimonios.length} (${pctPositivas}%)</span>
-                       <span><i style="background:${MARCA.rojo};"></i>Quejas: ${quejas.length} (${pctNegativas}%)</span>
-                     </div>
-                     ${tasaRecuperacion !== null ? `<div class="horas-nota">Recuperación: <b>${tasaRecuperacion}%</b></div>` : ""}`
-                  : `<div class="sentimiento-vacio">Sin calificaciones todavía.</div>`}
               </div>
             </div>
           </div>
@@ -4996,7 +4932,7 @@ app.get("/entrega/:slug.pdf", limitarIntentosAdmin, async (req, res) => {
     ["Categoría", negocio.categoria || "—"],
     ["Fecha de activación", fechaActivacion],
     ["Enlace de reseñas configurado", "Sí"],
-    ["Plan contratado", esPro(negocio) ? "Pro (mensual)" : "Básico (pago único)"],
+    ["Plan contratado", "Tarjeta Tapin (pago único, todo incluido)"],
     ["Código de tarjeta", slug],
   ];
   filas.forEach(([label, val], i) => {
@@ -7161,7 +7097,7 @@ app.get("/", (req, res) => {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Tapin — Convierte cada visita en una reseña de Google</title>
-        <meta name="description" content="Tapin: tarjeta NFC para negocios en Colombia que aumenta las reseñas de Google en segundos. Estadísticas, reportes automáticos y comparación con tu sector para gestionar tu reputación online.">
+        <meta name="description" content="Tapin: tarjeta NFC para negocios en Colombia que aumenta las reseñas de Google en segundos. Estadísticas y reportes automáticos incluidos para gestionar tu reputación online.">
         <meta name="google-site-verification" content="H7LUjIzom1urhBIS-T8yWBsUl1T2-o6NBbVAiEZf-Nw" />
         <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d432b'/%3E%3Ctext x='32' y='46' text-anchor='middle' font-family='Arial,sans-serif' font-size='42' font-weight='700' fill='%23fbf6e9'%3ET%3C/text%3E%3C/svg%3E">
         <meta property="og:title" content="Tapin — Convierte cada visita en una reseña de Google">
@@ -7375,26 +7311,17 @@ app.get("/", (req, res) => {
 
           <div id="como-funciona">
             <div class="seccion-titulo">Así funciona Tapin</div>
-            <div class="seccion-sub">El recorrido del cliente es el mismo en los dos planes: toca la tarjeta y llega directo a dejar su reseña en Google. La diferencia está en lo que tú ves desde tu panel.</div>
+            <div class="seccion-sub">Todo incluido en tu tarjeta — el cliente toca y va directo a Google, y tú ves todas las estadísticas desde tu panel.</div>
 
-            <div class="flujo flujo-basico">
+            <div class="flujo flujo-pro">
               <div class="flujo-cabecera"><h3>Con tu tarjeta Tapin</h3></div>
-              <p class="flujo-descripcion">El cliente toca la tarjeta y va directo a dejar su reseña en Google — sin pasos de por medio, en cualquiera de los dos planes.</p>
+              <p class="flujo-descripcion">El cliente toca la tarjeta y va directo a dejar su reseña en Google — sin pasos de por medio. Mientras tanto, tú ves todas las estadísticas de tu negocio desde tu panel.</p>
               <div class="pasos">
                 <div class="paso"><div class="paso-num">1</div><h3>Recibe tu código</h3><p>Tu código de activación llega con tu pedido para que puedas comenzar fácilmente.</p></div>
                 <div class="paso"><div class="paso-num">2</div><h3>Activa tu tarjeta</h3><p>Ingresas el código y completas los datos de tu negocio en pocos minutos.</p></div>
                 <div class="paso"><div class="paso-num">3</div><h3>El cliente toca la tarjeta</h3><p>Solo acerca su celular a la tarjeta Tapin para abrir el enlace.</p></div>
                 <div class="paso"><div class="paso-num">4</div><h3>Deja su reseña en Google Reviews</h3><p>El último paso lleva al cliente a publicar su reseña directamente en Google Reviews.</p></div>
-              </div>
-            </div>
-
-            <div class="flujo flujo-pro">
-              <div class="flujo-cabecera"><span class="flujo-etiqueta">Con Plan Pro</span><h3>Además, tú ves todo desde tu panel</h3></div>
-              <p class="flujo-descripcion"><b>El Plan Pro no cambia lo que ve el cliente</b> — cambia lo que tú ves: estadísticas detalladas, comparación con tu sector y reportes automáticos, todo desde tu panel.</p>
-              <div class="pasos">
-                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">1</div><h3>Estadísticas al detalle</h3><p>Horas pico, calendario de actividad, comparación semana a semana y contra el promedio de tu sector.</p></div>
-                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">2</div><h3>Recomendaciones automáticas</h3><p>Sugerencias generadas a partir de tus propios datos, para que sepas en qué enfocarte.</p></div>
-                <div class="paso paso-pro"><div class="paso-pro-badge">Solo Pro</div><div class="paso-num">3</div><h3>Reporte mensual por correo</h3><p>Un PDF automático cada mes con todo el análisis de tu negocio: horas pico, subidas, caídas y comparación con otros negocios de tu sector.</p></div>
+                <div class="paso"><div class="paso-num">5</div><h3>Tú ves todo en tu panel</h3><p>Horas pico, calendario de actividad, recomendaciones automáticas y reporte mensual por correo — incluido, sin costo adicional.</p></div>
               </div>
             </div>
           </div>
@@ -7462,28 +7389,16 @@ app.get("/", (req, res) => {
                 <p>Recibes un código de activación, completas los datos de tu negocio y conectas tu perfil de Google. El proceso está diseñado para hacerse en pocos minutos.</p>
               </details>
               <details class="faq-item">
-                <summary>¿Cuál es la diferencia entre la tarjeta y el Plan Pro?</summary>
-                <p>La tarjeta (pago único) ya incluye TODAS las estadísticas: calendario, horas pico, comparación con tu sector, reportes y más. El Plan Pro es opcional y agrega la calificación con retroalimentación privada — el cliente sigue viendo siempre el botón de reseña en Google, sin importar cómo calificó.</p>
+                <summary>¿Qué incluye la tarjeta?</summary>
+                <p>Todo: la tarjeta física con envío, redirección automática a tus reseñas de Google, y el panel completo con historial, horas pico, calendario de actividad, reporte mensual automático, recomendaciones y programa de fidelización. Un solo pago, sin mensualidades ni funciones bloqueadas.</p>
               </details>
               <details class="faq-item">
-                <summary>¿El Plan Pro es legal? ¿No es lo mismo que ocultar reseñas malas?</summary>
-                <p>No oculta nada. Google prohíbe explícitamente "filtrar" reseñas según la calificación (mostrarle Google solo al que calificó bien), y en Estados Unidos la FTC lo declaró ilegal desde octubre de 2024. El Plan Pro de Tapin no hace eso: a TODOS los clientes, califiquen como califiquen, se les muestra siempre el mismo botón para dejar su reseña en Google. Lo único que agrega, para todos por igual, es la opción adicional de contarte algo en privado — nunca en lugar de la reseña pública, siempre además.</p>
+                <summary>¿Qué estadísticas veo en mi panel?</summary>
+                <p>Horas pico, calendario de actividad, comparación semana a semana, actividad reciente al detalle, y recomendaciones automáticas generadas a partir de tus propios datos.</p>
               </details>
               <details class="faq-item">
-                <summary>¿Necesito una tarjeta Tapin para contratar el Plan Pro?</summary>
-                <p>Sí. La mensualidad Pro funciona sobre una tarjeta Tapin activa. Primero debes tener y activar tu tarjeta para poder utilizar las funciones Pro.</p>
-              </details>
-              <details class="faq-item">
-                <summary>¿Qué estadísticas veo con el Plan Pro?</summary>
-                <p>Horas pico, calendario de actividad, comparación semana a semana y contra el promedio de tu sector, y recomendaciones automáticas generadas a partir de tus propios datos.</p>
-              </details>
-              <details class="faq-item">
-                <summary>¿Qué incluye el reporte mensual Pro?</summary>
-                <p>Incluye tus estadísticas completas, actividad, horas pico, subidas y caídas, análisis de resultados y comparación frente a otros negocios de tu sector.</p>
-              </details>
-              <details class="faq-item">
-                <summary>¿Cómo funcionan los pagos del Plan Pro?</summary>
-                <p>Puedes elegir mensualidad con renovación automática o pago anual. La suscripción mensual se puede cancelar desde el panel y permanece activa hasta terminar el período ya pagado.</p>
+                <summary>¿Qué incluye el reporte mensual?</summary>
+                <p>Incluye tus estadísticas completas, actividad, horas pico, y subidas y caídas — te llega automáticamente por correo cada mes, sin costo adicional.</p>
               </details>
             </div>
           </div>
