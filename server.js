@@ -662,9 +662,9 @@ const ESTILO_PANEL_NEGOCIO = `
 
           /* Estructura del panel Pro basada en el boceto del negocio. */
           .panel-boceto{display:flex;flex-direction:column;gap:26px;margin-top:26px;}
-          .boceto-fila-superior{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;}
+          .boceto-fila-superior{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;align-items:stretch;}
           .boceto-fila-media{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.95fr);gap:16px;align-items:stretch;}
-          .boceto-botones,.boceto-contenidos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start;}
+          .boceto-botones,.boceto-contenidos{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-items:start;}
           .boceto-contenidos{margin-top:-14px;}
           .boceto-bloque{min-width:0;display:flex;flex-direction:column;}
           .boceto-bloque .chart-card{margin-top:0;flex:1;}
@@ -744,15 +744,9 @@ const ESTILO_PANEL_NEGOCIO = `
           .preview-pro-aviso a{flex-shrink:0;padding:8px 11px;border-radius:9px;background:${MARCA.verdeOscuro};
                                color:#fff;text-decoration:none;font-weight:800;}
           .pro-original{display:none!important;}
-          @media (max-width:1100px){
-            .boceto-fila-superior{grid-template-columns:repeat(2,minmax(0,1fr));}
-            .boceto-fila-superior .boceto-bloque:last-child{grid-column:1/-1;}
-            .boceto-botones,.boceto-contenidos{grid-template-columns:1fr 1fr;}
-          }
           @media (max-width:760px){
-            .boceto-fila-superior,.boceto-fila-media,.boceto-botones,.boceto-contenidos{grid-template-columns:1fr;}
+            .boceto-fila-media{grid-template-columns:1fr;}
             .boceto-contenidos{margin-top:0;}
-            .boceto-fila-superior .boceto-bloque:last-child{grid-column:auto;}
             .boceto-fila-superior .chart-card{min-height:300px;}
             .boceto-calendario{grid-template-columns:repeat(7,minmax(30px,1fr));gap:6px;max-width:360px;}
             .grafica-vertical{height:230px;}
