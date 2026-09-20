@@ -472,7 +472,7 @@ const MARCA = {
   textoSuave: "#50695b",
   borde: "#dedccc",
   rojo: "#C0392B",
-  oro: "#e8a623",
+  oro: "#9c6f1f",
 };
 
 // Estilos base compartidos por todas las páginas del panel — look "pro" consistente.
@@ -694,7 +694,7 @@ const ESTILO_PANEL_NEGOCIO = `
                         border:1px solid ${MARCA.borde};border-radius:13px;background:linear-gradient(180deg,#FBFCF9 0%,#F5F8F3 100%);}
           .horas-visual-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;
                             font-size:.7rem;font-weight:700;color:${MARCA.textoSuave};}
-          .hora-pico-badge{padding:5px 9px;border-radius:999px;background:#FBF1D8;color:#7A5A00;font-weight:800;}
+          .hora-pico-badge{padding:5px 9px;border-radius:999px;background:#E5E9E2;color:#3F4A3D;font-weight:800;}
           .boceto-fila-media .horas-chart{position:relative;width:100%;max-width:none;height:118px;margin:0;gap:4px;
                                          border-bottom:1px solid ${MARCA.borde};
                                          background:repeating-linear-gradient(to bottom,transparent 0,transparent 28px,rgba(15,81,50,.08) 29px);}
@@ -3131,7 +3131,7 @@ app.get("/demo", (req, res) => {
             <div class="grid-3">
               <div class="reco" style="border-left-color:${MARCA.verde};"><b>Resumen (30 días):</b> ${r.semana} toques esta semana · pico ${horas.picoHora}:00 · ${pctPositivas}% positivas</div>
               ${caida ? `<div class="reco" style="border-left-color:${MARCA.rojo};background:#FBEFE9;color:#993C1D;"><b>⚠ Caída esta semana</b> — ${caida.pctCaida}% por debajo de tu propio promedio.</div>` : ""}
-              <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">Tu día más flojo históricamente es el <b>${diaFlojo.dia}</b> — considera una promo esos días.</div>
+              <div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;">Tu día más flojo históricamente es el <b>${diaFlojo.dia}</b> — considera una promo esos días.</div>
               <div class="reco" style="border-left-color:${MARCA.verde};">Tienes <b>${clientesRecurrentes} clientes</b> que ya te calificaron 3 veces o más — son tus más fieles.</div>
             </div>
           </div>
@@ -3390,8 +3390,8 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             ${req.query.tarjeta === "ok" ? `<div class="reco" style="border-left-color:${MARCA.verde};margin-bottom:10px;">✓ Tarjeta vinculada — sus toques ya se suman a este negocio.</div>` : ""}
             ${req.query.tarjeta === "yaactiva" ? `<div class="reco" style="border-left-color:${MARCA.rojo};background:#FBEFE9;color:#993C1D;margin-bottom:10px;">Ese código ya está en uso por otra tarjeta activa.</div>` : ""}
             ${req.query.tarjeta === "noexiste" ? `<div class="reco" style="border-left-color:${MARCA.rojo};background:#FBEFE9;color:#993C1D;margin-bottom:10px;">Ese código no existe. Revisa que esté bien escrito.</div>` : ""}
-            ${req.query.tarjeta === "mismo" ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;margin-bottom:10px;">Esa es la tarjeta que ya estás usando.</div>` : ""}
-            ${req.query.tarjeta === "vacio" ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;margin-bottom:10px;">Escribe el código de la tarjeta.</div>` : ""}
+            ${req.query.tarjeta === "mismo" ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;margin-bottom:10px;">Esa es la tarjeta que ya estás usando.</div>` : ""}
+            ${req.query.tarjeta === "vacio" ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;margin-bottom:10px;">Escribe el código de la tarjeta.</div>` : ""}
             ${otrasSedes.length > 0 ? `
             <div class="chart-card" style="margin-top:0;padding:8px;">
               ${otrasSedes
@@ -3569,13 +3569,13 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           <div class="seccion">
             <div class="card-titulo">Primeros pasos</div>
             <div class="grid-3">
-              <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
+              <div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;">
                 Comparte el link de tu tarjeta con tus primeros clientes: <b>${req.protocol}://${req.get("host")}/r/${slug}</b>
               </div>
-              <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
-                Verifica que tu <a href="/mi-panel/${slug}/editar?key=${req.query.key}" style="color:#7A5A00;">enlace de reseñas de Google</a> sea el correcto antes del primer toque.
+              <div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;">
+                Verifica que tu <a href="/mi-panel/${slug}/editar?key=${req.query.key}" style="color:#3F4A3D;">enlace de reseñas de Google</a> sea el correcto antes del primer toque.
               </div>
-              <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
+              <div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;">
                 Invita a un cliente frecuente a dejar tu primera reseña — así pruebas que todo el flujo funciona.
               </div>
             </div>
@@ -3638,7 +3638,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               ${caida ? `<div class="reco" style="border-left-color:${MARCA.rojo};background:#FBEFE9;color:#993C1D;">
                 <b>⚠ Caída esta semana</b> — ${caida.pctCaida}% por debajo de tu propio promedio (~${caida.promedioSemanal} toques/semana).
               </div>` : ""}
-              ${diaFlojo ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
+              ${diaFlojo ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;">
                 Tu día más flojo históricamente es el <b>${diaFlojo.dia}</b> — considera una promo esos días.
               </div>` : ""}
               ${clientesRecurrentes > 0 ? `<div class="reco" style="border-left-color:${MARCA.verde};">
@@ -3716,7 +3716,7 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 : `<div class="sentimiento-vacio">Todavía no hay calificaciones registradas.</div>`}
               <div class="horas-nota">Cómo te calificaron — bloqueado en el plan Básico.</div>
             </div>
-            <div class="reco" style="border-left-color:${MARCA.oro};background:#FBF6E9;color:#7A5A00;">
+            <div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;">
               Con <b>Plan Pro</b> ($${PRECIO_PRO_COP.toLocaleString("es-CO")} COP/mes) obtienes:
               <ul style="margin:8px 0 0;padding-left:18px;">
                 <li>Gráfica de horas pico (cuándo te tocan más)</li>
@@ -7574,8 +7574,8 @@ app.get("/pedido", (req, res) => {
                 margin-bottom:14px;font-family:inherit;}
           .precio{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};padding:14px 16px;border-radius:10px;
                    font-weight:700;text-align:center;margin-bottom:18px;}
-          .descuento-info{background:#FBF6E9;border:1px solid #F0E2B8;border-radius:10px;padding:12px 14px;
-                           margin:-6px 0 18px;font-size:0.82rem;color:#7A5A00;display:none;}
+          .descuento-info{background:#EEF1EC;border:1px solid #F0E2B8;border-radius:10px;padding:12px 14px;
+                           margin:-6px 0 18px;font-size:0.82rem;color:#3F4A3D;display:none;}
           .descuento-info.activo{display:block;}
           .descuento-info b{display:block;font-size:0.95rem;margin-bottom:2px;}
           .pro-opcion{display:flex;align-items:flex-start;gap:10px;background:${MARCA.crema};border:1px solid ${MARCA.borde};
@@ -7770,7 +7770,7 @@ app.get("/pagar/:id", (req, res) => {
               <b>Plan Básico:</b> ${pedido.cantidad || 1} tarjeta${(pedido.cantidad || 1) > 1 ? "s" : ""}
               × $${(pedido.precioUnidad || PRECIO_BASICO_COP).toLocaleString("es-CO")} COP c/u
             </div>
-            ${pedido.descuentoAplicado ? `<div style="color:#7A5A00;">✓ Descuento por volumen aplicado: ${pedido.descuentoAplicado} off por tarjeta</div>` : ""}
+            ${pedido.descuentoAplicado ? `<div style="color:#3F4A3D;">✓ Descuento por volumen aplicado: ${pedido.descuentoAplicado} off por tarjeta</div>` : ""}
             ${pedido.proIncluido ? `<div><b>Plan Pro ${pedido.planProTipo === "anual" ? "anual" : "primer mes"}:</b> $${(pedido.planProTipo === "anual" ? PRECIO_PRO_ANUAL_COP : PRECIO_PRO_COP).toLocaleString("es-CO")} COP</div>` : ""}
           </div>
           <div class="monto">$${pedido.monto.toLocaleString("es-CO")} COP</div>
