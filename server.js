@@ -1088,6 +1088,20 @@ function esPro(negocio) {
 // escribir <script> en un comentario y que se ejecute cuando el negocio abra
 // su panel o su correo de alerta. Se usa en TODO texto libre de usuario que
 // se inserta en HTML.
+// Sugerencia de cómo llamar cada tarjeta física extra, según el tipo de
+// negocio — para que un restaurante piense en "Mesa 1", una peluquería en
+// "Silla 1", etc. Es solo un placeholder en el formulario; el dueño puede
+// escribir lo que quiera.
+function sugerenciaEtiquetaTarjeta(categoria) {
+  const palabras = {
+    restaurante: "Mesa",
+    peluqueria: "Silla",
+    tienda: "Caja",
+    clinica: "Consultorio",
+  };
+  return palabras[categoria] || "Tarjeta";
+}
+
 function escaparHtml(texto) {
   return String(texto == null ? "" : texto)
     .replace(/&/g, "&amp;")
@@ -2300,6 +2314,7 @@ app.get("/mi-panel/:slug/agregar-tarjeta", limitarIntentos(10, 15), (req, res) =
   }
 
   const codigoNuevo = (req.query.codigo || "").trim();
+  const etiqueta = (req.query.etiqueta || "").trim().slice(0, 40);
   const volver = (estado) => res.redirect(302, `/mi-panel/${slug}?key=${encodeURIComponent(claveUsada)}&tarjeta=${estado}#mi-negocio`);
 
   if (!codigoNuevo) return volver("vacio");
@@ -2312,6 +2327,7 @@ app.get("/mi-panel/:slug/agregar-tarjeta", limitarIntentos(10, 15), (req, res) =
   codigos[codigoNuevo] = {
     activado: true,
     alias: slug,
+    etiqueta: etiqueta || null,
     creado: new Date().toISOString(),
   };
   guardarCodigos(codigos);
@@ -3264,6 +3280,14 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
       )
     : [];
 
+  // Tarjetas físicas extra vinculadas a ESTE negocio (repuestos, otras mesas,
+  // sillas, etc.) — no son sedes aparte, solo apuntan aquí.
+  const codigosTodos = leerCodigos();
+  const tarjetasVinculadas = Object.keys(codigosTodos)
+    .filter((c) => codigosTodos[c].alias === slug)
+    .map((c) => ({ codigo: c, etiqueta: codigosTodos[c].etiqueta || null }));
+  const sugerenciaTarjeta = sugerenciaEtiquetaTarjeta(negocio.categoria);
+
   const actividadReciente = eventos
     .slice(-8)
     .reverse()
@@ -3378,15 +3402,9 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           </div>
           ` : ""}
 
-          ${!soloLectura ? `
+          ${otrasSedes.length > 0 ? `
           <div class="seccion">
-            <div class="card-titulo">Vincular otra tarjeta</div>
-            ${req.query.tarjeta === "ok" ? `<div class="reco" style="border-left-color:${MARCA.verde};margin-bottom:10px;">✓ Tarjeta vinculada — sus toques ya se suman a este negocio.</div>` : ""}
-            ${req.query.tarjeta === "yaactiva" ? `<div class="reco" style="border-left-color:${MARCA.rojo};background:#FBEFE9;color:#993C1D;margin-bottom:10px;">Ese código ya está en uso por otra tarjeta activa.</div>` : ""}
-            ${req.query.tarjeta === "noexiste" ? `<div class="reco" style="border-left-color:${MARCA.rojo};background:#FBEFE9;color:#993C1D;margin-bottom:10px;">Ese código no existe. Revisa que esté bien escrito.</div>` : ""}
-            ${req.query.tarjeta === "mismo" ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;margin-bottom:10px;">Esa es la tarjeta que ya estás usando.</div>` : ""}
-            ${req.query.tarjeta === "vacio" ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;margin-bottom:10px;">Escribe el código de la tarjeta.</div>` : ""}
-            ${otrasSedes.length > 0 ? `
+            <div class="card-titulo">Tus otras sedes <span class="suave">${otrasSedes.length + 1} en total</span></div>
             <div class="chart-card" style="margin-top:0;padding:8px;">
               ${otrasSedes
                 .map((s) => {
@@ -3401,19 +3419,41 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                 })
                 .join("")}
             </div>
+          </div>
+          ` : ""}
+
+          ${!soloLectura ? `
+          <div class="seccion">
+            <div class="card-titulo">Vincular otra tarjeta</div>
+            ${req.query.tarjeta === "ok" ? `<div class="reco" style="border-left-color:${MARCA.verde};margin-bottom:10px;">✓ Tarjeta vinculada — sus toques ya se suman a este negocio.</div>` : ""}
+            ${req.query.tarjeta === "yaactiva" ? `<div class="reco" style="border-left-color:${MARCA.rojo};background:#FBEFE9;color:#993C1D;margin-bottom:10px;">Ese código ya está en uso por otra tarjeta activa.</div>` : ""}
+            ${req.query.tarjeta === "noexiste" ? `<div class="reco" style="border-left-color:${MARCA.rojo};background:#FBEFE9;color:#993C1D;margin-bottom:10px;">Ese código no existe. Revisa que esté bien escrito.</div>` : ""}
+            ${req.query.tarjeta === "mismo" ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;margin-bottom:10px;">Esa es la tarjeta que ya estás usando.</div>` : ""}
+            ${req.query.tarjeta === "vacio" ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;margin-bottom:10px;">Escribe el código de la tarjeta.</div>` : ""}
+            ${tarjetasVinculadas.length > 0 ? `
+            <div class="chart-card" style="margin-top:0;padding:8px;">
+              ${tarjetasVinculadas
+                .map((t) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 10px;">
+                            <span style="font-size:0.85rem;font-weight:600;">${t.etiqueta ? escaparHtml(t.etiqueta) : "Sin nombre"}</span>
+                            <span style="font-size:0.76rem;color:${MARCA.textoSuave};font-family:monospace;">${t.codigo}</span>
+                          </div>`)
+                .join("")}
+            </div>
             ` : ""}
-            <div class="chart-card" style="margin-top:${otrasSedes.length > 0 ? "10px" : "0"};">
+            <div class="chart-card" style="margin-top:${tarjetasVinculadas.length > 0 ? "10px" : "0"};">
               <form action="/mi-panel/${slug}/agregar-tarjeta" method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                 <input type="hidden" name="key" value="${req.query.key}">
                 <input type="text" name="codigo" placeholder="Código de la tarjeta"
-                       style="flex:1;min-width:180px;padding:10px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.86rem;font-family:inherit;" required>
+                       style="flex:1;min-width:140px;padding:10px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.86rem;font-family:inherit;" required>
+                <input type="text" name="etiqueta" placeholder="Ej: ${sugerenciaTarjeta} ${tarjetasVinculadas.length + 2}"
+                       style="flex:1;min-width:140px;padding:10px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.86rem;font-family:inherit;">
                 <button type="submit"
                         style="background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:10px 18px;
                                font-size:0.84rem;font-weight:700;cursor:pointer;white-space:nowrap;">
                   Vincular
                 </button>
               </form>
-              <div class="suave" style="font-size:0.72rem;margin-top:8px;">¿Pediste una tarjeta de repuesto o una segunda tarjeta para este mismo negocio? Escribe su código: sus toques se suman aquí mismo, no crea un negocio aparte.</div>
+              <div class="suave" style="font-size:0.72rem;margin-top:8px;">¿Pediste una tarjeta de repuesto, o quieres poner una en cada ${sugerenciaTarjeta.toLowerCase()}? Escribe su código y, si quieres, un nombre para reconocerla — sus toques se suman aquí mismo, no crea un negocio aparte.</div>
             </div>
           </div>
           ` : ""}
@@ -3999,18 +4039,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
             <div class="config-subtitulo">Administra tus metas, alertas, accesos y el estado del negocio desde un solo lugar.</div>
           </div>
 
-          <div class="config-grid ${esPro(negocio) ? "config-pro" : "config-gratis"}">
-
-          ${esPro(negocio) ? `
-          <div class="form-card config-suscripcion">
-            <h3>Mi suscripción</h3>
-            <p class="nota">Ver el estado de tu pago, cambiar de tarjeta, o cancelar el Plan Pro.</p>
-            <a href="/suscripcion/${slug}?key=${claveUsada}" style="display:inline-block;background:${MARCA.verdeOscuro};color:#fff;
-               border-radius:9px;padding:11px 18px;font-weight:700;font-size:0.88rem;text-decoration:none;">
-              Gestionar mi suscripción →
-            </a>
-          </div>
-          ` : ""}
+          <div class="config-grid config-gratis">
 
           <div class="form-card config-meta">
             <h3>Meta mensual</h3>
@@ -4022,18 +4051,10 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
             </form>
           </div>
 
-          ${esPro(negocio) ? `
           <div class="form-card config-alertas">
-            <h3>Alertas por correo</h3>
-            <p class="nota">Elige cuáles quieres recibir — todas están activadas por defecto.</p>
+            <h3>Reporte mensual</h3>
+            <p class="nota">Un PDF automático cada mes con el análisis completo de tu negocio.</p>
             <form method="POST" action="/mi-panel/${slug}/configuracion/alertas?key=${claveUsada}">
-              <label class="fila-check"><input type="checkbox" name="quejas" ${alertas.quejas !== false ? "checked" : ""}> Avisarme cuando llega una queja</label>
-              <label>¿Con qué frecuencia?</label>
-              <select name="frecuenciaQuejas" style="width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;box-sizing:border-box;margin-bottom:12px;">
-                <option value="instantanea" ${(alertas.frecuenciaQuejas || "instantanea") === "instantanea" ? "selected" : ""}>Al instante — apenas llega cada una</option>
-                <option value="diario" ${alertas.frecuenciaQuejas === "diario" ? "selected" : ""}>Resumen diario — un correo con todas las del día</option>
-                <option value="semanal" ${alertas.frecuenciaQuejas === "semanal" ? "selected" : ""}>Resumen semanal — un correo con todas de la semana</option>
-              </select>
               <label class="fila-check"><input type="checkbox" name="reporteMensual" ${alertas.reporteMensual !== false ? "checked" : ""}> Reporte mensual automático</label>
               <label>WhatsApp para alertas (opcional)</label>
               <input type="text" name="whatsapp" value="${negocio.whatsappAlertas || ""}" placeholder="Ej: 3001234567">
@@ -4041,7 +4062,6 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
               <button type="submit">Guardar preferencias</button>
             </form>
           </div>
-          ` : ""}
 
           <div class="form-card config-pausar">
             <h3>Pausar negocio</h3>
@@ -4097,9 +4117,7 @@ app.post("/mi-panel/:slug/configuracion/alertas", (req, res) => {
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
   if (!tieneClaveConfigurada(negocio) || !claveNegocioValida(negocio, slug, req.query.key)) return res.status(401).send("No autorizado.");
-  const frecuenciaQuejas = ["instantanea", "diario", "semanal"].includes(req.body.frecuenciaQuejas)
-    ? req.body.frecuenciaQuejas : "instantanea";
-  const alertas = { quejas: req.body.quejas === "on", reporteMensual: req.body.reporteMensual === "on", frecuenciaQuejas };
+  const alertas = { reporteMensual: req.body.reporteMensual === "on" };
   const whatsappAlertas = (req.body.whatsapp || "").trim();
   guardarCambiosNegocio(slug, negocio, { alertas, whatsappAlertas });
   res.redirect(`/mi-panel/${slug}/configuracion?key=${req.query.key}`);
