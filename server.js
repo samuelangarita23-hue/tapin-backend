@@ -1082,19 +1082,11 @@ function obtenerNegocio(slug) {
 // Si el negocio no tiene plan "pro", estas simplemente no se disparan — sin
 // importar si el código las soporta técnicamente.
 function esPro(negocio) {
-  if (!negocio || negocio.plan !== "pro") return false;
-  // Si pagó el plan anual, sigue siendo Pro solo hasta que se cumpla el año —
-  // después de esa fecha, deja de contar como Pro hasta que renueve.
-  if (negocio.billingType === "anual" && negocio.proAnualHasta) {
-    return new Date(negocio.proAnualHasta) > new Date();
-  }
-  // Si canceló su suscripción mensual, sigue siendo Pro hasta el final del
-  // período que ya pagó (vigenteHasta) — después de esa fecha, baja solo a
-  // Básico, sin que nadie tenga que hacerlo a mano.
-  if (negocio.suscripcion && negocio.suscripcion.vigenteHasta) {
-    return new Date(negocio.suscripcion.vigenteHasta) > new Date();
-  }
-  return true;
+  // Un solo plan: todo viene incluido con la tarjeta, sin mensualidad ni
+  // distinción de plan. Se deja la función (en vez de borrar sus ~50 usos en
+  // el resto del archivo) para no tener que tocar cada sección una por una —
+  // así todo lo que antes dependía de "esPro" queda desbloqueado para todos.
+  return !!negocio;
 }
 
 // Escapa HTML para que texto escrito por clientes (comentarios de quejas,
@@ -1758,191 +1750,11 @@ app.get("/r/:slug", (req, res) => {
 
   registrarToque(slug, req, negocio);
 
-  // Sin Filtro Legal: directo a Google, sin preguntar nada — igual que
-  // cualquier negocio básico. Con Filtro Legal activo: pasa primero por
-  // /calificar, que SIEMPRE muestra el botón de Google a todo el mundo
-  // (nunca lo oculta ni lo reemplaza) y además ofrece, para todos por igual,
-  // la opción de mandar retroalimentación privada. Esa es la diferencia con
-  // un filtro de reseñas ilegal: aquí nadie deja de ver el camino a Google
-  // según lo que calificó.
-  if (esPro(negocio)) {
-    return res.redirect(302, `/calificar/${slug}`);
-  }
+  // Sin filtro de calificación — todos los negocios mandan al cliente
+  // directo a dejar su reseña en Google.
   return res.redirect(302, negocio.googleUrl);
 });
 
-// ---------- Filtro Legal: calificación + reseña + retroalimentación privada ----------
-// A DIFERENCIA de un filtro de reseñas (prohibido por la política de Google y,
-// en EE.UU., por la regla de la FTC vigente desde octubre 2024), este flujo
-// NUNCA decide a dónde va el cliente según lo que calificó. El botón para
-// dejar reseña en Google se muestra SIEMPRE, a todo el mundo, sin importar
-// si calificó 1 estrella o 5 — nunca se oculta ni se reemplaza. La única
-// diferencia por calificación es cosmética (un mensaje de empatía si fue
-// baja), nunca funcional. Lo que SÍ hace este filtro es agregar, para TODOS
-// por igual, la opción adicional y opcional de escribirle algo en privado al
-// negocio — eso es simplemente un canal de contacto más, no un reemplazo de
-// la reseña pública, y por eso es legal.
-app.get("/calificar/:slug", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  // El Filtro Legal es la función de pago mensual — si el negocio no lo tiene
-  // activo, no hay nada que mostrar aquí: directo a Google, como cualquier
-  // negocio sin el filtro.
-  if (!esPro(negocio)) return res.redirect(302, negocio.googleUrl);
-
-  const valor = parseInt(req.query.valor, 10) || null;
-  const calificado = valor >= 1 && valor <= 5;
-
-  // Si el cliente tiene sesión iniciada, guardamos la calificación en su
-  // historial y sumamos sello de fidelización — por participar, no por
-  // calificar bien. Ya funcionaba así, se conserva igual.
-  let selloSumado = null;
-  if (calificado) {
-    const cliente = clienteActual(req);
-    if (cliente) {
-      const clientes = leerClientes();
-      if (clientes[cliente.id]) {
-        if (!clientes[cliente.id].historial) clientes[cliente.id].historial = [];
-        clientes[cliente.id].historial.push({
-          slug, negocioNombre: negocio.nombre, valor,
-          fecha: new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" }),
-          fechaISO: new Date().toISOString(),
-        });
-        guardarClientes(clientes);
-      }
-      if (negocio.fidelizacion) {
-        selloSumado = sumarSelloFidelizacion(slug, negocio, cliente.email, cliente.nombre);
-      }
-    }
-    // Guardamos la calificación como dato interno (para "Cómo te calificaron"
-    // en tu panel) — esto es solo analítica tuya, no decide qué ve el cliente.
-    guardarTestimonio(slug, null, valor, negocio);
-  }
-
-  const mensajeEmpatia = calificado && valor <= 3
-    ? "Gracias por contarnos — cualquier cosa que quieras agregar nos ayuda a mejorar."
-    : calificado
-      ? "¡Qué bueno! Gracias por tu tiempo."
-      : "Cuéntanos cómo te fue.";
-
-  res.send(`
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>${negocio.nombre}</title>
-        <style>
-          *{box-sizing:border-box;}
-          body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#F8F4EC;
-               display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;}
-          .box{background:#fff;border-radius:18px;padding:32px 26px;max-width:400px;width:100%;
-               text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.08);}
-          h1{font-size:1.15rem;margin:0 0 6px;color:#16201C;}
-          p{color:#777;font-size:0.88rem;margin:0 0 18px;}
-          .estrellas{display:flex;justify-content:center;gap:6px;margin-bottom:22px;}
-          .estrellas a{font-size:1.8rem;text-decoration:none;color:${MARCA.oro};opacity:0.35;}
-          .estrellas a.activa{opacity:1;}
-          .btn-google{display:block;background:${MARCA.verdeOscuro};color:#fff;text-decoration:none;
-                      padding:15px;border-radius:12px;font-weight:700;font-size:0.98rem;margin-bottom:8px;}
-          .sub-google{font-size:0.74rem;color:#999;margin-bottom:22px;}
-          .divisor{display:flex;align-items:center;gap:10px;margin:4px 0 16px;color:#aaa;font-size:0.76rem;}
-          .divisor::before,.divisor::after{content:"";flex:1;height:1px;background:#eee;}
-          textarea{width:100%;border:1px solid #ddd;border-radius:10px;padding:12px;font-size:0.92rem;
-                    min-height:70px;font-family:inherit;box-sizing:border-box;}
-          input[type="tel"]{width:100%;margin-top:10px;padding:12px;border:1px solid #ddd;border-radius:10px;
-                    font-size:0.92rem;font-family:inherit;box-sizing:border-box;}
-          button{margin-top:12px;width:100%;background:#fff;color:${MARCA.verdeOscuro};
-                 border:1.5px solid ${MARCA.verdeOscuro};border-radius:10px;padding:12px;font-size:0.92rem;
-                 font-weight:700;cursor:pointer;}
-          .sello-aviso{background:#FBF6E9;border-radius:10px;padding:10px 14px;font-size:0.8rem;
-                      color:#7A5A00;margin-bottom:16px;}
-        </style>
-      </head>
-      <body>
-        <div class="box">
-          <h1>¿Cómo estuvo tu visita?</h1>
-          <p>${mensajeEmpatia}</p>
-          <div class="estrellas">
-            ${[1, 2, 3, 4, 5].map((n) => `<a href="/calificar/${slug}?valor=${n}" class="${calificado && n <= valor ? "activa" : ""}">★</a>`).join("")}
-          </div>
-          ${selloSumado ? `<div class="sello-aviso">${selloSumado.listo ? `¡Beneficio desbloqueado! Ya tienes: ${selloSumado.fid.premio}` : `+1 sello de fidelización — llevas ${selloSumado.actual.sellos} de ${selloSumado.fid.metaSellos}`}</div>` : ""}
-
-          <a class="btn-google" href="${negocio.googleUrl}">Dejar mi reseña en Google →</a>
-          <div class="sub-google">Se abre tu perfil de Google para escribir la reseña.</div>
-
-          <div class="divisor">o cuéntale algo en privado al negocio (opcional)</div>
-          <form method="POST" action="/calificar/${slug}/privado">
-            <input type="hidden" name="valor" value="${valor || ""}">
-            <textarea name="comentario" placeholder="Escribe aquí lo que quieras contarle... (opcional)"></textarea>
-            <input type="tel" name="telefono" placeholder="Tu teléfono (opcional, para que te contacten)">
-            <button type="submit">Enviar en privado</button>
-          </form>
-        </div>
-      </body>
-    </html>
-  `);
-});
-
-// Envía la retroalimentación privada — disponible para CUALQUIER calificación
-// (o incluso sin calificar), nunca en lugar del botón de Google de arriba,
-// siempre además de él. Esto es lo que hace legal al Filtro Legal.
-app.post("/calificar/:slug/privado", async (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-
-  const comentario = (req.body.comentario || "").trim();
-  const telefono = req.body.telefono || "";
-  const valorTexto = parseInt(req.body.valor, 10) || null;
-
-  if (comentario) {
-    guardarQueja(slug, comentario, negocio, telefono, valorTexto);
-
-    if (esPro(negocio)) {
-      const horaLocal = new Date().toLocaleString("es-CO", { timeZone: zonaDe(negocio) });
-      enviarEmail(
-        negocio.email,
-        `📩 Nueva retroalimentación privada en ${negocio.nombre}`,
-        `
-          <div style="font-family:-apple-system,Arial,sans-serif;max-width:480px;">
-            <h2 style="color:${MARCA.verdeOscuro};margin-bottom:4px;">Un cliente te escribió en privado</h2>
-            <p style="color:#666;font-size:0.9rem;margin-top:0;">${horaLocal}${valorTexto ? ` · calificó ${valorTexto}/5` : ""}</p>
-            <div style="background:#F4F6EF;border-left:3px solid ${MARCA.verde};padding:14px 16px;border-radius:8px;margin:16px 0;">
-              <p style="margin:0;color:#16201C;">"${escaparHtml(comentario)}"</p>
-            </div>
-            ${telefono ? `<p><b>Teléfono para contactarlo:</b> <a href="tel:${encodeURIComponent(telefono)}">${escaparHtml(telefono)}</a></p>` : `<p style="color:#888;">No dejó teléfono de contacto.</p>`}
-            <p style="font-size:0.85rem;color:#888;margin-top:24px;">Este mensaje llegó además de que el cliente ya vio la opción de dejar reseña en Google — no en lugar de ella.</p>
-          </div>
-        `
-      ).catch(() => {});
-    }
-  }
-
-  res.send(`
-    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>body{font-family:-apple-system,sans-serif;background:#F8F4EC;display:flex;align-items:center;
-    justify-content:center;min-height:100vh;margin:0;padding:24px;text-align:center;color:#16201C;}
-    .box{background:#fff;border-radius:18px;padding:36px 28px;max-width:380px;box-shadow:0 10px 30px rgba(0,0,0,0.08);}
-    </style></head>
-    <body><div class="box"><h2>Gracias 🙏</h2><p>El negocio ya recibió tu mensaje.</p></div></body></html>
-  `);
-});
-
-// Guarda el micro-testimonio elegido con un solo toque y manda al cliente a Google.
-app.get("/testimonio/:slug", (req, res) => {
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-
-  const frase = req.query.frase || "";
-  const valor = parseInt(req.query.valor, 10) || 5;
-  // Solo se guarda si es EXACTAMENTE una de las frases predefinidas — nunca
-  // texto libre.
-  if (frase && esPro(negocio) && TODAS_LAS_FRASES_VALIDAS.has(frase)) guardarTestimonio(slug, frase, valor, negocio);
-
-  res.redirect(302, negocio.googleUrl);
-});
 
 // Panel visual: una tarjeta por negocio con totales de hoy, semana, y mini gráfica.
 // Visítalo así: https://tu-dominio.com/stats?key=TU_CLAVE
@@ -2841,12 +2653,6 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
     const promedioEstrellasNegocio = promedioEstrellasFiltradas(testimonios, quejas);
     const r = calcularResumen(eventos);
     const ultimoTexto = r.ultimo ? r.ultimo.fechaLegible : "Sin toques todavía";
-    const promSector = promedioSector(NEGOCIOS_TOTAL[slug].categoria, slug, datos);
-    const sectorBadge = promSector !== null
-      ? `<div class="sector-badge" style="color:${r.semana - promSector >= 0 ? MARCA.verde : MARCA.rojo}">
-           ${r.semana - promSector >= 0 ? "▲" : "▼"} ${r.semana - promSector >= 0 ? "+" : ""}${r.semana - promSector} vs. promedio del sector
-         </div>`
-      : "";
 
     // Indicador de reporte mensual — solo aplica a negocios Pro.
     let reporteBadge = "";
@@ -2885,7 +2691,6 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
         </div>
 
         <div class="sparkline">${barraSemana(r.dias7)}</div>
-        ${sectorBadge}
         ${reporteBadge}
 
         <div class="card-ultimo">Último toque: <b>${ultimoTexto}</b></div>
@@ -3841,16 +3646,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                     : `<div class="sentimiento-vacio">Activa el Plan Pro para recibir calificaciones y retroalimentación privada de tus clientes, cumpliendo con las políticas de reseñas de Google.</div>`}
                 </div>
               </div>
-
-              <div class="boceto-bloque">
-                <div class="card-titulo">Tú vs. tu sector</div>
-                <div class="chart-card">
-                  ${promSector !== null ? `<div class="grafica-vertical-marco"><div class="grafica-vertical">
-                    <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:${MARCA.verde};">${r.semana}</div><div class="barra-vertical" style="height:${Math.max(6, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;background:linear-gradient(180deg,#2C9560,${MARCA.verde});"></div><div class="barra-vertical-etiqueta">Tu negocio<br><b>esta semana</b></div></div>
-                    <div class="barra-vertical-grupo"><div class="barra-vertical-valor" style="color:#A86E00;">${promSector}</div><div class="barra-vertical" style="height:${Math.max(6, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;background:linear-gradient(180deg,#F7D77D,${MARCA.oro});"></div><div class="barra-vertical-etiqueta">Tu sector<br><b>promedio</b></div></div>
-                  </div></div><div class="grafica-resumen"><span>Diferencia <b>${r.semana - promSector >= 0 ? "+" : ""}${r.semana - promSector}</b></span><span><b>${r.semana >= promSector ? "Por encima" : "Por debajo"}</b> del promedio</span></div>` : `<div class="sentimiento-vacio">Aún no hay negocios suficientes para comparar tu sector.</div>`}
-                </div>
-              </div>
             </div>
 
             <div class="boceto-fila-media" id="actividad">
@@ -3930,36 +3725,6 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                   : `<div class="sentimiento-vacio">Sin calificaciones todavía.</div>`}
               </div>
             </div>
-            ${promSector !== null ? `
-            <div>
-              <div class="card-titulo">Tú vs. tu sector</div>
-              <div class="chart-card" style="margin-top:0;">
-                <div style="display:flex;flex-direction:column;gap:10px;">
-                  <div>
-                    <div style="display:flex;justify-content:space-between;font-size:0.76rem;margin-bottom:4px;">
-                      <span>Tú</span><b>${r.semana}</b>
-                    </div>
-                    <div style="height:8px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
-                      <div style="height:100%;border-radius:100px;background:${MARCA.verde};
-                                  width:${Math.min(100, Math.round((r.semana / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
-                    </div>
-                  </div>
-                  <div>
-                    <div style="display:flex;justify-content:space-between;font-size:0.76rem;margin-bottom:4px;color:${MARCA.textoSuave};">
-                      <span>Sector</span><b>${promSector}</b>
-                    </div>
-                    <div style="height:8px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
-                      <div style="height:100%;border-radius:100px;background:${MARCA.oro};
-                                  width:${Math.min(100, Math.round((promSector / Math.max(1, r.semana, promSector)) * 100))}%;"></div>
-                    </div>
-                  </div>
-                </div>
-                <div class="horas-nota" style="margin-top:8px;">
-                  ${r.semana >= promSector ? `Por encima del promedio.` : `${promSector - r.semana} bajo el promedio.`}
-                </div>
-              </div>
-            </div>
-            ` : ""}
           </div>
 
           <div class="seccion seccion-actividad">
@@ -6053,9 +5818,9 @@ app.get("/conoce", (req, res) => {
             <b>Consejo clave:</b> los datos de Tapin son tan buenos como la cantidad de gente que use la tarjeta. Si solo la usa 1 de cada 10 clientes, lo que ves en tu panel no representa lo que realmente pasa en tu negocio. Anímala con todos — en caja, en la mesa, al despedirte — para que tus estadísticas reflejen la realidad, no solo a los clientes más entusiastas.
           </div>
 
-          <div class="seccion-titulo" id="beneficios">Qué incluye cada plan</div>
+          <div class="seccion-titulo" id="beneficios">Qué incluye tu tarjeta</div>
           <div class="planes">
-            <div class="plan">
+            <div class="plan pro" style="max-width:420px;margin:0 auto;">
               <div class="plan-nombre">Pago único</div>
               <div class="plan-precio">$${PRECIO_BASICO_COP.toLocaleString("es-CO")} <span>COP</span></div>
               <p style="font-size:0.78rem;color:${MARCA.verde};font-weight:700;margin:-6px 0 14px;">Envío incluido</p>
@@ -6063,27 +5828,12 @@ app.get("/conoce", (req, res) => {
                 <li><span class="check">✓</span> Tarjeta NFC física + envío incluido</li>
                 <li><span class="check">✓</span> Redirección automática a tus reseñas de Google</li>
                 <li><span class="check">✓</span> Panel con TODAS las estadísticas incluidas</li>
+                <li><span class="check">✓</span> Horas pico, calendario de actividad y comparativos</li>
+                <li><span class="check">✓</span> Reporte PDF mensual automático</li>
+                <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
+                <li><span class="check">✓</span> Recomendaciones automáticas para tu negocio</li>
+                <li><span class="check">✓</span> Programa de fidelización de clientes</li>
                 <li><span class="check">✓</span> Acta de entrega formal</li>
-              </ul>
-            </div>
-            <div class="plan pro">
-              <div class="plan-badge">OPCIONAL</div>
-              <div class="plan-nombre">Plan Pro</div>
-              <div class="plan-precio">$${PRECIO_PRO_COP.toLocaleString("es-CO")} <span>COP / mes</span></div>
-              <p style="font-size:0.78rem;color:${MARCA.verde};font-weight:700;margin:-6px 0 14px;">Desde 1 tarjeta — ver tabla de precios abajo si tienes varias</p>
-              <div class="plan-anual">
-                <div class="plan-anual-izq">
-                  <div class="plan-anual-etiqueta">Pago anual</div>
-                  <div class="plan-anual-precio">$${PRECIO_PRO_ANUAL_COP.toLocaleString("es-CO")} <span>COP / año</span></div>
-                </div>
-                <div class="plan-anual-badge">10% más barato</div>
-              </div>
-              <ul>
-                <li><span class="check">✓</span> Requiere tener la tarjeta activa (se compra aparte)</li>
-                <li><span class="check">✓</span> Muestra siempre el botón de reseña en Google a todos tus clientes, sin importar la calificación</li>
-                <li><span class="check">✓</span> Además, les da la opción de escribirte algo en privado</li>
-                <li><span class="check">✓</span> Te llega una alerta por correo apenas alguien te escribe</li>
-                <li><span class="check">✓</span> 100% legal — cumple con la política de reseñas de Google y con la regla de la FTC sobre "review gating"</li>
               </ul>
             </div>
           </div>
@@ -6101,21 +5851,10 @@ app.get("/conoce", (req, res) => {
                 }).join("")}
               </table>
             </div>
-            <div class="precio-card">
-              <div class="precio-card-titulo">Suscripción Plan Pro</div>
-              <table class="tabla-precios">
-                <tr><th>Tarjetas activas</th><th>Precio c/u / mes</th></tr>
-                ${ESCALONES_PRO.slice().reverse().map((e, i, arr) => {
-                  const siguiente = arr[i + 1];
-                  const rango = siguiente ? `${e.minimo}-${siguiente.minimo - 1}` : `${e.minimo}+`;
-                  return `<tr><td>${rango}</td><td>$${e.precio.toLocaleString("es-CO")}</td></tr>`;
-                }).join("")}
-              </table>
-            </div>
           </div>
 
           <div class="nota">
-            <b>Sobre las reseñas:</b> más volumen de reseñas totales, buenas y malas, es lo que Google y tus clientes realmente valoran — un perfil con solo reseñas positivas suele generar desconfianza. Tapin te ayuda a que más clientes lleguen a dejar su reseña, y con el Plan Pro tienes las estadísticas para saber cuándo y por qué sube o baja tu actividad.
+            <b>Sobre las reseñas:</b> más volumen de reseñas totales, buenas y malas, es lo que Google y tus clientes realmente valoran — un perfil con solo reseñas positivas suele generar desconfianza. Tapin te ayuda a que más clientes lleguen a dejar su reseña, y tu panel te da las estadísticas para saber cuándo y por qué sube o baja tu actividad.
           </div>
 
           <a class="cta" href="/pedido">Pedir mi tarjeta Tapin →</a>
@@ -7672,35 +7411,21 @@ app.get("/", (req, res) => {
 
           <div id="precios">
             <div class="seccion-titulo">Lo que cuesta, sin letra pequeña</div>
-            <div class="seccion-sub">Pago único para empezar, o Plan Pro si quieres estadísticas al detalle, reportes automáticos y más. Para pagar la mensualidad Pro primero debes tener una tarjeta Tapin.</div>
+            <div class="seccion-sub">Un solo pago. Todo incluido — sin mensualidades ni sorpresas después.</div>
             <div class="planes">
-              <div class="plan">
+              <div class="plan pro" style="max-width:420px;margin:0 auto;">
                 <div class="plan-nombre">Pago único</div>
                 <div class="plan-precio">$${PRECIO_BASICO_COP.toLocaleString("es-CO")}<span> COP</span></div>
                 <ul>
                   <li><span class="check">✓</span> Tarjeta NFC física + envío incluido</li>
                   <li><span class="check">✓</span> Redirección automática a tus reseñas de Google</li>
-                  <li><span class="check">✓</span> Panel con historial y estadísticas</li>
-                  <li><span class="check">✓</span> Acta de entrega formal</li>
-                </ul>
-              </div>
-              <div class="plan pro">
-                <div class="plan-badge">RECOMENDADO</div>
-                <div class="plan-nombre">Mensualidad Pro</div>
-                <div class="plan-precio">$${PRECIO_PRO_COP.toLocaleString("es-CO")}<span> COP/mes</span></div>
-                <div class="plan-anual">
-                  <div><div class="plan-anual-etiqueta">Pago anual</div><div class="plan-anual-precio">$${PRECIO_PRO_ANUAL_COP.toLocaleString("es-CO")} COP/año</div></div>
-                  <div class="plan-anual-badge">10% más barato</div>
-                </div>
-                <ul>
-                  <li><span class="check">✓</span> Requiere tener una tarjeta Tapin activa</li>
-                  <li><span class="check">✓</span> Todo lo del pago único, más:</li>
-                  <li><span class="check">✓</span> Historial detallado de cada toque y estadísticas completas</li>
-                  <li><span class="check">✓</span> Reporte PDF mensual con horas pico, subidas y caídas</li>
-                  <li><span class="check">✓</span> Comparación y análisis frente a negocios del mismo sector</li>
+                  <li><span class="check">✓</span> Panel con historial y todas las estadísticas</li>
+                  <li><span class="check">✓</span> Horas pico, calendario de actividad y comparativos</li>
+                  <li><span class="check">✓</span> Reporte PDF mensual automático</li>
                   <li><span class="check">✓</span> Exportación de reportes en CSV, PDF y Word</li>
                   <li><span class="check">✓</span> Recomendaciones automáticas para tu negocio</li>
                   <li><span class="check">✓</span> Programa de fidelización de clientes</li>
+                  <li><span class="check">✓</span> Acta de entrega formal</li>
                 </ul>
               </div>
             </div>
@@ -7715,14 +7440,6 @@ app.get("/", (req, res) => {
                     const rango = siguiente ? `${e.minimo}-${siguiente.minimo - 1}` : `${e.minimo}+`;
                     return `<tr><td>${rango}</td><td>$${e.precio.toLocaleString("es-CO")}</td><td>${e.descuento || "—"}</td></tr>`;
                   }).join("")}
-                </table>
-              </div>
-              <div class="precio-card">
-                <div class="precio-card-titulo">Suscripción Plan Pro</div>
-                <div class="precio-card-sub">Precio mensual por tarjeta según cuántas tengas activas</div>
-                <table class="tabla-precios tabla-pro">
-                  <tr><th>Tarjetas activas</th><th>Precio mensual</th></tr>
-                  ${filasTablaProHtml()}
                 </table>
               </div>
             </div>
@@ -7989,25 +7706,6 @@ app.get("/pedido", (req, res) => {
             <input type="text" name="ciudad" id="input-ciudad" list="lista-ciudades" required
                    placeholder="Primero elige el departamento" autocomplete="off" disabled>
             <datalist id="lista-ciudades"></datalist>
-
-            <label class="pro-opcion" style="cursor:pointer;">
-              <input type="checkbox" name="incluirPro" id="check-incluir-pro" value="si" onchange="document.getElementById('opciones-plan-pro').style.display=this.checked?'block':'none';">
-              <span class="txt">
-                <b>Incluir Plan Pro</b>
-                Rescate de reseñas negativas en tiempo real, reportes mensuales y más. Se cobra junto con tu tarjeta en este mismo pago.
-              </span>
-            </label>
-
-            <div id="opciones-plan-pro" style="display:none;margin:-6px 0 16px;padding-left:4px;">
-              <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:0.86rem;margin-bottom:8px;cursor:pointer;">
-                <input type="radio" name="planProTipo" value="mensual" checked style="width:auto;margin:0;">
-                Mensual — $${PRECIO_PRO_COP.toLocaleString("es-CO")} COP (primer mes; luego se cobra cada mes aparte)
-              </label>
-              <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:0.86rem;cursor:pointer;">
-                <input type="radio" name="planProTipo" value="anual" style="width:auto;margin:0;">
-                Anual — $${PRECIO_PRO_ANUAL_COP.toLocaleString("es-CO")} COP (año completo, un solo pago, sin cobros después)
-              </label>
-            </div>
 
             <button type="submit">Continuar al pago</button>
           </form>
