@@ -7488,7 +7488,7 @@ app.get("/admin/entrar", limitarIntentos(6, 15), (req, res) => {
 // Esto es para el Plan Básico ($119.900 COP, pago único, incluye la tarjeta física y el envío
 // y el envío). El Plan Pro (mensual) necesita una integración distinta — ver nota
 // al final del archivo README sobre pagos recurrentes.
-const PRECIO_BASICO_COP = 120000;
+const PRECIO_BASICO_COP = 90000;
 const PRECIO_PRO_COP = 60000;
 const PRECIO_PRO_ANUAL_COP = 648000; // pago único, cubre 12 meses (~10% más barato que mes a mes)
 // Mientras más locales activos en Plan Pro tenga el mismo negocio, más paga
@@ -7526,11 +7526,9 @@ function filasTablaProHtml() {
 // tarjeta baja según cuántas se pidan de una vez, pero nunca por debajo de
 // un margen saludable.
 const ESCALONES_DESCUENTO = [
-  { minimo: 100, precio: 72000, descuento: "40%" },
-  { minimo: 50, precio: 78000, descuento: "35%" },
-  { minimo: 25, precio: 84000, descuento: "30%" },
-  { minimo: 10, precio: 96000, descuento: "20%" },
-  { minimo: 4, precio: 108000, descuento: "10%" },
+  { minimo: 10, precio: 50000, descuento: "44%" },
+  { minimo: 8, precio: 60000, descuento: "33%" },
+  { minimo: 4, precio: 70000, descuento: "22%" },
   { minimo: 1, precio: PRECIO_BASICO_COP, descuento: null },
 ];
 function precioTarjetaPorCantidad(cantidad) {
