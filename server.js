@@ -3558,7 +3558,24 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
           ${tarjetasVinculadas.length > 0 ? `
           <div class="seccion">
             <div class="card-titulo">Actividad por tarjeta <span class="suave">${sugerenciaTarjeta.toLowerCase()}, repuesto, etc.</span></div>
-            <div class="chart-card" style="margin-top:0;padding:8px;">
+            ${actividadPorOrigen.length > 0 ? `
+            <div class="chart-card" style="margin-top:0;">
+              <div class="chart-card-titulo" style="text-align:left;margin-bottom:14px;">Últimos 7 días, por tarjeta</div>
+              ${(() => {
+                const maxSemana = Math.max(1, ...actividadPorOrigen.map((g) => g.semana));
+                return actividadPorOrigen.map((g) => `
+                <div style="margin-bottom:12px;">
+                  <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:4px;">
+                    <span style="font-weight:600;">${escaparHtml(g.etiqueta)}</span><b>${g.semana}</b>
+                  </div>
+                  <div style="height:9px;border-radius:100px;background:${MARCA.borde};overflow:hidden;">
+                    <div style="height:100%;border-radius:100px;background:${MARCA.verde};width:${Math.max(3, Math.round((g.semana / maxSemana) * 100))}%;"></div>
+                  </div>
+                </div>`).join("");
+              })()}
+            </div>
+            ` : ""}
+            <div class="chart-card" style="margin-top:10px;padding:8px;">
               ${actividadPorOrigen.length > 0 ? actividadPorOrigen.map((g, i) => `
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;${i < actividadPorOrigen.length - 1 ? `border-bottom:1px solid ${MARCA.borde};` : ""}">
                   <span style="font-size:0.86rem;font-weight:600;">${escaparHtml(g.etiqueta)}</span>
