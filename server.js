@@ -2519,15 +2519,6 @@ app.get("/activar/:codigo", (req, res) => {
               </div>
               <input type="hidden" name="categoria" id="input-categoria" value="restaurante">
 
-              <label>Plan</label>
-              ${entrada.proIncluido
-                ? `<div style="background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};padding:12px 14px;border-radius:9px;font-size:0.88rem;font-weight:600;">
-                     ✓ Plan Pro ${entrada.planProTipo === "anual" ? "anual" : "mensual"} — ya incluido con la compra de esta tarjeta
-                   </div>`
-                : `<div style="background:${MARCA.crema};color:${MARCA.textoSuave};padding:12px 14px;border-radius:9px;font-size:0.88rem;">
-                     Plan Básico ($119.900 — pago único). ¿Quieres Pro? Lo puedes agregar después desde tu panel.
-                   </div>`}
-
               <label>País (define la hora local de los reportes)</label>
               <select name="pais" id="input-pais">
                 <option value="colombia" data-codigo="co">Colombia</option>
@@ -4065,12 +4056,13 @@ app.get("/mi-panel/:slug/clave", (req, res) => {
             <form method="POST" action="/mi-panel/${slug}/clave?key=${req.query.key}">
               <label>Nueva clave (mínimo 6 caracteres)</label>
               <input type="text" name="claveNueva" required minlength="6">
-              <button type="submit">Guardar nueva clave</button>
+              <button type="submit">Enviarme la confirmación por correo</button>
             </form>
           </div>
           <p style="font-size:0.78rem;color:${MARCA.textoSuave};max-width:420px;">
-            Ojo: en cuanto la cambies, el link que tenías guardado con la clave vieja deja de funcionar —
-            guarda el nuevo link que te va a salir aquí mismo.
+            Por seguridad, te mandamos un correo a <b>${negocio.email || "tu correo registrado"}</b> para confirmar el cambio —
+            la clave no se actualiza hasta que hagas clic en ese link. Así, si alguien más entró con tu link viejo,
+            no puede cambiarte la clave sin que te enteres.
           </p>
           <a class="volver" href="/mi-panel/${slug}?key=${req.query.key}">&larr; Volver a mi panel</a>
         </div>
@@ -4079,7 +4071,7 @@ app.get("/mi-panel/:slug/clave", (req, res) => {
   `);
 });
 
-app.post("/mi-panel/:slug/clave", (req, res) => {
+app.post("/mi-panel/:slug/clave", limitarIntentos(6, 15), async (req, res) => {
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
@@ -4090,10 +4082,90 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
   if (claveNueva.length < 6) {
     return res.status(400).send("La clave debe tener al menos 6 caracteres.");
   }
+  if (!negocio.email) {
+    return res.status(400).send("Este negocio no tiene correo registrado — no podemos mandarte la confirmación. Agrega un correo en \"Editar mi negocio\" primero.");
+  }
+
+  // Guarda la clave nueva PENDIENTE de confirmar (30 minutos), no la aplica
+  // todavía — solo se activa cuando el dueño hace clic en el link del correo.
+  const tokens = leerTokensAccesoNegocio();
+  const ahora = Date.now();
+  for (const t in tokens) {
+    if (new Date(tokens[t].expiraEl).getTime() < ahora) delete tokens[t];
+  }
+  const token = "cclave_" + generarToken();
+  tokens[token] = {
+    tipo: "cambio-clave",
+    slug,
+    claveNuevaPendiente: claveNueva,
+    expiraEl: new Date(ahora + 30 * 60 * 1000).toISOString(),
+  };
+  guardarTokensAccesoNegocio(tokens);
+
+  const linkConfirmacion = `${req.protocol}://${req.get("host")}/mi-panel/${slug}/clave/confirmar?token=${token}`;
+  await enviarEmail(
+    negocio.email,
+    `Confirma el cambio de clave en tu panel — ${negocio.nombre}`,
+    `
+      <div style="font-family:-apple-system,Arial,sans-serif;max-width:480px;">
+        <h2 style="color:${MARCA.verdeOscuro};margin-bottom:4px;">¿Pediste cambiar tu clave?</h2>
+        <p style="color:#666;">Alguien con acceso a tu panel de <b>${escaparHtml(negocio.nombre)}</b> pidió cambiar la clave de acceso. Si fuiste tú, confirma aquí:</p>
+        <a href="${linkConfirmacion}" style="display:inline-block;background:${MARCA.verdeOscuro};color:#fff;text-decoration:none;
+           padding:13px 22px;border-radius:9px;font-weight:700;margin:12px 0;">Confirmar cambio de clave</a>
+        <p style="font-size:0.85rem;color:#888;">Este link expira en 30 minutos. Si no pediste este cambio, ignora este correo — tu clave actual sigue funcionando igual.</p>
+      </div>
+    `
+  ).catch(() => {});
+
+  res.send(`
+    <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>${ESTILO_BASE}
+        .ok-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;}
+      </style></head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
+        <div class="content">
+          <div class="eyebrow">Revisa tu correo</div>
+          <h1 class="titulo-pagina">Te mandamos un link de confirmación</h1>
+          <div class="ok-card">
+            <p>Te escribimos a <b>${escaparHtml(negocio.email)}</b> — abre ese correo y haz clic en el link para que la clave nueva quede activa. Tu clave actual sigue funcionando mientras tanto.</p>
+            <p style="font-size:0.8rem;color:${MARCA.textoSuave};margin-top:12px;">El link expira en 30 minutos.</p>
+          </div>
+          <a class="volver" href="/mi-panel/${slug}?key=${req.query.key}" style="display:inline-block;margin-top:14px;font-size:0.82rem;color:${MARCA.textoSuave};">&larr; Volver a mi panel</a>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Paso 2: el dueño hace clic en el link del correo — ahí sí se aplica la
+// clave nueva de verdad.
+app.get("/mi-panel/:slug/clave/confirmar", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  const token = req.query.token || "";
+  const tokens = leerTokensAccesoNegocio();
+  const entrada = tokens[token];
+  if (!entrada || entrada.tipo !== "cambio-clave" || entrada.slug !== slug) {
+    return res.status(400).send("Este link de confirmación no es válido o ya se usó.");
+  }
+  if (new Date(entrada.expiraEl).getTime() < Date.now()) {
+    delete tokens[token];
+    guardarTokensAccesoNegocio(tokens);
+    return res.status(400).send("Este link de confirmación ya expiró — pide el cambio de clave de nuevo desde tu panel.");
+  }
+
+  const claveNueva = entrada.claveNuevaPendiente;
+  delete tokens[token];
+  guardarTokensAccesoNegocio(tokens);
+
   const { salt: saltCambio, hash: hashCambio } = hashClaveNegocio(claveNueva);
   guardarCambiosNegocio(slug, negocio, { claveAccesoHash: hashCambio, claveAccesoSalt: saltCambio, claveAcceso: undefined });
   ponerCookieSesion(res, slug, claveNueva);
-  registrarAuditoria(slug, negocio, "Cambiaste tu clave de acceso");
+  registrarAuditoria(slug, negocio, "Confirmó el cambio de su clave de acceso por correo");
 
   res.send(`
     <html>
@@ -4110,6 +4182,8 @@ app.post("/mi-panel/:slug/clave", (req, res) => {
           <div class="ok-card">
             <p>Guarda este link — es el nuevo acceso a tu panel:</p>
             <p><code>${req.protocol}://${req.get("host")}/mi-panel/${slug}?key=${claveNueva}</code></p>
+            <a href="/mi-panel/${slug}?key=${claveNueva}" style="display:inline-block;margin-top:16px;background:${MARCA.verdeOscuro};
+               color:#fff;text-decoration:none;padding:12px 22px;border-radius:9px;font-weight:700;">Ir a mi panel →</a>
           </div>
         </div>
       </body>
