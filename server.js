@@ -4158,6 +4158,55 @@ app.get("/mi-panel/:slug/clave/confirmar", (req, res) => {
     return res.status(400).send("Este link de confirmación ya expiró — pide el cambio de clave de nuevo desde tu panel.");
   }
 
+  // Ojo: esta página SOLO muestra la confirmación — no cambia nada todavía.
+  // El cambio real se hace con el botón de abajo (POST). Si fuera al revés
+  // (cambiar la clave con solo visitar este link), algunos correos como
+  // Outlook o filtros de seguridad "escanean" los links automáticamente
+  // antes de que la persona los abra, lo que consumiría el token sin que el
+  // dueño realmente haya hecho clic.
+  res.send(`
+    <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>${ESTILO_BASE}
+        .ok-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:460px;}
+        button{width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;padding:13px;
+               font-size:0.95rem;font-weight:700;cursor:pointer;margin-top:8px;}
+      </style></head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
+        <div class="content">
+          <div class="eyebrow">Último paso</div>
+          <h1 class="titulo-pagina">Confirma el cambio de tu clave</h1>
+          <div class="ok-card">
+            <p>Vas a cambiar la clave de acceso de <b>${escaparHtml(negocio.nombre)}</b>. Si fuiste tú quien lo pidió, confirma aquí abajo.</p>
+            <form method="POST" action="/mi-panel/${slug}/clave/confirmar">
+              <input type="hidden" name="token" value="${escaparHtml(token)}">
+              <button type="submit">Sí, confirmar cambio de clave</button>
+            </form>
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.post("/mi-panel/:slug/clave/confirmar", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  const token = req.body.token || "";
+  const tokens = leerTokensAccesoNegocio();
+  const entrada = tokens[token];
+  if (!entrada || entrada.tipo !== "cambio-clave" || entrada.slug !== slug) {
+    return res.status(400).send("Este link de confirmación no es válido o ya se usó.");
+  }
+  if (new Date(entrada.expiraEl).getTime() < Date.now()) {
+    delete tokens[token];
+    guardarTokensAccesoNegocio(tokens);
+    return res.status(400).send("Este link de confirmación ya expiró — pide el cambio de clave de nuevo desde tu panel.");
+  }
+
   const claveNueva = entrada.claveNuevaPendiente;
   delete tokens[token];
   guardarTokensAccesoNegocio(tokens);
@@ -6209,6 +6258,73 @@ function renderizarPaginaNegocios(email) {
     </html>`;
 }
 
+
+// El link "¿Olvidaste tu clave?" que sale en el correo del login mágico —
+// como ya se probó dueño del correo (así llegó hasta acá), el cambio se
+// aplica directo, sin pedir una SEGUNDA confirmación por correo.
+app.get("/restablecer-clave/:slug", limitarIntentos(10, 15), (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!claveNegocioValida(negocio, slug, req.query.token)) {
+    return res.status(401).send("Este link no es válido o ya expiró. Pide uno nuevo en /mis-negocios.");
+  }
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Restablecer clave — ${negocio.nombre}</title>
+        <style>
+          ${ESTILO_BASE}
+          .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:28px;max-width:420px;
+                     box-shadow:0 8px 24px rgba(11,61,44,0.06);}
+          label{font-size:0.82rem;font-weight:600;color:${MARCA.textoSuave};display:block;margin:14px 0 6px;}
+          label:first-of-type{margin-top:0;}
+          input{width:100%;padding:11px 13px;border:1px solid ${MARCA.borde};border-radius:9px;font-size:0.92rem;font-family:inherit;box-sizing:border-box;}
+          button{margin-top:22px;width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:9px;
+                 padding:13px;font-size:0.95rem;font-weight:700;cursor:pointer;}
+        </style>
+      </head>
+      <body>
+        <div class="topbar"><div>${logoSvg("#FFFFFF", 30)}</div></div>
+        <div class="content">
+          <div class="eyebrow">${negocio.nombre}</div>
+          <h1 class="titulo-pagina">Elige tu nueva clave</h1>
+          <div class="form-card">
+            <form method="POST" action="/restablecer-clave/${slug}">
+              <input type="hidden" name="token" value="${escaparHtml(req.query.token)}">
+              <label>Nueva clave (mínimo 6 caracteres)</label>
+              <input type="password" name="claveNueva" required minlength="6" autocomplete="new-password">
+              <button type="submit">Guardar y entrar a mi panel</button>
+            </form>
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+app.post("/restablecer-clave/:slug", limitarIntentos(10, 15), (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  if (!claveNegocioValida(negocio, slug, req.body.token)) {
+    return res.status(401).send("Este link no es válido o ya expiró. Pide uno nuevo en /mis-negocios.");
+  }
+  const claveNueva = (req.body.claveNueva || "").trim();
+  if (claveNueva.length < 6) {
+    return res.status(400).send("La clave debe tener al menos 6 caracteres.");
+  }
+
+  const { salt, hash } = hashClaveNegocio(claveNueva);
+  guardarCambiosNegocio(slug, negocio, { claveAccesoHash: hash, claveAccesoSalt: salt, claveAcceso: undefined });
+  ponerCookieSesion(res, slug, claveNueva);
+  registrarAuditoria(slug, negocio, "Restableció su clave desde el link de \"olvidé mi clave\"");
+
+  res.redirect(302, `/mi-panel/${slug}?key=${encodeURIComponent(claveNueva)}`);
+});
 
 app.get("/mis-negocios/:token", (req, res) => {
   const tokens = leerTokens();
