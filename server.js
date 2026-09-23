@@ -2784,6 +2784,7 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
           <a href="/export/${slug}.pdf?key=${key}">PDF</a>
           <a href="/export/${slug}.docx?key=${key}">Word</a>
           <a href="/entrega/${slug}.pdf?key=${key}">Acta de entrega</a>
+          <a href="/entrega/${slug}/firmar?key=${key}">Firmar acta →</a>
           <a href="/notificar/${slug}?key=${key}">Enviar reporte por email</a>
           <a href="/reportes-guardados/${slug}?key=${key}">Reportes guardados</a>
         </div>
@@ -3477,6 +3478,13 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
                       border:1.5px solid ${MARCA.borde};border-radius:100px;padding:8px 16px;text-decoration:none;">
               Cambiar mi clave
             </a>
+            ${fs.existsSync(path.join(ACTAS_FIRMADAS_DIR, `${slug}.pdf`)) ? `
+            <a href="/entrega/${slug}/firmada.pdf?key=${req.query.key}"
+               style="font-size:0.76rem;font-weight:700;color:${MARCA.verdeOscuro};background:#fff;
+                      border:1.5px solid ${MARCA.borde};border-radius:100px;padding:8px 16px;text-decoration:none;">
+              Ver mi acta firmada
+            </a>
+            ` : ""}
           </div>
           ` : ""}
 
@@ -4896,14 +4904,10 @@ app.get("/export/:slug.docx", async (req, res) => {
 // que respalda el cobro inicial y deja constancia de la fecha de activación
 // y las condiciones del servicio. Útil como soporte comercial con el cliente.
 // Visítalo así: https://tu-dominio.com/entrega/mi-negocio.pdf?key=TU_CLAVE
-app.get("/entrega/:slug.pdf", limitarIntentosAdmin, async (req, res) => {
-  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
-    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
-  }
-  const { slug } = req.params;
-  const negocio = obtenerNegocio(slug);
-  if (!negocio) return res.status(404).send("Negocio no encontrado.");
-
+// Genera el PDF del acta de entrega — reutilizable con o sin firmas. Si se
+// pasan firmaTapinPng/firmaClientePng (bytes de una imagen PNG), se dibujan
+// sobre las líneas de firma correspondientes.
+async function generarActaPdfBuffer(negocio, slug, { firmaTapinPng = null, firmaClientePng = null } = {}) {
   const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
 
   const codigos = leerCodigos();
@@ -4911,6 +4915,17 @@ app.get("/entrega/:slug.pdf", limitarIntentosAdmin, async (req, res) => {
   const fechaActivacion = (entrada && entrada.activadoEl)
     ? new Date(entrada.activadoEl).toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" })
     : new Date().toLocaleDateString("es-CO", { timeZone: zonaDe(negocio), day: "numeric", month: "long", year: "numeric" });
+
+  // Todas las tarjetas físicas de este negocio: la principal + las que se
+  // hayan vinculado después (mesas, sillas, repuestos, etc.) — el acta debe
+  // reflejar TODO lo entregado, no solo la primera tarjeta.
+  const sugerenciaTarjeta = sugerenciaEtiquetaTarjeta(negocio.categoria);
+  const tarjetasVinculadas = Object.keys(codigos).filter((c) => codigos[c].alias === slug);
+  const tarjetasEntregadas = [
+    { codigo: slug, etiqueta: `Tarjeta principal` },
+    ...tarjetasVinculadas.map((c) => ({ codigo: c, etiqueta: codigos[c].etiqueta || `${sugerenciaTarjeta} adicional` })),
+  ];
+  const totalTarjetas = tarjetasEntregadas.length;
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595, 842]);
@@ -4941,7 +4956,7 @@ app.get("/entrega/:slug.pdf", limitarIntentosAdmin, async (req, res) => {
     ["Fecha de activación", fechaActivacion],
     ["Enlace de reseñas configurado", "Sí"],
     ["Plan contratado", "Tarjeta Tapin (pago único, todo incluido)"],
-    ["Código de tarjeta", slug],
+    ["Tarjetas entregadas", `${totalTarjetas} (ver detalle abajo)`],
   ];
   filas.forEach(([label, val], i) => {
     if (i % 2 === 0) page.drawRectangle({ x: 50, y: y - 20, width: ANCHO - 100, height: 20, color: crema });
@@ -4951,13 +4966,25 @@ app.get("/entrega/:slug.pdf", limitarIntentosAdmin, async (req, res) => {
   });
 
   y -= 30;
+  page.drawText(`Tarjetas físicas entregadas e instaladas (${totalTarjetas})`, { x: 50, y, size: 12, font: fontBold, color: oscuro });
+  y -= 20;
+  tarjetasEntregadas.forEach(({ codigo, etiqueta }, i) => {
+    if (i % 2 === 0) page.drawRectangle({ x: 50, y: y - 16, width: ANCHO - 100, height: 16, color: crema });
+    page.drawText(etiqueta, { x: 58, y: y - 12, size: 9.5, font: fontBold, color: oscuro });
+    page.drawText(codigo, { x: 280, y: y - 12, size: 9, font, color: gris });
+    y -= 16;
+  });
+
+  y -= 30;
   page.drawText("Alcance del servicio entregado", { x: 50, y, size: 12, font: fontBold, color: oscuro });
   y -= 20;
   const alcance = [
-    "Tarjeta física con tecnología NFC, configurada y activada.",
+    totalTarjetas > 1
+      ? `${totalTarjetas} tarjetas físicas con tecnología NFC, configuradas y activadas (ver detalle arriba).`
+      : "Tarjeta física con tecnología NFC, configurada y activada.",
     "Redirección automática a la página de reseñas de Google del negocio.",
-    "Filtro de reputación: reseñas negativas se capturan en privado, no se publican.",
-    "Panel de estadísticas con historial de toques y exportación de reportes.",
+    "Panel con todas las estadísticas incluidas: historial de toques, horas pico, calendario de actividad.",
+    "Reporte mensual automático y exportación de reportes en CSV, PDF y Word.",
   ];
   alcance.forEach((linea) => {
     page.drawText(`•  ${linea}`, { x: 58, y, size: 9.5, font, color: oscuro, maxWidth: ANCHO - 116, lineHeight: 13 });
@@ -4974,9 +5001,22 @@ app.get("/entrega/:slug.pdf", limitarIntentosAdmin, async (req, res) => {
   });
 
   y -= 110;
+
+  // Firma de Tapin — si hay una imagen dibujada/subida, se pega encima de la
+  // línea; si no, queda la línea en blanco para firmar a mano en papel.
+  if (firmaTapinPng) {
+    const img = await pdfDoc.embedPng(firmaTapinPng);
+    const escala = Math.min(190 / img.width, 55 / img.height);
+    page.drawImage(img, { x: 60, y: y + 4, width: img.width * escala, height: img.height * escala });
+  }
   page.drawLine({ start: { x: 60, y }, end: { x: 260, y }, thickness: 1, color: gris });
   page.drawText("Firma - Tapin", { x: 60, y: y - 14, size: 9, font, color: gris });
 
+  if (firmaClientePng) {
+    const img = await pdfDoc.embedPng(firmaClientePng);
+    const escala = Math.min(190 / img.width, 55 / img.height);
+    page.drawImage(img, { x: 340, y: y + 4, width: img.width * escala, height: img.height * escala });
+  }
   page.drawLine({ start: { x: 340, y }, end: { x: 540, y }, thickness: 1, color: gris });
   page.drawText("Firma - Cliente", { x: 340, y: y - 14, size: 9, font, color: gris });
 
@@ -4984,10 +5024,234 @@ app.get("/entrega/:slug.pdf", limitarIntentosAdmin, async (req, res) => {
     x: 50, y: 40, size: 8, font, color: gris,
   });
 
-  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(await pdfDoc.save());
+}
+
+// Carpeta donde se guardan las actas ya firmadas (una por negocio, se
+// sobreescribe si se vuelve a firmar).
+const ACTAS_FIRMADAS_DIR = path.join(DATA_DIR, "actas-firmadas");
+if (!fs.existsSync(ACTAS_FIRMADAS_DIR)) fs.mkdirSync(ACTAS_FIRMADAS_DIR, { recursive: true });
+
+app.get("/entrega/:slug.pdf", limitarIntentosAdmin, async (req, res) => {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  const pdfBytes = await generarActaPdfBuffer(negocio, slug);
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="acta-entrega-tapin-${slug}.pdf"`);
-  res.send(Buffer.from(pdfBytes));
+  res.send(pdfBytes);
+});
+
+// Página para firmar el acta en el momento de la entrega — pensada para
+// abrirla en el iPad y que el dueño firme con el dedo directo en la
+// pantalla. Al generar, el PDF queda con las firmas incrustadas y se
+// descarga solo; además se guarda una copia para poder verla después.
+app.get("/entrega/:slug/firmar", limitarIntentosAdmin, (req, res) => {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Firmar acta — ${negocio.nombre}</title>
+        <style>
+          *{box-sizing:border-box;}
+          body{font-family:-apple-system,Arial,sans-serif;background:${MARCA.crema};margin:0;padding:20px;color:${MARCA.texto};}
+          h1{font-size:1.2rem;color:${MARCA.verdeOscuro};margin:0 0 4px;}
+          .sub{color:${MARCA.textoSuave};font-size:0.85rem;margin:0 0 20px;}
+          .bloque-firma{background:#fff;border:1px solid ${MARCA.borde};border-radius:14px;padding:16px;margin-bottom:16px;}
+          .bloque-firma h3{margin:0 0 10px;font-size:0.9rem;color:${MARCA.verdeOscuro};}
+          canvas{width:100%;height:160px;border:2px dashed ${MARCA.borde};border-radius:10px;background:#fafafa;touch-action:none;display:block;}
+          .fila-botones{display:flex;gap:8px;margin-top:8px;}
+          .fila-botones button{flex:1;padding:9px;border-radius:8px;border:1px solid ${MARCA.borde};background:#fff;
+                                font-size:0.82rem;font-weight:600;cursor:pointer;color:${MARCA.textoSuave};}
+          .btn-generar{width:100%;background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:12px;
+                       padding:16px;font-size:1rem;font-weight:700;cursor:pointer;margin-top:10px;}
+          .btn-generar:disabled{opacity:0.5;}
+          .o-subir{margin-top:10px;font-size:0.8rem;color:${MARCA.textoSuave};}
+          .o-subir input{margin-top:6px;}
+          .aviso{font-size:0.78rem;color:${MARCA.textoSuave};text-align:center;margin-top:12px;}
+        </style>
+      </head>
+      <body>
+        <h1>Firmar acta — ${escaparHtml(negocio.nombre)}</h1>
+        <div class="sub">Firmen directo en la pantalla con el dedo o el Apple Pencil. Al generar, el PDF queda con las dos firmas y se descarga automáticamente.</div>
+
+        <div class="bloque-firma">
+          <h3>Firma — Tapin</h3>
+          <canvas id="firmaTapin"></canvas>
+          <div class="fila-botones">
+            <button type="button" onclick="limpiar('firmaTapin')">Borrar y firmar de nuevo</button>
+          </div>
+          <div class="o-subir">
+            ¿Prefieres subir una foto de la firma en papel en vez de dibujarla?
+            <input type="file" accept="image/*" id="archivoTapin" onchange="cargarFoto('firmaTapin', this)">
+          </div>
+        </div>
+
+        <div class="bloque-firma">
+          <h3>Firma — Cliente</h3>
+          <canvas id="firmaCliente"></canvas>
+          <div class="fila-botones">
+            <button type="button" onclick="limpiar('firmaCliente')">Borrar y firmar de nuevo</button>
+          </div>
+          <div class="o-subir">
+            ¿Prefieres subir una foto de la firma en papel en vez de dibujarla?
+            <input type="file" accept="image/*" id="archivoCliente" onchange="cargarFoto('firmaCliente', this)">
+          </div>
+        </div>
+
+        <form id="formFirma" method="POST" action="/entrega/${slug}/firmar?key=${req.query.key}">
+          <input type="hidden" name="firmaTapin" id="inputFirmaTapin">
+          <input type="hidden" name="firmaCliente" id="inputFirmaCliente">
+          <button type="submit" class="btn-generar" id="btnGenerar">Generar y descargar acta firmada</button>
+        </form>
+        <div class="aviso">Se guarda una copia — el negocio podrá verla después desde su panel.</div>
+
+        <script>
+          const lienzos = {};
+          function prepararLienzo(id) {
+            const canvas = document.getElementById(id);
+            const ctx = canvas.getContext("2d");
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            ctx.strokeStyle = "#0d2318";
+            ctx.lineWidth = 2.2;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            let dibujando = false;
+            let x0 = 0, y0 = 0;
+
+            function pos(e) {
+              const r = canvas.getBoundingClientRect();
+              const punto = e.touches ? e.touches[0] : e;
+              return { x: punto.clientX - r.left, y: punto.clientY - r.top };
+            }
+            function empezar(e) {
+              e.preventDefault();
+              dibujando = true;
+              const p = pos(e);
+              x0 = p.x; y0 = p.y;
+            }
+            function mover(e) {
+              if (!dibujando) return;
+              e.preventDefault();
+              const p = pos(e);
+              ctx.beginPath();
+              ctx.moveTo(x0, y0);
+              ctx.lineTo(p.x, p.y);
+              ctx.stroke();
+              x0 = p.x; y0 = p.y;
+              lienzos[id].tieneTrazo = true;
+            }
+            function terminar() { dibujando = false; }
+
+            canvas.addEventListener("mousedown", empezar);
+            canvas.addEventListener("mousemove", mover);
+            window.addEventListener("mouseup", terminar);
+            canvas.addEventListener("touchstart", empezar, { passive: false });
+            canvas.addEventListener("touchmove", mover, { passive: false });
+            canvas.addEventListener("touchend", terminar);
+
+            lienzos[id] = { canvas, ctx, tieneTrazo: false };
+          }
+          function limpiar(id) {
+            const l = lienzos[id];
+            l.ctx.clearRect(0, 0, l.canvas.width, l.canvas.height);
+            l.tieneTrazo = false;
+            document.getElementById("archivo" + id.replace("firma", "")).value = "";
+          }
+          function cargarFoto(id, input) {
+            const archivo = input.files[0];
+            if (!archivo) return;
+            const lector = new FileReader();
+            lector.onload = (e) => {
+              lienzos[id].fotoBase64 = e.target.result;
+            };
+            lector.readAsDataURL(archivo);
+          }
+          prepararLienzo("firmaTapin");
+          prepararLienzo("firmaCliente");
+
+          document.getElementById("formFirma").addEventListener("submit", (e) => {
+            e.preventDefault();
+            document.getElementById("btnGenerar").disabled = true;
+            document.getElementById("btnGenerar").textContent = "Generando...";
+
+            ["firmaTapin", "firmaCliente"].forEach((id) => {
+              const l = lienzos[id];
+              let dataUrl = "";
+              if (l.fotoBase64) {
+                dataUrl = l.fotoBase64;
+              } else if (l.tieneTrazo) {
+                dataUrl = l.canvas.toDataURL("image/png");
+              }
+              document.getElementById("input" + id.charAt(0).toUpperCase() + id.slice(1)).value = dataUrl;
+            });
+
+            e.target.submit();
+          });
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+app.post("/entrega/:slug/firmar", limitarIntentosAdmin, async (req, res) => {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
+    return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
+  }
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  const dataUrlABuffer = (dataUrl) => {
+    if (!dataUrl || !dataUrl.startsWith("data:image")) return null;
+    const base64 = dataUrl.split(",")[1];
+    return base64 ? Buffer.from(base64, "base64") : null;
+  };
+
+  const firmaTapinPng = dataUrlABuffer(req.body.firmaTapin);
+  const firmaClientePng = dataUrlABuffer(req.body.firmaCliente);
+
+  const pdfBytes = await generarActaPdfBuffer(negocio, slug, { firmaTapinPng, firmaClientePng });
+
+  // Guarda una copia — así el negocio la puede ver después desde su panel,
+  // sin depender de que tú se la reenvíes.
+  fs.writeFileSync(path.join(ACTAS_FIRMADAS_DIR, `${slug}.pdf`), pdfBytes);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="acta-firmada-tapin-${slug}.pdf"`);
+  res.send(pdfBytes);
+});
+
+// El negocio (o el admin) puede ver/descargar la última acta firmada.
+app.get("/entrega/:slug/firmada.pdf", (req, res) => {
+  const { slug } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+  const autorizado = req.query.key === ADMIN_KEY || claveNegocioValida(negocio, slug, req.query.key);
+  if (!autorizado) return res.status(401).send("No autorizado.");
+
+  const ruta = path.join(ACTAS_FIRMADAS_DIR, `${slug}.pdf`);
+  if (!fs.existsSync(ruta)) return res.status(404).send("Todavía no hay un acta firmada para este negocio.");
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="acta-firmada-tapin-${slug}.pdf"`);
+  res.send(fs.readFileSync(ruta));
 });
 // Ideal para entregarle el reporte a tu cliente (Excel/Google Sheets lo abre directo).
 // Visítalo así: https://tu-dominio.com/export/mi-negocio.csv?key=TU_CLAVE
