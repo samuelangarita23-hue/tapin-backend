@@ -1826,10 +1826,10 @@ app.get("/r/:slug", (req, res) => {
 // sin tener que tocar el código ni redesplegar en Render.
 // Visítalo así: https://tu-dominio.com/editar?key=TU_CLAVE
 app.get("/editar", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
-  const key = req.query.key;
+  const key = req.query.key || ADMIN_KEY;
   const todos = todosLosNegocios();
 
   const filas = Object.entries(todos)
@@ -1892,15 +1892,15 @@ app.get("/editar", limitarIntentosAdmin, (req, res) => {
 
 // Formulario para crear un negocio nuevo directamente (sin pasar por código de activación).
 app.get("/editar/nuevo", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
-  const key = req.query.key;
+  const key = req.query.key || ADMIN_KEY;
   res.send(formularioNegocio({ titulo: "Agregar negocio nuevo", accion: `/editar/nuevo?key=${key}`, key }));
 });
 
 app.post("/editar/nuevo", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
   const { nombre, googleUrl, categoria, pais, email, plan, direccion, lat, lng } = req.body;
@@ -1942,7 +1942,7 @@ app.post("/editar/nuevo", limitarIntentosAdmin, (req, res) => {
 
 // Editar un negocio dinámico existente (creado por código de activación o desde /editar/nuevo).
 app.get("/editar/:slug", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
   const { slug } = req.params;
@@ -1950,7 +1950,7 @@ app.get("/editar/:slug", limitarIntentosAdmin, (req, res) => {
   if (!negocio) {
     return res.status(404).send("Negocio no encontrado.");
   }
-  const key = req.query.key;
+  const key = req.query.key || ADMIN_KEY;
   res.send(formularioNegocio({
     titulo: `Editar — ${negocio.nombre}`,
     accion: `/editar/${slug}?key=${key}`,
@@ -1961,7 +1961,7 @@ app.get("/editar/:slug", limitarIntentosAdmin, (req, res) => {
 });
 
 app.post("/editar/:slug", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
   const { slug } = req.params;
@@ -2023,13 +2023,13 @@ app.post("/editar/:slug", limitarIntentosAdmin, (req, res) => {
 });
 // Pantalla de confirmación antes de quitar una tarjeta (para evitar borrados accidentales).
 app.get("/editar/:slug/quitar", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
   const { slug } = req.params;
   const negocio = obtenerNegocio(slug);
   if (!negocio) return res.status(404).send("Negocio no encontrado.");
-  const key = req.query.key;
+  const key = req.query.key || ADMIN_KEY;
 
   res.send(`
     <html>
@@ -2068,7 +2068,7 @@ app.get("/editar/:slug/quitar", limitarIntentosAdmin, (req, res) => {
 // Procesa la desactivación: la tarjeta deja de funcionar y desaparece del panel,
 // pero el historial de toques queda guardado en data.json por si se reactiva después.
 app.post("/editar/:slug/quitar", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
   const { slug } = req.params;
@@ -2181,12 +2181,12 @@ function formularioNegocio({ titulo, accion, key, valores = {}, slug = null }) {
 // Genera un código por cada tarjeta física ANTES de saber a qué negocio va.
 // Visítalo así: https://tu-dominio.com/codigos?key=TU_CLAVE
 app.get("/codigos", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
 
   const codigos = leerCodigos();
-  const key = req.query.key;
+  const key = req.query.key || ADMIN_KEY;
   const negociosTodos = todosLosNegocios();
 
   const filas = Object.entries(codigos)
@@ -2286,7 +2286,7 @@ app.get("/codigos", limitarIntentosAdmin, (req, res) => {
 // vez — un código en el correo si generaste 1, o todos los que hayan sido
 // necesarios si generaste varios (ej: un negocio con varias sedes).
 app.post("/codigos/generar", limitarIntentosAdmin, async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
   const cantidad = Math.min(200, Math.max(1, parseInt(req.body.cantidad, 10) || 1));
@@ -2676,13 +2676,13 @@ app.post("/activar/:codigo", (req, res) => {
 });
 
 app.get("/stats", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   iniciarSesionAdmin(res);
 
   const datos = leerDatos();
-  const key = req.query.key;
+  const key = req.query.key || ADMIN_KEY;
   const NEGOCIOS_TOTAL = todosLosNegocios();
 
   // Totales agregados de TODAS las tarjetas juntas (sección de resumen general)
@@ -2963,7 +2963,7 @@ app.get("/stats", limitarIntentosAdmin, (req, res) => {
 // Esto es lo que le puedes mostrar o entregar a tu cliente para justificar la suscripción.
 // Visítalo así: https://tu-dominio.com/historial/mi-negocio?key=TU_CLAVE
 app.get("/historial/:slug", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
 
@@ -4221,11 +4221,11 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           .config-header .titulo-pagina{margin-bottom:0;}
           .config-subtitulo{max-width:480px;color:${MARCA.textoSuave};font-size:.82rem;line-height:1.5;text-align:right;}
           .config-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:stretch;
-                       grid-template-areas:"meta alert" "pause read" "audit audit";}
+                       grid-template-areas:"meta alert" "pause read" "clave clave" "audit audit";}
           .config-grid>.form-card:not(.config-auditoria){display:flex;flex-direction:column;height:100%;}
           .config-grid>.form-card:not(.config-auditoria)>form{margin-top:auto;}
           .config-suscripcion{grid-area:sus}.config-meta{grid-area:meta}.config-alertas{grid-area:alert}
-          .config-pausar{grid-area:pause}.config-lectura{grid-area:read}.config-auditoria{grid-area:audit}
+          .config-pausar{grid-area:pause}.config-lectura{grid-area:read}.config-clave{grid-area:clave}.config-auditoria{grid-area:audit}
           .form-card{background:#fff;border:1px solid ${MARCA.borde};border-radius:16px;padding:22px;max-width:none;margin:0;
                      box-shadow:0 1px 3px rgba(11,61,44,.05);box-sizing:border-box;min-width:0;}
           .form-card h3{margin:0 0 5px;font-size:0.98rem;color:${MARCA.texto};}
@@ -4244,7 +4244,7 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
           .linea-audit b{color:${MARCA.texto};font-weight:600;}
           .config-auditoria .linea-audit:last-child{border-bottom:none;}
           @media(max-width:980px){
-            .config-grid{grid-template-areas:"meta alert" "pause read" "audit audit";}
+            .config-grid{grid-template-areas:"meta alert" "pause read" "clave clave" "audit audit";}
           }
           @media(max-width:760px){
             .config-header{align-items:flex-start;flex-direction:column;}
@@ -4309,6 +4309,15 @@ app.get("/mi-panel/:slug/configuracion", (req, res) => {
               : `<form method="POST" action="/mi-panel/${slug}/configuracion/solo-lectura?key=${claveUsada}">
                    <button type="submit">Generar acceso de solo lectura</button>
                  </form>`}
+          </div>
+
+          <div class="form-card config-clave">
+            <h3>Clave de acceso</h3>
+            <p class="nota">Por seguridad, el cambio se confirma por correo antes de quedar activo — nunca se aplica al instante.</p>
+            <a href="/mi-panel/${slug}/clave?key=${claveUsada}" style="display:inline-block;background:${MARCA.verdeOscuro};color:#fff;
+               text-decoration:none;border-radius:9px;padding:11px 18px;font-weight:700;font-size:0.88rem;">
+              Cambiar mi clave
+            </a>
           </div>
 
           <div class="form-card config-auditoria">
@@ -4379,7 +4388,7 @@ function normalizarIdentificador(valor) {
 // Mismo reporte que el PDF, pero para ver directo en el navegador sin descargar nada.
 // Visítalo así: https://tu-dominio.com/reporte/mi-negocio?key=TU_CLAVE
 app.get("/reporte/:slug", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   const { slug } = req.params;
@@ -4839,7 +4848,7 @@ app.get("/export/:slug.docx", async (req, res) => {
 // y las condiciones del servicio. Útil como soporte comercial con el cliente.
 // Visítalo así: https://tu-dominio.com/entrega/mi-negocio.pdf?key=TU_CLAVE
 app.get("/entrega/:slug.pdf", limitarIntentosAdmin, async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   const { slug } = req.params;
@@ -5095,7 +5104,7 @@ async function enviarReporteMensualNegocio(slug, negocio, baseUrl) {
 // TODOS los Pro de una sola vez — ya no necesitas un cron por cada negocio.
 // Visítalo así: https://tu-dominio.com/notificar/mi-negocio?key=TU_CLAVE
 app.get("/notificar/:slug", limitarIntentosAdmin, async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   const { slug } = req.params;
@@ -5118,7 +5127,7 @@ app.get("/notificar/:slug", limitarIntentosAdmin, async (req, res) => {
 // reporte a mano o configurar un cron por cada negocio.
 // Visítalo así: https://tu-dominio.com/enviar-reportes-mensuales?key=TU_CLAVE
 app.get("/enviar-reportes-mensuales", limitarIntentosAdmin, async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
 
@@ -5151,7 +5160,7 @@ app.get("/enviar-reportes-mensuales", limitarIntentosAdmin, async (req, res) => 
 // algo quedó roto, para arreglarlo antes de que un cliente se tope con el error.
 // Visítalo así: https://tu-dominio.com/verificar-links-google?key=TU_CLAVE
 app.get("/verificar-links-google", limitarIntentosAdmin, async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
   const negocios = todosLosNegocios();
@@ -5189,7 +5198,7 @@ app.get("/verificar-links-google", limitarIntentosAdmin, async (req, res) => {
 // cron diario (revisa sola si a cada negocio ya le toca según su frecuencia).
 // Visítala así: https://tu-dominio.com/enviar-resumenes-quejas?key=TU_CLAVE
 app.get("/enviar-resumenes-quejas", limitarIntentosAdmin, async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
 
   const negocios = todosLosNegocios();
   const datos = leerDatos();
@@ -5247,7 +5256,7 @@ app.get("/enviar-resumenes-quejas", limitarIntentosAdmin, async (req, res) => {
 // darse cuenta. Visítala con un cron diario, solo manda un correo por negocio
 // (usa "avisoVencimientoEnviado" para no repetirlo cada día que corra el cron).
 app.get("/avisar-vencimiento-anual", limitarIntentosAdmin, async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
 
   const negocios = todosLosNegocios();
   const ahora = new Date();
@@ -5374,7 +5383,7 @@ app.get("/reportes-guardados/:slug/:mes.pdf", (req, res) => {
 // Incluye nombre y categoría de cada negocio (no solo los eventos), para que
 // la app no tenga que adivinar esa parte.
 app.get("/stats.json", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).json({ error: "No autorizado" });
   }
   const datos = leerDatos();
@@ -5403,7 +5412,7 @@ app.get("/stats.json", limitarIntentosAdmin, (req, res) => {
 // rastro si algo raro pasa o simplemente para acordarte de tus propios cambios.
 // Visítalo así: https://tu-dominio.com/auditoria?key=TU_CLAVE
 app.get("/auditoria", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   let registros = [];
@@ -5459,7 +5468,7 @@ app.get("/auditoria", limitarIntentosAdmin, (req, res) => {
 });
 
 app.get("/respaldo", limitarIntentosAdmin, (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   const archivos = ["data.json", "codigos.json", "clientes.json", "sesiones-clientes.json", "pedidos.json", "tokens.json"];
@@ -5483,7 +5492,7 @@ app.get("/respaldo", limitarIntentosAdmin, (req, res) => {
 // respaldo te llega solo sin que tengas que acordarte de entrar a bajarlo.
 // Visítalo así: https://tu-dominio.com/respaldo-correo?key=TU_CLAVE
 app.get("/respaldo-correo", limitarIntentosAdmin, async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado.");
   }
   const destino = req.query.a || process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
@@ -6831,7 +6840,7 @@ app.post("/favoritos/:slug/quitar", (req, res) => {
 // con ADMIN_KEY de todas formas.
 // Visítalo así: https://tu-dominio.com/test-email?key=TU_CLAVE&to=tu@correo.com
 app.get("/test-email", limitarIntentosAdmin, async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.status(401).send("No autorizado. Agrega ?key=TU_CLAVE a la URL.");
   }
   const destino = req.query.to;
@@ -7245,7 +7254,7 @@ app.get("/admin", (req, res) => {
 });
 
 app.get("/admin/entrar", limitarIntentos(6, 15), (req, res) => {
-  if (req.query.key !== ADMIN_KEY) {
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) {
     return res.redirect("/admin?error=1");
   }
   res.redirect(`/stats?key=${encodeURIComponent(req.query.key)}`);
@@ -8200,7 +8209,7 @@ function precioProSegunLocales(email, todosNegocios) {
 }
 
 app.get("/cobrar-suscripciones", limitarIntentosAdmin, async (req, res) => {
-  if (req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
+  if (!adminSesionValida(req) && req.query.key !== ADMIN_KEY) return res.status(401).send("No autorizado.");
   if (!process.env.WOMPI_PRIVATE_KEY) {
     return res.status(500).send("Falta configurar WOMPI_PRIVATE_KEY en Render.");
   }
