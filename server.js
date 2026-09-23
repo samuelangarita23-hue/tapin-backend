@@ -1227,6 +1227,30 @@ function calcularActividadPorOrigen(eventos) {
   return Object.values(grupos).sort((a, b) => b.total - a.total);
 }
 
+// Actividad por hora (0-23) de UNA tarjeta en particular, en UN día en
+// particular — para el selector "ver el día de esta mesa" en el panel.
+// origen null/"" = la tarjeta principal. fechaStr en formato YYYY-MM-DD,
+// interpretado en la zona horaria del negocio.
+function horasPorTarjetaYFecha(eventos, origen, fechaStr, negocio) {
+  const tz = zonaDe(negocio);
+  const porHora = new Array(24).fill(0);
+  let total = 0;
+  for (const e of eventos) {
+    const claveEvento = e.origen || "Tarjeta principal";
+    const claveBuscada = origen || "Tarjeta principal";
+    if (claveEvento !== claveBuscada) continue;
+    const fecha = new Date(e.fechaISO);
+    const fechaLocal = fecha.toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
+    if (fechaLocal !== fechaStr) continue;
+    const hora = parseInt(fecha.toLocaleString("en-US", { timeZone: tz, hour: "2-digit", hour12: false }), 10) % 24;
+    porHora[hora]++;
+    total++;
+  }
+  const maxToques = Math.max(0, ...porHora);
+  const picoHora = maxToques > 0 ? porHora.indexOf(maxToques) : null;
+  return { porHora, picoHora, maxToques, total };
+}
+
 // Analiza la actividad por hora del día (0-23) durante el último mes, para
 // identificar picos (horas de más movimiento) y caídas (horas muertas).
 // También compara la última semana contra la anterior para ver si el pico
@@ -2364,6 +2388,31 @@ app.get("/mi-panel/:slug/agregar-tarjeta", limitarIntentos(10, 15), (req, res) =
   return volver("ok");
 });
 
+// Cambia el nombre de una tarjeta ya vinculada (Mesa 2 → Terraza, etc.) sin
+// tener que desvincularla y volver a vincularla.
+app.post("/mi-panel/:slug/tarjeta/:codigo/renombrar", limitarIntentos(20, 15), (req, res) => {
+  const { slug, codigo } = req.params;
+  const negocio = obtenerNegocio(slug);
+  if (!negocio) return res.status(404).send("Negocio no encontrado.");
+
+  const claveUsada = claveEfectiva(req, slug);
+  const autorizado = claveNegocioValida(negocio, slug, claveUsada) && claveUsada !== negocio.claveSoloLectura;
+  if (!tieneClaveConfigurada(negocio) || !autorizado) {
+    return res.status(401).send("No autorizado.");
+  }
+
+  const codigos = leerCodigos();
+  const volver = (estado) => res.redirect(302, `/mi-panel/${slug}?key=${encodeURIComponent(claveUsada)}&tarjeta=${estado}#mi-negocio`);
+
+  if (!codigos[codigo] || codigos[codigo].alias !== slug) return volver("noexiste");
+
+  const nuevaEtiqueta = (req.body.etiqueta || "").trim().slice(0, 40);
+  codigos[codigo].etiqueta = nuevaEtiqueta || null;
+  guardarCodigos(codigos);
+
+  return volver("renombrada");
+});
+
 app.get("/activar/:codigo", (req, res) => {
   const { codigo } = req.params;
   const codigos = leerCodigos();
@@ -3318,6 +3367,14 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
   const sugerenciaTarjeta = sugerenciaEtiquetaTarjeta(negocio.categoria);
   const actividadPorOrigen = tarjetasVinculadas.length > 0 ? calcularActividadPorOrigen(eventos) : [];
 
+  const opcionesTarjeta = actividadPorOrigen.map((g) => g.etiqueta);
+  const hoyLocalStr = new Date().toLocaleDateString("en-CA", { timeZone: zonaDe(negocio) });
+  const verTarjeta = opcionesTarjeta.includes(req.query.verTarjeta) ? req.query.verTarjeta : opcionesTarjeta[0];
+  const verFecha = /^\d{4}-\d{2}-\d{2}$/.test(req.query.verFecha || "") ? req.query.verFecha : hoyLocalStr;
+  const horaDetalle = verTarjeta
+    ? horasPorTarjetaYFecha(eventos, verTarjeta === "Tarjeta principal" ? null : verTarjeta, verFecha, negocio)
+    : null;
+
   const actividadReciente = eventos
     .slice(-8)
     .reverse()
@@ -3460,13 +3517,18 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
             ${req.query.tarjeta === "noexiste" ? `<div class="reco" style="border-left-color:${MARCA.rojo};background:#FBEFE9;color:#993C1D;margin-bottom:10px;">Ese código no existe. Revisa que esté bien escrito.</div>` : ""}
             ${req.query.tarjeta === "mismo" ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;margin-bottom:10px;">Esa es la tarjeta que ya estás usando.</div>` : ""}
             ${req.query.tarjeta === "vacio" ? `<div class="reco" style="border-left-color:${MARCA.oro};background:#EEF1EC;color:#3F4A3D;margin-bottom:10px;">Escribe el código de la tarjeta.</div>` : ""}
+            ${req.query.tarjeta === "renombrada" ? `<div class="reco" style="border-left-color:${MARCA.verde};margin-bottom:10px;">✓ Nombre actualizado.</div>` : ""}
             ${tarjetasVinculadas.length > 0 ? `
             <div class="chart-card" style="margin-top:0;padding:8px;">
               ${tarjetasVinculadas
-                .map((t) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 10px;">
-                            <span style="font-size:0.85rem;font-weight:600;">${t.etiqueta ? escaparHtml(t.etiqueta) : "Sin nombre"}</span>
-                            <span style="font-size:0.76rem;color:${MARCA.textoSuave};font-family:monospace;">${t.codigo}</span>
-                          </div>`)
+                .map((t) => `<form action="/mi-panel/${slug}/tarjeta/${encodeURIComponent(t.codigo)}/renombrar?key=${encodeURIComponent(req.query.key)}" method="POST"
+                                    style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;flex-wrap:wrap;">
+                            <input type="text" name="etiqueta" value="${t.etiqueta ? escaparHtml(t.etiqueta) : ""}" placeholder="Sin nombre"
+                                   style="flex:1;min-width:110px;border:1px solid transparent;background:transparent;font-size:0.85rem;font-weight:600;padding:4px 6px;border-radius:6px;font-family:inherit;"
+                                   onfocus="this.style.borderColor='${MARCA.borde}';this.style.background='#fff';" onblur="this.style.borderColor='transparent';this.style.background='transparent';">
+                            <span style="font-size:0.72rem;color:${MARCA.textoSuave};font-family:monospace;">${t.codigo}</span>
+                            <button type="submit" style="background:none;border:none;color:${MARCA.verde};font-size:0.76rem;font-weight:700;cursor:pointer;padding:4px 8px;">Guardar</button>
+                          </form>`)
                 .join("")}
             </div>
             ` : ""}
@@ -3588,6 +3650,28 @@ app.get("/mi-panel/:slug", limitarIntentos(20, 15), (req, res) => {
               `).join("")
                 : `<div class="sentimiento-vacio">Todavía no hay toques registrados en ninguna tarjeta.</div>`}
             </div>
+
+            ${horaDetalle ? `
+            <div class="chart-card" style="margin-top:10px;">
+              <div class="chart-card-titulo" style="text-align:left;margin-bottom:10px;">Ver el día de una tarjeta</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+                ${opcionesTarjeta.map((etq) => `<a href="/mi-panel/${slug}?key=${encodeURIComponent(req.query.key)}&verTarjeta=${encodeURIComponent(etq)}&verFecha=${verFecha}#mi-negocio" style="text-decoration:none;font-size:0.72rem;font-weight:700;padding:6px 12px;border-radius:999px;border:1px solid ${verTarjeta === etq ? MARCA.verde : MARCA.borde};background:${verTarjeta === etq ? MARCA.verdeClaro : "#fff"};color:${MARCA.verdeOscuro};">${escaparHtml(etq)}</a>`).join("")}
+              </div>
+              <form method="GET" action="/mi-panel/${slug}" style="display:flex;gap:8px;align-items:center;margin-bottom:14px;">
+                <input type="hidden" name="key" value="${req.query.key}">
+                <input type="hidden" name="verTarjeta" value="${escaparHtml(verTarjeta)}">
+                <input type="date" name="verFecha" value="${verFecha}" max="${hoyLocalStr}"
+                       style="padding:8px 10px;border:1px solid ${MARCA.borde};border-radius:8px;font-size:0.8rem;font-family:inherit;">
+                <button type="submit" style="background:${MARCA.verdeOscuro};color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;">Ver</button>
+              </form>
+              ${horaDetalle.total > 0 ? `
+                <div class="horas-chart">${barraHoras(horaDetalle.porHora, horaDetalle.picoHora)}</div>
+                <div class="horas-labels"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+                <div class="horas-nota">${escaparHtml(verTarjeta)} el ${verFecha}: <b>${horaDetalle.total} toques</b> · pico <b>${horaDetalle.picoHora}:00</b> (${horaDetalle.maxToques})</div>
+              ` : `<div class="sentimiento-vacio">${escaparHtml(verTarjeta)} no tuvo toques ese día.</div>`}
+            </div>
+            ` : ""}
+
             <div class="suave" style="font-size:0.72rem;margin-top:8px;">"Tarjeta principal" es la que activaste primero — las demás son las que vinculaste después.</div>
           </div>
           ` : ""}
@@ -5797,6 +5881,17 @@ app.get("/descubre", (req, res) => {
   `);
 });
 
+// Recibe el negocio y la clave escritos en el formulario de /mis-negocios y
+// entra directo al panel — así el navegador puede guardar la clave como
+// cualquier contraseña normal (el campo es type="password" con
+// autocomplete), en vez de depender de un link mágico por correo.
+app.get("/mi-panel-entrar", limitarIntentos(15, 15), (req, res) => {
+  const slug = (req.query.slug || "").trim().toLowerCase().replace(/^https?:\/\/[^/]+\//, "").replace(/\/.*$/, "");
+  const key = req.query.key || "";
+  if (!slug || !key) return res.redirect(302, "/mis-negocios");
+  res.redirect(302, `/mi-panel/${encodeURIComponent(slug)}?key=${encodeURIComponent(key)}`);
+});
+
 // ---------- Dashboard de dueños: login mágico por correo, sin contraseña ----------
 // Un dueño puede tener varios locales (varios slugs) — se agrupan por email.
 app.get("/mis-negocios", (req, res) => {
@@ -5812,22 +5907,25 @@ app.get("/mis-negocios", (req, res) => {
     </form>`;
 
   const bloqueLogin = `
-    <a href="/auth/google/iniciar" style="display:flex;align-items:center;justify-content:center;gap:10px;
-       width:100%;box-sizing:border-box;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
-       padding:13px;font-weight:700;font-size:0.9rem;color:${MARCA.texto};text-decoration:none;margin-bottom:14px;">
-      <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-        <path fill="#EA4335" d="M24 9.5c3.4 0 6.4 1.2 8.8 3.5l6.5-6.5C35.3 2.5 30 0 24 0 14.6 0 6.5 5.4 2.5 13.2l7.6 5.9C12 12.9 17.5 9.5 24 9.5z"/>
-        <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7c4.3-4 6.8-9.9 6.8-17.4z"/>
-        <path fill="#FBBC05" d="M10.1 19.1a14.5 14.5 0 000 9.8l-7.6 5.9a24 24 0 010-21.6z"/>
-        <path fill="#34A853" d="M24 48c6 0 11.3-2 15-5.4l-7.3-5.7c-2 1.4-4.6 2.2-7.7 2.2-6.5 0-12-4.4-14-10.3l-7.6 5.9C6.5 42.6 14.6 48 24 48z"/>
-      </svg>
-      Iniciar sesión con Google
-    </a>
-    <div class="divisor">o con tu correo</div>
+    <form method="GET" action="/mi-panel-entrar">
+      <input type="text" name="slug" required placeholder="Tu negocio (la parte final de tu link)" autocomplete="username">
+      <div class="campo-clave">
+        <input type="password" id="clave-negocio" name="key" required placeholder="Tu clave" autocomplete="current-password">
+        <button type="button" class="ver-clave" onclick="alternarClave('clave-negocio')">${ICONO_OJO_ABIERTO}</button>
+      </div>
+      <button type="submit">Entrar</button>
+    </form>
+    <div class="divisor">¿Olvidaste tu clave?</div>
     <form method="POST" action="/mis-negocios/solicitar">
       <input type="email" name="email" required placeholder="tu@negocio.com">
-      <button type="submit">Enviarme el acceso</button>
-    </form>`;
+      <button type="submit" style="background:#fff;color:${MARCA.verde};border:1.5px solid ${MARCA.verde};">Enviarme el acceso por correo</button>
+    </form>
+    <script>
+      function alternarClave(id) {
+        const campo = document.getElementById(id);
+        campo.type = campo.type === "password" ? "text" : "password";
+      }
+    </script>`;
 
   res.send(`
     <html>
@@ -5849,6 +5947,11 @@ app.get("/mis-negocios", (req, res) => {
                  font-weight:700;font-size:0.95rem;cursor:pointer;}
           .divisor{display:flex;align-items:center;gap:10px;margin:22px 0;color:${MARCA.textoSuave};font-size:0.76rem;}
           .divisor::before,.divisor::after{content:"";flex:1;height:1px;background:${MARCA.borde};}
+          .campo-clave{position:relative;}
+          .campo-clave input{padding-right:44px;}
+          .ver-clave{position:absolute;right:4px;top:4px;bottom:4px;width:36px;background:none;border:none;
+                     cursor:pointer;color:${MARCA.textoSuave};padding:0;display:flex;align-items:center;justify-content:center;}
+          .ver-clave:hover{color:${MARCA.texto};}
           .form-codigo button{background:${MARCA.oro};}
           .banner-nueva{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};border-radius:10px;
                         padding:10px 14px;font-size:0.8rem;font-weight:600;margin-bottom:20px;}
@@ -5863,11 +5966,11 @@ app.get("/mis-negocios", (req, res) => {
             <p>Completa los datos de tu negocio para dejarla lista para usar.</p>
             ${bloqueActivar}
             <div class="divisor">¿Ya tienes cuenta con otra tarjeta?</div>
-            <p style="margin:0 0 14px;">Inicia sesión con el correo que usaste antes:</p>
+            <p style="margin:0 0 14px;">¿Ya tienes otro negocio? Entra con tu clave:</p>
             ${bloqueLogin}
           ` : `
             <h1>Panel de tu negocio</h1>
-            <p>Escribe el correo con el que registraste tu(s) tarjeta(s) Tapin. Te mandamos un link de acceso, sin contraseña que recordar — funciona también si olvidaste tu clave del panel, ahí te la recordamos.</p>
+            <p>Escribe el nombre de tu negocio y tu clave para entrar directo a tu panel. ¿No la tienes a la mano? Abajo puedes pedir que te la recordemos por correo.</p>
             ${bloqueLogin}
             <div class="divisor">¿Es tu primera tarjeta?</div>
             ${bloqueActivar}
@@ -6023,102 +6126,6 @@ function renderizarPaginaNegocios(email) {
     </html>`;
 }
 
-// ---------- Iniciar sesión con Google (negocios) ----------
-// Usa OAuth 2.0 de Google directamente (fetch a sus endpoints, sin librerías
-// extra). Necesita dos variables de entorno en Render:
-//   GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET — se sacan gratis en
-//   console.cloud.google.com → APIs y servicios → Credenciales → Crear
-//   credenciales → ID de cliente de OAuth → tipo "Aplicación web".
-//   En "URI de redirección autorizados" hay que agregar (ambos dominios):
-//   https://tapin.page/auth/google/callback
-//   https://tapincol.com/auth/google/callback
-// tipo=negocio (por defecto) o tipo=cliente — decide a quién logueamos al volver.
-app.get("/auth/google/iniciar", (req, res) => {
-  if (!process.env.GOOGLE_CLIENT_ID) {
-    return res.status(500).send("El login con Google todavía no está configurado (falta GOOGLE_CLIENT_ID en Render).");
-  }
-  const tipo = req.query.tipo === "cliente" ? "cliente" : "negocio";
-  const redirectUri = `${req.protocol}://${req.get("host")}/auth/google/callback`;
-  const params = new URLSearchParams({
-    client_id: process.env.GOOGLE_CLIENT_ID,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: "openid email",
-    prompt: "select_account",
-    state: tipo,
-  });
-  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
-});
-
-app.get("/auth/google/callback", async (req, res) => {
-  if (!req.query.code) {
-    return res.status(400).send("No llegó el código de Google. Intenta de nuevo desde /mis-negocios.");
-  }
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-    return res.status(500).send("El login con Google todavía no está configurado.");
-  }
-
-  try {
-    const redirectUri = `${req.protocol}://${req.get("host")}/auth/google/callback`;
-    const resp = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        code: req.query.code,
-        client_id: process.env.GOOGLE_CLIENT_ID,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        redirect_uri: redirectUri,
-        grant_type: "authorization_code",
-      }),
-    });
-    const data = await resp.json();
-    if (!data.access_token) {
-      console.error("[auth/google] Error obteniendo token:", JSON.stringify(data));
-      return res.status(401).send("No se pudo verificar tu cuenta de Google. Intenta de nuevo.");
-    }
-
-    const infoResp = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-      headers: { Authorization: `Bearer ${data.access_token}` },
-    });
-    const info = await infoResp.json();
-    if (!info.email) {
-      return res.status(401).send("Google no devolvió un correo válido.");
-    }
-    const email = info.email.trim().toLowerCase();
-
-    if (req.query.state === "cliente") {
-      // Cliente final: si ya existe una cuenta con este correo, entra a esa.
-      // Si no existe, se crea sola — Google ya verificó el correo, así que no
-      // hace falta pedirle contraseña.
-      const clientes = leerClientes();
-      let entrada = Object.entries(clientes).find(([, c]) => c.email === email);
-      let clienteId;
-      if (entrada) {
-        clienteId = entrada[0];
-      } else {
-        clienteId = generarToken();
-        clientes[clienteId] = {
-          nombre: info.name || email.split("@")[0],
-          email,
-          salt: null,
-          hash: null,
-          metodoGoogle: true,
-          favoritos: [],
-          historial: [],
-          creado: new Date().toISOString(),
-        };
-        guardarClientes(clientes);
-      }
-      iniciarSesionCliente(res, clienteId, true);
-      return res.redirect("/cuenta");
-    }
-
-    res.send(renderizarPaginaNegocios(email));
-  } catch (err) {
-    console.error("[auth/google] Error:", err.message);
-    res.status(500).send("Ocurrió un error verificando tu cuenta de Google. Intenta de nuevo.");
-  }
-});
 
 app.get("/mis-negocios/:token", (req, res) => {
   const tokens = leerTokens();
@@ -6191,22 +6198,6 @@ app.get("/cliente", (req, res) => {
           <div class="panel activo" id="panel-login">
             <h2>Bienvenido de vuelta</h2>
             <p>Entra para ver tus favoritos y tu historial de reseñas.</p>
-            <a href="/auth/google/iniciar?tipo=cliente" style="display:flex;align-items:center;justify-content:center;gap:10px;
-               width:100%;box-sizing:border-box;background:#fff;border:1px solid ${MARCA.borde};border-radius:10px;
-               padding:13px;font-weight:700;font-size:0.9rem;color:${MARCA.texto};text-decoration:none;margin-bottom:14px;">
-              <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <path fill="#EA4335" d="M24 9.5c3.4 0 6.4 1.2 8.8 3.5l6.5-6.5C35.3 2.5 30 0 24 0 14.6 0 6.5 5.4 2.5 13.2l7.6 5.9C12 12.9 17.5 9.5 24 9.5z"/>
-                <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7c4.3-4 6.8-9.9 6.8-17.4z"/>
-                <path fill="#FBBC05" d="M10.1 19.1a14.5 14.5 0 000 9.8l-7.6 5.9a24 24 0 010-21.6z"/>
-                <path fill="#34A853" d="M24 48c6 0 11.3-2 15-5.4l-7.3-5.7c-2 1.4-4.6 2.2-7.7 2.2-6.5 0-12-4.4-14-10.3l-7.6 5.9C6.5 42.6 14.6 48 24 48z"/>
-              </svg>
-              Iniciar sesión con Google
-            </a>
-            <div style="display:flex;align-items:center;gap:10px;margin:16px 0;color:#999;font-size:0.76rem;">
-              <div style="flex:1;height:1px;background:${MARCA.borde};"></div>
-              o con tu correo
-              <div style="flex:1;height:1px;background:${MARCA.borde};"></div>
-            </div>
             <form method="POST" action="/cliente/login">
               <input type="email" name="email" required placeholder="Correo electrónico">
               <div class="campo-clave">
