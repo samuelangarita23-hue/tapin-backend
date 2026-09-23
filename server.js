@@ -6018,10 +6018,29 @@ app.get("/descubre", (req, res) => {
 // cualquier contraseña normal (el campo es type="password" con
 // autocomplete), en vez de depender de un link mágico por correo.
 app.get("/mi-panel-entrar", limitarIntentos(15, 15), (req, res) => {
-  const slug = (req.query.slug || "").trim().toLowerCase().replace(/^https?:\/\/[^/]+\//, "").replace(/\/.*$/, "");
+  const entrada = (req.query.slug || "").trim().toLowerCase().replace(/^https?:\/\/[^/]+\//, "").replace(/\/.*$/, "");
   const key = req.query.key || "";
-  if (!slug || !key) return res.redirect(302, "/mis-negocios");
-  res.redirect(302, `/mi-panel/${encodeURIComponent(slug)}?key=${encodeURIComponent(key)}`);
+  if (!entrada || !key) return res.redirect(302, "/mis-negocios");
+
+  // Si lo que escribieron es un correo (en vez del nombre del negocio),
+  // buscamos entre TODOS sus negocios cuál abre con esa clave — así no
+  // hace falta que sepan el slug exacto de memoria.
+  if (entrada.includes("@")) {
+    const todos = todosLosNegocios();
+    const susSlugs = Object.keys(todos).filter(
+      (s) => (todos[s].email || "").trim().toLowerCase() === entrada
+    );
+    const slugQueAbre = susSlugs.find((s) => claveNegocioValida(todos[s], s, key));
+    if (slugQueAbre) {
+      return res.redirect(302, `/mi-panel/${encodeURIComponent(slugQueAbre)}?key=${encodeURIComponent(key)}`);
+    }
+    if (susSlugs.length > 0) {
+      return res.redirect(302, "/mis-negocios?error=clave");
+    }
+    return res.redirect(302, "/mis-negocios?error=correo");
+  }
+
+  res.redirect(302, `/mi-panel/${encodeURIComponent(entrada)}?key=${encodeURIComponent(key)}`);
 });
 
 // ---------- Dashboard de dueños: login mágico por correo, sin contraseña ----------
@@ -6040,7 +6059,7 @@ app.get("/mis-negocios", (req, res) => {
 
   const bloqueLogin = `
     <form method="GET" action="/mi-panel-entrar">
-      <input type="text" name="slug" required placeholder="Tu negocio (la parte final de tu link)" autocomplete="username">
+      <input type="text" name="slug" required placeholder="Tu negocio o tu correo" autocomplete="username">
       <div class="campo-clave">
         <input type="password" id="clave-negocio" name="key" required placeholder="Tu clave" autocomplete="current-password">
         <button type="button" class="ver-clave" onclick="alternarClave('clave-negocio')">${ICONO_OJO_ABIERTO}</button>
@@ -6087,11 +6106,15 @@ app.get("/mis-negocios", (req, res) => {
           .form-codigo button{background:${MARCA.oro};}
           .banner-nueva{background:${MARCA.verdeClaro};color:${MARCA.verdeOscuro};border-radius:10px;
                         padding:10px 14px;font-size:0.8rem;font-weight:600;margin-bottom:20px;}
+          .banner-error{background:#FBEFE9;color:${MARCA.rojo};border-radius:10px;
+                        padding:10px 14px;font-size:0.8rem;font-weight:600;margin-bottom:20px;}
         </style>
       </head>
       <body>
         <div class="box">
           <div class="logo">${logoSvg(MARCA.verdeOscuro, 38)}</div>
+          ${req.query.error === "clave" ? `<div class="banner-error">Ese correo sí lo tenemos, pero la clave no coincide con ninguno de tus negocios.</div>` : ""}
+          ${req.query.error === "correo" ? `<div class="banner-error">No encontramos ningún negocio con ese correo. Revisa que esté bien escrito, o usa el nombre de tu negocio en vez del correo.</div>` : ""}
           ${esTarjetaNueva ? `
             <div class="banner-nueva">Detectamos tu tarjeta Tapin nueva — actívala abajo.</div>
             <h1>Activa tu tarjeta</h1>
